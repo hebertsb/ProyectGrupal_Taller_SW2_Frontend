@@ -152,6 +152,28 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
     }
   }
 
+  async function manejarUsarPosicionEscaneada() {
+    if (!fenReconocido) return;
+    setError(null);
+    setCargando('nueva');
+    try {
+      const partida = await crearPartida(nivel, fenReconocido);
+      setPartidaId(partida.id);
+      setFen(partida.fen);
+      setTerminada(false);
+      setResultado(null);
+      setJugadas(partida.jugadas);
+      setCasillaOrigen(null);
+      setEvaluacionesHistorial([]);
+      setFenReconocido(null);
+      await actualizarAnalisis(partida.fen);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCargando(null);
+    }
+  }
+
   function actualizarFoto() {
     setFotoKey((valor) => valor + 1);
   }
@@ -230,8 +252,18 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
               {cargando === 'reconocer' ? 'RECONOCIENDO…' : 'RECONOCER TABLERO (HU1)'}
             </button>
             {fenReconocido && (
-              <div className="bg-surface-container-lowest p-2 rounded-lg font-mono-micro text-mono-micro text-primary-fixed-dim break-all">
-                FEN reconocido: {fenReconocido}
+              <div className="bg-surface-container-lowest p-2 rounded-lg flex flex-col gap-1.5">
+                <span className="font-mono-micro text-mono-micro text-primary-fixed-dim break-all">
+                  FEN reconocido: {fenReconocido}
+                </span>
+                <button
+                  onClick={manejarUsarPosicionEscaneada}
+                  disabled={cargando === 'nueva'}
+                  className="w-full py-1.5 rounded-lg bg-primary text-on-primary font-mono-label text-mono-label flex items-center justify-center gap-1.5 disabled:opacity-50"
+                >
+                  <span className="material-symbols-outlined text-[16px]">play_arrow</span>
+                  USAR ESTA POSICIÓN
+                </button>
               </div>
             )}
           </div>

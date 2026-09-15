@@ -17,8 +17,9 @@ async function solicitar(endpoint, opciones = {}) {
   return respuesta.json();
 }
 
-export function crearPartida(nivel) {
-  return solicitar("/partida", { body: JSON.stringify({ nivel }) });
+export function crearPartida(nivel, fenInicial) {
+  const cuerpo = fenInicial ? { nivel, fen_inicial: fenInicial } : { nivel };
+  return solicitar("/partida", { body: JSON.stringify(cuerpo) });
 }
 
 export function obtenerPartida(partidaId) {
