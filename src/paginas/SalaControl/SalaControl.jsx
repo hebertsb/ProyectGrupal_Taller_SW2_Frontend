@@ -13,11 +13,20 @@ import {
 import { claseDePieza, esPromocionDePeon, fenAMatriz, nombreCasilla, rutaImagenPieza, turnoDeFen } from '../../ajedrez';
 
 const NIVEL_MAX = 20;
+const NIVEL_INICIAL = 8; // arranca en "Intermedio", no siempre al máximo
+
+// Niveles de Stockfish (0-20, "Skill Level") agrupados por franja de dificultad,
+// para que elegir el nivel sea más legible que un número suelto.
+const NIVELES_POR_CATEGORIA = [
+  { etiqueta: 'Básico', desde: 0, hasta: 6 },
+  { etiqueta: 'Intermedio', desde: 7, hasta: 13 },
+  { etiqueta: 'Avanzado', desde: 14, hasta: NIVEL_MAX },
+];
 
 export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
   const [partidaId, setPartidaId] = useState(null);
   const [fen, setFen] = useState(null);
-  const [nivel, setNivel] = useState(NIVEL_MAX);
+  const [nivel, setNivel] = useState(NIVEL_INICIAL);
   const [terminada, setTerminada] = useState(false);
   const [resultado, setResultado] = useState(null);
   const [casillaOrigen, setCasillaOrigen] = useState(null);
@@ -431,8 +440,15 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
                   onChange={(evento) => setNivel(Number(evento.target.value))}
                   className="bg-surface-container-high rounded-lg px-2 py-1 font-mono-label text-mono-label text-on-surface"
                 >
-                  {Array.from({ length: NIVEL_MAX + 1 }, (_, valor) => valor).map((valor) => (
-                    <option key={valor} value={valor}>{valor}</option>
+                  {NIVELES_POR_CATEGORIA.map((categoria) => (
+                    <optgroup key={categoria.etiqueta} label={categoria.etiqueta}>
+                      {Array.from(
+                        { length: categoria.hasta - categoria.desde + 1 },
+                        (_, indice) => categoria.desde + indice
+                      ).map((valor) => (
+                        <option key={valor} value={valor}>Nivel {valor}</option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
                 <button
