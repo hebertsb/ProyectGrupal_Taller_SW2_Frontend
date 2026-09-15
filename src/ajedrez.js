@@ -36,6 +36,15 @@ export function claseDePieza(caracterFen) {
   return `chess-piece ${color} ${tipo}`;
 }
 
+/**
+ * Ruta del ícono SVG de la pieza (set "cburnett", el mismo que usa lichess.org —
+ * Colin M.L. Burnett, GPLv2+ — ver frontend/public/piezas/). Ej.: "K" -> "/piezas/wK.svg".
+ */
+export function rutaImagenPieza(caracterFen) {
+  const color = caracterFen === caracterFen.toUpperCase() ? "w" : "b";
+  return `/piezas/${color}${caracterFen.toUpperCase()}.svg`;
+}
+
 export function turnoDeFen(fen) {
   return fen.split(" ")[1] === "b" ? "b" : "w";
 }

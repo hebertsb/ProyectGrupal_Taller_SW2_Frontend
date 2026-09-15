@@ -9,7 +9,7 @@ import {
   reconocerTablero,
   urlFotoCamara,
 } from '../../api/backend';
-import { PIEZA_A_SIMBOLO, claseDePieza, esPromocionDePeon, fenAMatriz, nombreCasilla, turnoDeFen } from '../../ajedrez';
+import { claseDePieza, esPromocionDePeon, fenAMatriz, nombreCasilla, rutaImagenPieza, turnoDeFen } from '../../ajedrez';
 
 const NIVEL_MAX = 20;
 
@@ -339,7 +339,12 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
                           >
                             {pieza && (
                               <div className={claseDePieza(pieza)}>
-                                <span className="chess-piece-simbolo">{PIEZA_A_SIMBOLO[pieza]}</span>
+                                <img
+                                  className="chess-piece-imagen"
+                                  src={rutaImagenPieza(pieza)}
+                                  alt={pieza}
+                                  draggable={false}
+                                />
                               </div>
                             )}
                           </button>
