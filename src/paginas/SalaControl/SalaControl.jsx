@@ -438,6 +438,24 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
                 </span>
               </div>
             )}
+
+            {analisis?.variantes_candidatas?.length > 0 && (
+              <div className="bg-surface-container-lowest p-2.5 rounded-lg flex flex-col gap-1">
+                <span className="font-mono-micro text-mono-micro text-outline uppercase">JUGADAS CANDIDATAS</span>
+                <div className="flex flex-col gap-0.5">
+                  {analisis.variantes_candidatas.map((variante, indice) => (
+                    <div key={`${variante.jugada}-${indice}`} className="flex items-center justify-between">
+                      <span className="font-mono-label text-mono-label text-on-surface-variant">
+                        {indice + 1}. {variante.jugada}
+                      </span>
+                      <span className="font-mono-micro text-mono-micro text-primary-fixed-dim">
+                        {formatearEvaluacion(variante)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="bg-surface-container-low rounded-xl p-space-md shadow-xl flex flex-col gap-space-sm flex-1">
