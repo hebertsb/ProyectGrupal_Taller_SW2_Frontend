@@ -139,17 +139,25 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
     }
   }
 
-  async function manejarReconocerTablero() {
+  async function manejarReconocerTablero(archivoFoto = null) {
     setCargando('reconocer');
     setError(null);
     setFenReconocido(null);
     try {
-      const datos = await reconocerTablero(fen ? turnoDeFen(fen) : 'w');
+      const datos = await reconocerTablero(fen ? turnoDeFen(fen) : 'w', archivoFoto);
       setFenReconocido(datos.fen);
     } catch (err) {
       setError(err.message);
     } finally {
       setCargando(null);
+    }
+  }
+
+  function manejarSeleccionarFoto(evento) {
+    const archivo = evento.target.files?.[0];
+    evento.target.value = ''; // permite volver a elegir el mismo archivo después
+    if (archivo) {
+      manejarReconocerTablero(archivo);
     }
   }
 
@@ -266,13 +274,21 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
               )}
             </div>
             <button
-              onClick={manejarReconocerTablero}
+              onClick={() => manejarReconocerTablero()}
               disabled={cargando === 'reconocer'}
               className="w-full py-2 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface transition-colors font-mono-label text-mono-label flex items-center justify-center gap-1.5 disabled:opacity-50"
             >
               <span className="material-symbols-outlined text-[16px]">grid_view</span>
               {cargando === 'reconocer' ? 'RECONOCIENDO…' : 'RECONOCER TABLERO (HU1)'}
             </button>
+            <label
+              className={`w-full py-2 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface transition-colors font-mono-label text-mono-label flex items-center justify-center gap-1.5 cursor-pointer ${cargando === 'reconocer' ? 'opacity-50 pointer-events-none' : ''}`}
+              title="Subí una foto ya sacada (ej. de la galería del celular) en vez de usar la cámara en vivo"
+            >
+              <span className="material-symbols-outlined text-[16px]">upload</span>
+              SUBIR FOTO DEL TABLERO
+              <input type="file" accept="image/*" className="hidden" onChange={manejarSeleccionarFoto} />
+            </label>
             {partidaId && !terminada && (
               <button
                 onClick={manejarMoverDesdeFoto}

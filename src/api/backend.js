@@ -48,8 +48,24 @@ export function analizarPosicion(fen, nivel) {
   return solicitar("/analisis", { body: JSON.stringify({ fen, nivel }) });
 }
 
-export function reconocerTablero(turno = "w") {
-  return solicitar("/vision/reconocer", { body: JSON.stringify({ turno }) });
+/**
+ * Reconoce el tablero. Si se pasa `archivoFoto` (una imagen ya sacada, ej.
+ * de la galería del celular), la usa en vez de sacar una foto nueva de la
+ * cámara fija — útil para no depender de que la cámara en vivo acierte el
+ * encuadre justo en el momento de mostrar el sistema.
+ */
+export async function reconocerTablero(turno = "w", archivoFoto = null) {
+  const datos = new FormData();
+  datos.append("turno", turno);
+  if (archivoFoto) {
+    datos.append("foto_subida", archivoFoto);
+  }
+  const respuesta = await fetch("/vision/reconocer", { method: "POST", body: datos });
+  if (!respuesta.ok) {
+    const detalle = await respuesta.json().catch(() => null);
+    throw new Error(detalle?.detail ?? `Error ${respuesta.status}`);
+  }
+  return respuesta.json();
 }
 
 /** URL de la última foto de la cámara fija — agregar un timestamp para evitar el caché del navegador. */
