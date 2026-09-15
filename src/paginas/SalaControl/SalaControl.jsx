@@ -9,7 +9,7 @@ import {
   reconocerTablero,
   urlFotoCamara,
 } from '../../api/backend';
-import { claseDePieza, esPromocionDePeon, fenAMatriz, nombreCasilla, turnoDeFen } from '../../ajedrez';
+import { PIEZA_A_SIMBOLO, claseDePieza, esPromocionDePeon, fenAMatriz, nombreCasilla, turnoDeFen } from '../../ajedrez';
 
 const NIVEL_MAX = 20;
 
@@ -337,7 +337,11 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
                             aria-label={`Casilla ${casilla}${pieza ? ', pieza ' + pieza : ', vacía'}`}
                             className={`relative flex items-center justify-center ${clara ? 'bg-[#b89772]' : 'bg-[#543423]'} ${seleccionada ? 'ring-2 ring-inset ring-primary' : ''}`}
                           >
-                            {pieza && <div className={claseDePieza(pieza)}></div>}
+                            {pieza && (
+                              <div className={claseDePieza(pieza)}>
+                                <span className="chess-piece-simbolo">{PIEZA_A_SIMBOLO[pieza]}</span>
+                              </div>
+                            )}
                           </button>
                         );
                       })

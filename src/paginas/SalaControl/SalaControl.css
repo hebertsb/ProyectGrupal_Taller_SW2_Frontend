@@ -8,6 +8,15 @@
   justify-content: center;
   transition: transform 0.2s ease;
   cursor: pointer;
+  font-size: min(4.2vw, 38px);
+  line-height: 1;
+  z-index: 1;
+}
+.chess-piece-simbolo {
+  position: relative;
+  z-index: 5;
+  color: inherit;
+  pointer-events: none;
 }
 .chess-piece:hover {
   transform: scale(1.08) translateY(-2px);
@@ -17,6 +26,7 @@
   background: radial-gradient(circle at 35% 30%, #ffffff 0%, #ede3d1 45%, #c8bba6 80%, #9c8e76 100%);
   box-shadow: 0 8px 14px -2px rgba(0,0,0,0.65), inset 0 2px 4px rgba(255,255,255,0.9), inset 0 -3px 5px rgba(110,95,75,0.6);
   border: 1px solid rgba(255,255,255,0.4);
+  color: #3d2215;
 }
 .white-piece::after {
   content: '';
@@ -32,6 +42,7 @@
   background: radial-gradient(circle at 35% 30%, #5a4b41 0%, #302620 45%, #1d1612 80%, #0d0907 100%);
   box-shadow: 0 8px 14px -2px rgba(0,0,0,0.85), inset 0 2px 3px rgba(255,255,255,0.25), inset 0 -3px 5px rgba(0,0,0,0.9);
   border: 1px solid rgba(255,255,255,0.08);
+  color: #f0e6d8;
 }
 .black-piece::after {
   content: '';
