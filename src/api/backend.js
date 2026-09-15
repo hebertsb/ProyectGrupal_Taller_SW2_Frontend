@@ -35,6 +35,11 @@ export function moverPartida(partidaId, jugada) {
   return solicitar(`/partida/${partidaId}/mover`, { body: JSON.stringify({ jugada }) });
 }
 
+/** Detecta la jugada hecha en el tablero físico (cámara fija) y la aplica (RF11). */
+export function moverPartidaDesdeFoto(partidaId) {
+  return solicitar(`/partida/${partidaId}/mover-desde-foto`);
+}
+
 export function calcularJugada(fen, nivel) {
   return solicitar("/jugada", { body: JSON.stringify({ fen, nivel }) });
 }

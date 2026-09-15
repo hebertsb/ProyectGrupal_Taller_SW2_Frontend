@@ -5,6 +5,7 @@ import {
   backendEnLinea,
   crearPartida,
   moverPartida,
+  moverPartidaDesdeFoto,
   obtenerPartida,
   reconocerTablero,
   urlFotoCamara,
@@ -174,6 +175,27 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
     }
   }
 
+  async function manejarMoverDesdeFoto() {
+    if (!partidaId || terminada) return;
+    setError(null);
+    setCargando('mover-foto');
+    try {
+      const datos = await moverPartidaDesdeFoto(partidaId);
+      setFen(datos.fen);
+      setTerminada(datos.terminada);
+      setResultado(datos.resultado);
+      setJugadas(datos.jugadas);
+      setCasillaOrigen(null);
+      if (!datos.terminada) {
+        await actualizarAnalisis(datos.fen);
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCargando(null);
+    }
+  }
+
   function actualizarFoto() {
     setFotoKey((valor) => valor + 1);
   }
@@ -251,6 +273,17 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
               <span className="material-symbols-outlined text-[16px]">grid_view</span>
               {cargando === 'reconocer' ? 'RECONOCIENDO…' : 'RECONOCER TABLERO (HU1)'}
             </button>
+            {partidaId && !terminada && (
+              <button
+                onClick={manejarMoverDesdeFoto}
+                disabled={cargando === 'mover-foto'}
+                title="Mové una pieza en el tablero físico y tocá esto — detecta la jugada comparando la foto con la posición actual"
+                className="w-full py-2 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface transition-colors font-mono-label text-mono-label flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                <span className="material-symbols-outlined text-[16px]">back_hand</span>
+                {cargando === 'mover-foto' ? 'DETECTANDO…' : 'DETECTÉ UN MOVIMIENTO FÍSICO'}
+              </button>
+            )}
             {fenReconocido && (
               <div className="bg-surface-container-lowest p-2 rounded-lg flex flex-col gap-1.5">
                 <span className="font-mono-micro text-mono-micro text-primary-fixed-dim break-all">
