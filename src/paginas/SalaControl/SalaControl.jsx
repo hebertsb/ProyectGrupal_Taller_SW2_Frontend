@@ -6,11 +6,20 @@ import {
   crearPartida,
   moverPartida,
   moverPartidaDesdeFoto,
+  obtenerJugadasLegales,
   obtenerPartida,
   reconocerTablero,
   urlFotoCamara,
 } from '../../api/backend';
-import { claseDePieza, esPromocionDePeon, fenAMatriz, nombreCasilla, rutaImagenPieza, turnoDeFen } from '../../ajedrez';
+import {
+  claseDePieza,
+  esPromocionDePeon,
+  fenAMatriz,
+  nombreCasilla,
+  piezaEnCasilla,
+  rutaImagenPieza,
+  turnoDeFen,
+} from '../../ajedrez';
 
 const NIVEL_MAX = 20;
 const NIVEL_INICIAL = 8; // arranca en "Intermedio", no siempre al máximo
@@ -30,6 +39,7 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
   const [terminada, setTerminada] = useState(false);
   const [resultado, setResultado] = useState(null);
   const [casillaOrigen, setCasillaOrigen] = useState(null);
+  const [destinosValidos, setDestinosValidos] = useState([]);
   const [jugadas, setJugadas] = useState([]);
   const [analisis, setAnalisis] = useState(null);
   const [evaluacionesHistorial, setEvaluacionesHistorial] = useState([]);
@@ -78,6 +88,7 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
       setResultado(partida.resultado);
       setJugadas(partida.jugadas);
       setCasillaOrigen(null);
+      setDestinosValidos([]);
       setEvaluacionesHistorial([]);
       if (!partida.terminada) {
         await actualizarAnalisis(partida.fen);
@@ -100,6 +111,7 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
       setResultado(null);
       setJugadas(partida.jugadas);
       setCasillaOrigen(null);
+      setDestinosValidos([]);
       setEvaluacionesHistorial([]);
       await actualizarAnalisis(partida.fen);
     } catch (err) {
@@ -109,15 +121,49 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
     }
   }
 
+  function esPiezaDelTurno(casilla) {
+    const pieza = piezaEnCasilla(fen, casilla);
+    if (!pieza) return false;
+    const esBlanca = pieza === pieza.toUpperCase();
+    return esBlanca ? turnoDeFen(fen) === 'w' : turnoDeFen(fen) === 'b';
+  }
+
+  async function seleccionarOrigen(casilla) {
+    setCasillaOrigen(casilla);
+    setDestinosValidos([]);
+    try {
+      const datos = await obtenerJugadasLegales(partidaId, casilla);
+      setDestinosValidos(datos.casillas);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   async function manejarClicCasilla(casilla) {
     if (!partidaId || terminada) return;
+
     if (!casillaOrigen) {
-      setCasillaOrigen(casilla);
+      if (esPiezaDelTurno(casilla)) {
+        await seleccionarOrigen(casilla);
+      }
       return;
     }
+
     const origen = casillaOrigen;
+    if (origen === casilla) {
+      setCasillaOrigen(null);
+      setDestinosValidos([]);
+      return;
+    }
+
+    // Clic en otra pieza propia: cambia la selección en vez de intentar mover.
+    if (esPiezaDelTurno(casilla)) {
+      await seleccionarOrigen(casilla);
+      return;
+    }
+
     setCasillaOrigen(null);
-    if (origen === casilla) return;
+    setDestinosValidos([]);
 
     const jugadaUci = origen + casilla + (esPromocionDePeon(fen, origen, casilla) ? 'q' : '');
     setError(null);
@@ -182,6 +228,7 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
       setResultado(null);
       setJugadas(partida.jugadas);
       setCasillaOrigen(null);
+      setDestinosValidos([]);
       setEvaluacionesHistorial([]);
       setFenReconocido(null);
       await actualizarAnalisis(partida.fen);
@@ -203,6 +250,7 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
       setResultado(datos.resultado);
       setJugadas(datos.jugadas);
       setCasillaOrigen(null);
+      setDestinosValidos([]);
       if (!datos.terminada) {
         await actualizarAnalisis(datos.fen);
       }
@@ -387,12 +435,13 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
                         const casilla = nombreCasilla(indiceFila, indiceColumna);
                         const clara = (indiceFila + indiceColumna) % 2 === 0;
                         const seleccionada = casilla === casillaOrigen;
+                        const esDestinoValido = destinosValidos.includes(casilla);
                         return (
                           <button
                             key={casilla}
                             type="button"
                             onClick={() => manejarClicCasilla(casilla)}
-                            aria-label={`Casilla ${casilla}${pieza ? ', pieza ' + pieza : ', vacía'}`}
+                            aria-label={`Casilla ${casilla}${pieza ? ', pieza ' + pieza : ', vacía'}${esDestinoValido ? ', jugada válida' : ''}`}
                             className={`relative flex items-center justify-center ${clara ? 'bg-[#b89772]' : 'bg-[#543423]'} ${seleccionada ? 'ring-2 ring-inset ring-primary' : ''}`}
                           >
                             {pieza && (
@@ -404,6 +453,15 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
                                   draggable={false}
                                 />
                               </div>
+                            )}
+                            {esDestinoValido && (
+                              <span
+                                className={`pointer-events-none absolute rounded-full ${
+                                  pieza
+                                    ? 'inset-[8%] border-[3px] border-primary/80 shadow-[0_0_6px_rgba(0,229,255,0.5)]'
+                                    : 'w-[28%] h-[28%] bg-primary/70 shadow-[0_0_6px_rgba(0,229,255,0.6)]'
+                                }`}
+                              ></span>
                             )}
                           </button>
                         );

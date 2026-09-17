@@ -49,6 +49,13 @@ export function turnoDeFen(fen) {
   return fen.split(" ")[1] === "b" ? "b" : "w";
 }
 
+export function piezaEnCasilla(fen, casilla) {
+  const matriz = fenAMatriz(fen);
+  const columna = "abcdefgh".indexOf(casilla[0]);
+  const fila = 8 - Number(casilla[1]);
+  return matriz[fila]?.[columna] ?? null;
+}
+
 export function esPromocionDePeon(fen, origen, destino) {
   const matriz = fenAMatriz(fen);
   const columna = "abcdefgh".indexOf(origen[0]);

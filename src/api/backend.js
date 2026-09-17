@@ -40,6 +40,11 @@ export function moverPartidaDesdeFoto(partidaId) {
   return solicitar(`/partida/${partidaId}/mover-desde-foto`);
 }
 
+/** Casillas destino legales para la pieza parada en `casilla`, para resaltarlas al seleccionarla. */
+export function obtenerJugadasLegales(partidaId, casilla) {
+  return solicitar(`/partida/${partidaId}/jugadas-legales?casilla=${casilla}`, { method: "GET" });
+}
+
 export function calcularJugada(fen, nivel) {
   return solicitar("/jugada", { body: JSON.stringify({ fen, nivel }) });
 }
