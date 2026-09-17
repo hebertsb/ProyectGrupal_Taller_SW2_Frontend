@@ -45,6 +45,11 @@ export function obtenerJugadasLegales(partidaId, casilla) {
   return solicitar(`/partida/${partidaId}/jugadas-legales?casilla=${casilla}`, { method: "GET" });
 }
 
+/** Análisis jugada por jugada de una partida ya jugada, para la vista de Aprendizaje. */
+export function analisisCompletoPartida(partidaId) {
+  return solicitar(`/partida/${partidaId}/analisis-completo`, { method: "GET" });
+}
+
 export function calcularJugada(fen, nivel) {
   return solicitar("/jugada", { body: JSON.stringify({ fen, nivel }) });
 }

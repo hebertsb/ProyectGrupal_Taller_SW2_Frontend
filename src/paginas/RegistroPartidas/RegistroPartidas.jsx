@@ -23,7 +23,7 @@ function fechaLegible(iso) {
   }
 }
 
-export default function RegistroPartidas({ alIrASalaControl, alIrARazonamiento }) {
+export default function RegistroPartidas({ alIrASalaControl, alIrARazonamiento, alIrAAprendizaje }) {
   const [historial, setHistorial] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
@@ -219,6 +219,14 @@ export default function RegistroPartidas({ alIrASalaControl, alIrARazonamiento }
                 >
                   <span className="material-symbols-outlined text-[16px]">play_circle</span>
                   <span>Cargar en Sala de Control</span>
+                </button>
+                <button
+                  onClick={() => alIrAAprendizaje?.(detalle.id)}
+                  className="px-space-sm py-space-xs rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-primary font-mono-micro text-mono-micro uppercase tracking-wider transition-all flex items-center gap-space-2xs"
+                  type="button"
+                >
+                  <span className="material-symbols-outlined text-[15px] text-primary">school</span>
+                  <span>Analizar Aprendizaje</span>
                 </button>
                 <button
                   onClick={alIrARazonamiento}

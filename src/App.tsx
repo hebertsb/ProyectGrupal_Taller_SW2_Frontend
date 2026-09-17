@@ -8,6 +8,7 @@ import SalaControl from './paginas/SalaControl/SalaControl';
 import RazonamientoNeuronal from './paginas/RazonamientoNeuronal/RazonamientoNeuronal';
 import Administracion from './paginas/Administracion/Administracion';
 import RegistroPartidas from './paginas/RegistroPartidas/RegistroPartidas';
+import Aprendizaje from './paginas/Aprendizaje/Aprendizaje';
 import { backendEnLinea } from './api/backend';
 
 export default function App() {
@@ -15,10 +16,16 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [backendConectado, setBackendConectado] = useState<boolean | null>(null);
   const [partidaParaCargar, setPartidaParaCargar] = useState<string | null>(null);
+  const [partidaParaAprender, setPartidaParaAprender] = useState<string | null>(null);
 
   function irASalaControl(partidaId?: string) {
     setPartidaParaCargar(partidaId ?? null);
     setPantallaActiva('control');
+  }
+
+  function irAAprendizaje(partidaId?: string) {
+    setPartidaParaAprender(partidaId ?? null);
+    setPantallaActiva('aprendizaje');
   }
 
   useEffect(() => {
@@ -66,6 +73,9 @@ export default function App() {
               <div className="pl-space-md flex flex-col gap-space-2xs border-l border-outline-variant/20 ml-space-sm mt-space-2xs">
                 <button onClick={() => setPantallaActiva('registro')} className={navClasses('registro')}>
                   <span className="material-symbols-outlined text-[16px]">history_edu</span>Registro de Partidas
+                </button>
+                <button onClick={() => irAAprendizaje()} className={navClasses('aprendizaje')}>
+                  <span className="material-symbols-outlined text-[16px]">school</span>Aprendizaje
                 </button>
               </div>
             </nav>
@@ -136,7 +146,14 @@ export default function App() {
           {pantallaActiva === 'neuronal' && <RazonamientoNeuronal />}
           {pantallaActiva === 'admin' && <Administracion />}
           {pantallaActiva === 'registro' && (
-            <RegistroPartidas alIrASalaControl={irASalaControl} alIrARazonamiento={() => setPantallaActiva('neuronal')} />
+            <RegistroPartidas
+              alIrASalaControl={irASalaControl}
+              alIrARazonamiento={() => setPantallaActiva('neuronal')}
+              alIrAAprendizaje={irAAprendizaje}
+            />
+          )}
+          {pantallaActiva === 'aprendizaje' && (
+            <Aprendizaje partidaIdInicial={partidaParaAprender} alCargarPartida={() => setPartidaParaAprender(null)} />
           )}
         </main>
       </div>
