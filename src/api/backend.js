@@ -91,3 +91,31 @@ export async function backendEnLinea() {
     return false;
   }
 }
+
+/** Gestión de usuarios (solo facilitadores) */
+
+async function solicitarAuth(endpoint, opciones = {}) {
+  const token = localStorage.getItem('access_token');
+  const respuesta = await fetch(endpoint, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`,
+      ...opciones.headers,
+    },
+    ...opciones,
+  });
+  if (!respuesta.ok) {
+    const detalle = await respuesta.json().catch(() => null);
+    throw new Error(detalle?.detail ?? `Error ${respuesta.status}`);
+  }
+  return respuesta.json();
+}
+
+export function listarUsuarios() {
+  return solicitarAuth("/auth/usuarios");
+}
+
+export function historialPartidasUsuario(usuarioId, limit = 10, offset = 0) {
+  return solicitarAuth(`/auth/usuarios/${usuarioId}/historial-partidas?limit=${limit}&offset=${offset}`);
+}

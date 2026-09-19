@@ -3,13 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense, lazy } from 'react';
 import SalaControl from './paginas/SalaControl/SalaControl';
 import RazonamientoNeuronal from './paginas/RazonamientoNeuronal/RazonamientoNeuronal';
 import Administracion from './paginas/Administracion/Administracion';
 import RegistroPartidas from './paginas/RegistroPartidas/RegistroPartidas';
 import Aprendizaje from './paginas/Aprendizaje/Aprendizaje';
 import { backendEnLinea } from './api/backend';
+
+const GestionUsuarios = lazy(() => import('./paginas/Administracion/GestionUsuarios.jsx'));
 
 export default function App() {
   const [pantallaActiva, setPantallaActiva] = useState('control');
@@ -70,6 +72,9 @@ export default function App() {
               <button onClick={() => setPantallaActiva('admin')} className={navClasses('admin')}>
                 <span className="material-symbols-outlined text-[18px]">tune</span>Administración
               </button>
+              <button onClick={() => setPantallaActiva('usuarios')} className={navClasses('usuarios')}>
+                <span className="material-symbols-outlined text-[18px]">manage_accounts</span>Gestión de Usuarios
+              </button>
               <div className="pl-space-md flex flex-col gap-space-2xs border-l border-outline-variant/20 ml-space-sm mt-space-2xs">
                 <button onClick={() => setPantallaActiva('registro')} className={navClasses('registro')}>
                   <span className="material-symbols-outlined text-[16px]">history_edu</span>Registro de Partidas
@@ -113,6 +118,7 @@ export default function App() {
                 <button onClick={() => setPantallaActiva('control')} className={headerNavClasses('control')}>SALA DE CONTROL</button>
                 <button onClick={() => setPantallaActiva('neuronal')} className={headerNavClasses('neuronal')}>RAZONAMIENTO NEURONAL</button>
                 <button onClick={() => setPantallaActiva('admin')} className={headerNavClasses('admin')}>ADMINISTRACIÓN</button>
+                <button onClick={() => setPantallaActiva('usuarios')} className={headerNavClasses('usuarios')}>GESTIÓN USUARIOS</button>
               </nav>
             </div>
             <div className="flex items-center gap-space-md">
@@ -145,6 +151,16 @@ export default function App() {
           )}
           {pantallaActiva === 'neuronal' && <RazonamientoNeuronal />}
           {pantallaActiva === 'admin' && <Administracion />}
+          {pantallaActiva === 'usuarios' && (
+            <Suspense fallback={
+              <div className="w-full px-space-lg py-space-lg flex flex-col items-center justify-center min-h-[40vh]">
+                <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mb-2"></div>
+                <span className="font-mono-micro text-mono-micro text-on-surface-variant">Cargando gestión de usuarios...</span>
+              </div>
+            }>
+              <GestionUsuarios />
+            </Suspense>
+          )}
           {pantallaActiva === 'registro' && (
             <RegistroPartidas
               alIrASalaControl={irASalaControl}
