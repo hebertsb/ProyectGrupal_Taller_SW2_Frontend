@@ -2,12 +2,18 @@
  * Capa de comunicación con el backend real (FastAPI). Solo fetch — sin
  * estado ni JSX. Nada de datos simulados: si el backend no responde, el
  * error se propaga tal cual para que la interfaz lo muestre.
+ * Incluye automáticamente el token JWT si existe en localStorage.
  */
 
 async function solicitar(endpoint, opciones = {}) {
+  const token = localStorage.getItem('access_token');
+  const headers = { "Content-Type": "application/json", ...opciones.headers };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
   const respuesta = await fetch(endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     ...opciones,
   });
   if (!respuesta.ok) {
@@ -65,12 +71,17 @@ export function analizarPosicion(fen, nivel) {
  * encuadre justo en el momento de mostrar el sistema.
  */
 export async function reconocerTablero(turno = "w", archivoFoto = null) {
+  const token = localStorage.getItem('access_token');
   const datos = new FormData();
   datos.append("turno", turno);
   if (archivoFoto) {
     datos.append("foto_subida", archivoFoto);
   }
-  const respuesta = await fetch("/vision/reconocer", { method: "POST", body: datos });
+  const headers = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  const respuesta = await fetch("/vision/reconocer", { method: "POST", body: datos, headers });
   if (!respuesta.ok) {
     const detalle = await respuesta.json().catch(() => null);
     throw new Error(detalle?.detail ?? `Error ${respuesta.status}`);
@@ -83,6 +94,7 @@ export function urlFotoCamara() {
   return `/vision/foto?t=${Date.now()}`;
 }
 
+/** Health check del backend — sin auth para que funcione antes de login */
 export async function backendEnLinea() {
   try {
     const respuesta = await fetch("/health");
