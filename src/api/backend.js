@@ -92,6 +92,20 @@ export async function backendEnLinea() {
   }
 }
 
+/** Autenticación */
+export async function login(email, password, rolEsperado) {
+  const respuesta = await fetch("/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password, rol_esperado: rolEsperado }),
+  });
+  if (!respuesta.ok) {
+    const detalle = await respuesta.json().catch(() => null);
+    throw new Error(detalle?.detail ?? `Error ${respuesta.status}`);
+  }
+  return respuesta.json();
+}
+
 /** Gestión de usuarios (solo facilitadores) */
 
 async function solicitarAuth(endpoint, opciones = {}) {

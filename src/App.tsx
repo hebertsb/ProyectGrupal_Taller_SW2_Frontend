@@ -9,9 +9,19 @@ import RazonamientoNeuronal from './paginas/RazonamientoNeuronal/RazonamientoNeu
 import Administracion from './paginas/Administracion/Administracion';
 import RegistroPartidas from './paginas/RegistroPartidas/RegistroPartidas';
 import Aprendizaje from './paginas/Aprendizaje/Aprendizaje';
+import Login from './paginas/Login/Login';
 import { backendEnLinea } from './api/backend';
 
 const GestionUsuarios = lazy(() => import('./paginas/Administracion/GestionUsuarios.jsx'));
+
+function obtenerUsuarioGuardado() {
+  try {
+    const stored = localStorage.getItem('usuario');
+    return stored ? JSON.parse(stored) : null;
+  } catch {
+    return null;
+  }
+}
 
 export default function App() {
   const [pantallaActiva, setPantallaActiva] = useState('control');
@@ -19,6 +29,27 @@ export default function App() {
   const [backendConectado, setBackendConectado] = useState<boolean | null>(null);
   const [partidaParaCargar, setPartidaParaCargar] = useState<string | null>(null);
   const [partidaParaAprender, setPartidaParaAprender] = useState<string | null>(null);
+  const [usuario, setUsuario] = useState(() => obtenerUsuarioGuardado());
+
+  const manejarLogin = (usuarioData) => {
+    setUsuario(usuarioData);
+    // Redirigir según rol
+    if (usuarioData.rol === 'facilitador') {
+      setPantallaActiva('usuarios');
+    } else {
+      setPantallaActiva('control');
+    }
+  };
+
+  const manejarLogout = () => {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('usuario');
+    setUsuario(null);
+    setPantallaActiva('control');
+  };
+
+  const esFacilitador = usuario?.rol === 'facilitador';
 
   function irASalaControl(partidaId?: string) {
     setPartidaParaCargar(partidaId ?? null);
@@ -37,6 +68,15 @@ export default function App() {
     return () => clearInterval(intervalo);
   }, []);
 
+  // Verificar token al cargar
+  useEffect(() => {
+    const token = localStorage.getItem('access_token');
+    if (token && !usuario) {
+      // Token existe pero no hay usuario en estado - podría ser token expirado
+      // El backend responderá 401 en las llamadas y la UI lo manejará
+    }
+  }, [usuario]);
+
   const navClasses = (path: string) => 
     pantallaActiva === path
       ? "flex items-center gap-space-sm px-space-sm py-space-xs transition-colors bg-surface-container-high text-primary font-medium rounded-lg shadow-[0_1px_8px_rgba(0,0,0,0.04)] w-full text-left"
@@ -46,6 +86,13 @@ export default function App() {
     pantallaActiva === path
       ? "px-space-sm py-space-2xs transition-colors font-body-sm uppercase tracking-wide bg-surface-container-high text-primary rounded-lg"
       : "px-space-sm py-space-2xs text-on-surface-variant hover:bg-surface-container hover:text-on-surface rounded-lg transition-colors font-body-sm text-body-sm uppercase tracking-wide";
+
+  // Si no hay usuario, mostrar login
+  if (!usuario) {
+    return (
+      <Login onLoginSuccess={manejarLogin} />
+    );
+  }
 
   return (
     <div className="bg-surface-container-lowest font-body-lg text-on-surface antialiased selection:bg-primary-container selection:text-on-primary-container min-h-screen">
@@ -72,9 +119,11 @@ export default function App() {
               <button onClick={() => setPantallaActiva('admin')} className={navClasses('admin')}>
                 <span className="material-symbols-outlined text-[18px]">tune</span>Administración
               </button>
-              <button onClick={() => setPantallaActiva('usuarios')} className={navClasses('usuarios')}>
-                <span className="material-symbols-outlined text-[18px]">manage_accounts</span>Gestión de Usuarios
-              </button>
+              {esFacilitador && (
+                <button onClick={() => setPantallaActiva('usuarios')} className={navClasses('usuarios')}>
+                  <span className="material-symbols-outlined text-[18px]">manage_accounts</span>Gestión de Usuarios
+                </button>
+              )}
               <div className="pl-space-md flex flex-col gap-space-2xs border-l border-outline-variant/20 ml-space-sm mt-space-2xs">
                 <button onClick={() => setPantallaActiva('registro')} className={navClasses('registro')}>
                   <span className="material-symbols-outlined text-[16px]">history_edu</span>Registro de Partidas
@@ -99,6 +148,27 @@ export default function App() {
               <span className="font-mono-micro text-mono-micro text-outline">SOLO SIMULADO</span>
             </div>
           </div>
+          <div className="p-space-sm rounded-lg bg-surface-container-lowest/60 flex items-center gap-space-sm">
+            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+              <span className="material-symbols-outlined text-on-primary text-[18px]">
+                {esFacilitador ? 'admin_panel_settings' : 'person'}
+              </span>
+            </div>
+            <div className="flex-1 min-w-0 flex flex-col">
+              <span className="font-body-sm text-body-sm font-medium text-on-surface truncate">{usuario.nombre}</span>
+              <span className={`font-mono-micro text-mono-micro ${esFacilitador ? 'text-tertiary' : 'text-secondary'}`}>
+                {esFacilitador ? 'Facilitador' : 'Jugador'}
+              </span>
+            </div>
+            <button
+              onClick={manejarLogout}
+              className="p-space-xs rounded-lg hover:bg-surface-container transition-colors text-on-surface-variant"
+              type="button"
+              title="Cerrar sesión"
+            >
+              <span className="material-symbols-outlined text-[20px]">logout</span>
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -118,7 +188,9 @@ export default function App() {
                 <button onClick={() => setPantallaActiva('control')} className={headerNavClasses('control')}>SALA DE CONTROL</button>
                 <button onClick={() => setPantallaActiva('neuronal')} className={headerNavClasses('neuronal')}>RAZONAMIENTO NEURONAL</button>
                 <button onClick={() => setPantallaActiva('admin')} className={headerNavClasses('admin')}>ADMINISTRACIÓN</button>
-                <button onClick={() => setPantallaActiva('usuarios')} className={headerNavClasses('usuarios')}>GESTIÓN USUARIOS</button>
+                {esFacilitador && (
+                  <button onClick={() => setPantallaActiva('usuarios')} className={headerNavClasses('usuarios')}>GESTIÓN USUARIOS</button>
+                )}
               </nav>
             </div>
             <div className="flex items-center gap-space-md">
@@ -139,7 +211,9 @@ export default function App() {
                 <span className="material-symbols-outlined text-[14px]">emergency</span><span className="hidden sm:inline">E-STOP</span>
               </button>
               <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-                <span className="material-symbols-outlined text-on-primary text-[18px]">person</span>
+                <span className="material-symbols-outlined text-on-primary text-[18px]">
+                  {esFacilitador ? 'admin_panel_settings' : 'person'}
+                </span>
               </div>
             </div>
           </div>
@@ -151,7 +225,7 @@ export default function App() {
           )}
           {pantallaActiva === 'neuronal' && <RazonamientoNeuronal />}
           {pantallaActiva === 'admin' && <Administracion />}
-          {pantallaActiva === 'usuarios' && (
+          {pantallaActiva === 'usuarios' && esFacilitador && (
             <Suspense fallback={
               <div className="w-full px-space-lg py-space-lg flex flex-col items-center justify-center min-h-[40vh]">
                 <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mb-2"></div>
@@ -170,6 +244,21 @@ export default function App() {
           )}
           {pantallaActiva === 'aprendizaje' && (
             <Aprendizaje partidaIdInicial={partidaParaAprender} alCargarPartida={() => setPartidaParaAprender(null)} />
+          )}
+          {pantallaActiva === 'usuarios' && !esFacilitador && (
+            <div className="w-full px-space-lg py-space-lg flex flex-col items-center justify-center min-h-[40vh] text-center">
+              <span className="material-symbols-outlined text-[48px] text-error mb-2">lock</span>
+              <h2 className="font-headline-md text-headline-md text-on-surface mb-2">Acceso denegado</h2>
+              <p className="font-body-md text-body-md text-on-surface-variant">
+                Solo los facilitadores pueden acceder a la gestión de usuarios.
+              </p>
+              <button
+                onClick={() => setPantallaActiva('control')}
+                className="mt-4 px-space-lg py-space-md bg-primary text-on-primary rounded-xl font-body-sm text-body-sm"
+              >
+                Ir a Sala de Control
+              </button>
+            </div>
           )}
         </main>
       </div>
