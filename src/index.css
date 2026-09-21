@@ -49,6 +49,15 @@
   --color-outline-variant: #3b494c;
   --color-on-tertiary-container: #864a00;
 
+  /* Acentos "neón" — solo para la consola de Razonamiento Neuronal (estética
+     tipo laboratorio holográfico, ver frontend/vista razonamiento neuronal/code.html).
+     No reemplazan la paleta M3 de arriba, que sigue siendo la del resto de la app. */
+  --color-neon-cyan: #00e5ff;
+  --color-neon-blue: #0070f3;
+  --color-neon-purple: #7c4dff;
+  --color-neon-orange: #ff9100;
+  --color-neon-lime: #76ff03;
+
   --spacing-space-md: 1rem;
   --spacing-space-sm: 0.75rem;
   --spacing-space-2xs: 0.25rem;
