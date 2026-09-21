@@ -118,6 +118,16 @@ export async function login(email, password, rolEsperado) {
   return respuesta.json();
 }
 
+/** Estado del modelo de aprendizaje (disponible, dispositivo, checkpoint, etc.) */
+export function estadoModelo() {
+  return solicitar("/aprendizaje/estado-modelo", { method: "GET" });
+}
+
+/** Inferencia del modelo propio: candidatas, saliencia, etc. */
+export function inferenciaModelo(fen) {
+  return solicitar("/aprendizaje/inferencia", { body: JSON.stringify({ fen }) });
+}
+
 /** Gestión de usuarios (solo facilitadores) */
 
 async function solicitarAuth(endpoint, opciones = {}) {

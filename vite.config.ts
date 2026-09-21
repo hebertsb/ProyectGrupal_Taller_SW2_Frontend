@@ -19,6 +19,8 @@ export default defineConfig({
       '/partida': BACKEND_URL,
       '/vision': BACKEND_URL,
       '/health': BACKEND_URL,
+      '/aprendizaje': BACKEND_URL,
+      '/auth': BACKEND_URL,
     },
   },
 });
