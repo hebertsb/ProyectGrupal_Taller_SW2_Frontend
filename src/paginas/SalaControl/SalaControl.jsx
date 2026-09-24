@@ -316,7 +316,9 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
             pensando={cargando === 'mover' || cargando === 'mover-foto'}
             tipoOponente={tipoOponente}
             evaluacionCp={analisis?.evaluacion_cp ?? 0}
+            mateEn={analisis?.mate_en ?? null}
             ultimoMovimiento={jugadas.length > 0 ? jugadas[jugadas.length - 1] : null}
+            cantidadJugadas={jugadas.length}
             terminada={terminada}
             resultado={resultado}
           />
