@@ -150,34 +150,73 @@ export default function Login({ onLoginSuccess }) {
 
   return (
     <div className="min-h-screen bg-[#0c0e14] text-slate-200 font-sans antialiased flex flex-col justify-between relative overflow-x-hidden select-none">
-      {/* 1. FONDO CON MARCA DE AGUA Y CUADRÍCULA TECNOLÓGICA */}
-      <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
-        {/* Imagen de ajedrez robótico de alta fidelidad */}
-        <div
-          className="absolute inset-0 bg-cover bg-center filter brightness-75 contrast-125 opacity-40 scale-105"
-          style={{
-            backgroundImage: `radial-gradient(circle at 50% 50%, rgba(12,14,20,0.4) 0%, rgba(12,14,20,0.95) 90%), url("https://images.unsplash.com/photo-1529699211952-734e80c4d42b?auto=format&fit=crop&w=1600&q=80")`,
+      {/* ESTILOS DEEP-TECH EMBEBIDOS */}
+      <style>{`
+        .bg-tech-grid {
+          background-image: 
+            linear-gradient(to right, rgba(0, 229, 255, 0.05) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(0, 229, 255, 0.05) 1px, transparent 1px);
+          background-size: 38px 38px;
+        }
+        .neon-border-cyan {
+          box-shadow: 0 0 30px -4px rgba(0, 229, 255, 0.28), inset 0 0 20px -6px rgba(0, 229, 255, 0.16);
+        }
+        .text-glow-cyan {
+          text-shadow: 0 0 14px rgba(0, 229, 255, 0.7);
+        }
+        .text-glow-emerald {
+          text-shadow: 0 0 12px rgba(16, 185, 129, 0.7);
+        }
+        @keyframes chessStepAnimation {
+          0% { left: 6px; transform: translateY(0px) rotate(0deg); }
+          12% { transform: translateY(-16px) rotate(8deg); }
+          25% { left: 23%; transform: translateY(0px) rotate(0deg); }
+          37% { transform: translateY(-16px) rotate(-8deg); }
+          50% { left: 45%; transform: translateY(0px) rotate(0deg); }
+          62% { transform: translateY(-16px) rotate(8deg); }
+          75% { left: 68%; transform: translateY(0px) rotate(0deg); }
+          87% { transform: translateY(-16px) rotate(-6deg); }
+          100% { left: 88%; transform: translateY(0px) rotate(0deg); }
+        }
+        .animate-chess-step {
+          position: absolute;
+          animation: chessStepAnimation 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }
+        .scanlines {
+          background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.22) 50%);
+          background-size: 100% 3px;
+        }
+      `}</style>
+
+      {/* 1. FONDO CON MARCA DE AGUA FUTURISTA Y ARTE ROBÓTICO KAIROS */}
+      <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none" data-purpose="futuristic-scenery">
+        {/* Imagen de fondo representativa de ajedrez robótico */}
+        <img
+          alt="Fondo KAIROS Robot Chess Art"
+          className="absolute w-full h-full object-cover object-center filter brightness-90 contrast-110 opacity-60 scale-100 transform duration-700 ease-out"
+          src="/img/kairos_robot_bg.png"
+          onError={(e) => {
+            e.currentTarget.onerror = null;
+            e.currentTarget.src =
+              "https://lh3.googleusercontent.com/aida/AEtjO1WN9d-8ugCVVIzHn-mJLurilDjUiMqCn5WUFd2FjJpShzOTF4elBT7C07H_K3clHB0m6uDp9Grw5mfBFYvTJ2gTWOqbLr7gG1tAFS0iKH7-8TXqYbkXLY0AZ4RUa2nIrjGcxz_EQuh64eo9Yltx-fdjQ25gUKIrg3n5gA1mJf3HZEFgxMY--KpaDoOm-XMNm0pjEYhbJPSoJbzShoE8I9iqTJM_U2gIfWVF5MOI7gr3pJBbgzccMOSPgliu";
           }}
         />
 
-        {/* Gradientes y Rejilla Cibernética */}
-        <div className="absolute inset-0 bg-gradient-to-b from-[#0c0e14]/90 via-[#111319]/80 to-[#0c0e14]/95 backdrop-blur-[2px]" />
-        <div
-          className="absolute inset-0 opacity-40"
-          style={{
-            backgroundImage:
-              'linear-gradient(to right, rgba(0, 229, 255, 0.08) 1px, transparent 1px), linear-gradient(to bottom, rgba(0, 229, 255, 0.08) 1px, transparent 1px)',
-            backgroundSize: '36px 36px',
-          }}
-        />
+        {/* Overlay semitransparente degradado (#0c0e14 / #111319) */}
+        <div className="absolute inset-0 bg-gradient-to-b from-[#0c0e14]/85 via-[#111319]/75 to-[#0c0e14]/90 backdrop-blur-[1.5px]" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#0c0e14]/90 via-transparent to-[#0c0e14]/90" />
 
-        {/* Luces Neón Volumétricas */}
-        <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-[680px] h-[400px] bg-[#00e5ff]/10 rounded-full blur-[140px]" />
-        <div className="absolute bottom-4 right-1/4 w-[460px] h-[300px] bg-[#10b981]/10 rounded-full blur-[150px]" />
+        {/* Efecto de circuitos, cuadrícula y líneas de escaneo */}
+        <div className="absolute inset-0 bg-tech-grid opacity-70" />
+        <div className="absolute inset-0 scanlines opacity-40" />
+
+        {/* Luces ambientales cibernéticas */}
+        <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-[720px] h-[480px] bg-[#00e5ff]/12 rounded-full blur-[140px]" />
+        <div className="absolute bottom-4 right-1/4 w-[500px] h-[340px] bg-[#10b981]/10 rounded-full blur-[160px]" />
       </div>
 
       {/* 2. BARRA DE TELEMETRÍA SUPERIOR */}
-      <header className="relative z-10 w-full px-5 sm:px-8 py-3 flex items-center justify-between border-b border-[#00e5ff]/20 bg-[#0c0e14]/85 backdrop-blur-md font-mono text-xs">
+      <header className="relative z-10 w-full px-5 sm:px-8 py-3.5 flex items-center justify-between border-b border-[#00e5ff]/20 bg-[#0c0e14]/85 backdrop-blur-md font-mono text-xs" data-purpose="telemetry-bar">
         <div className="flex items-center space-x-3 sm:space-x-5">
           <div className="flex items-center space-x-2">
             <span className="relative flex h-2.5 w-2.5">
@@ -185,7 +224,7 @@ export default function Login({ onLoginSuccess }) {
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#00e5ff]" />
             </span>
             <span className="tracking-wider text-slate-300 font-semibold">
-              NODO KAIROS: <span className="text-[#00e5ff] drop-shadow-[0_0_8px_#00e5ff]">EN LÍNEA</span>
+              NODO KAIROS: <span className="text-[#00e5ff] text-glow-cyan">EN LÍNEA</span>
             </span>
           </div>
           <span className="text-slate-700 hidden sm:inline">|</span>
@@ -199,7 +238,9 @@ export default function Login({ onLoginSuccess }) {
 
         <div className="flex items-center space-x-3 sm:space-x-4">
           <div className="hidden md:flex items-center space-x-1.5 text-slate-400">
-            <span className="material-symbols-outlined text-[15px] text-[#00e5ff]">lock</span>
+            <svg className="w-3.5 h-3.5 text-[#00e5ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+            </svg>
             <span className="tracking-wider text-slate-300 text-[11px]">E2E TLS 1.3</span>
           </div>
           <div className="flex items-center space-x-1 px-2.5 py-1 rounded bg-[#00e5ff]/10 border border-[#00e5ff]/30 text-[11px] text-[#00e5ff] font-semibold">
@@ -212,32 +253,37 @@ export default function Login({ onLoginSuccess }) {
       {/* 3. CARD CENTRAL GLASSMÓRFICA DE AUTENTICACIÓN */}
       <main className="relative z-10 flex-1 flex items-center justify-center px-4 py-6 sm:px-6">
         <div className="w-full max-w-[440px] mx-auto">
-          <section className="relative bg-[#111319]/90 backdrop-blur-2xl rounded-2xl border border-[#00e5ff]/30 p-6 sm:p-7 shadow-2xl transition-all duration-300 shadow-[0_0_30px_-4px_rgba(0,229,255,0.25)]">
+          <section className="relative bg-[#111319]/90 backdrop-blur-2xl rounded-2xl border border-[#00e5ff]/30 p-6 sm:p-7 neon-border-cyan shadow-2xl transition-all duration-300">
             {/* Esquinas Cibernéticas Decorativas */}
             <div className="absolute -top-1 -left-1 w-3.5 h-3.5 border-t-2 border-l-2 border-[#00e5ff]" />
             <div className="absolute -top-1 -right-1 w-3.5 h-3.5 border-t-2 border-r-2 border-[#00e5ff]" />
             <div className="absolute -bottom-1 -left-1 w-3.5 h-3.5 border-b-2 border-l-2 border-[#00e5ff]" />
             <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 border-b-2 border-r-2 border-[#00e5ff]" />
 
-            {/* LOGOTIPO E IDENTIDAD KAIROS CORE */}
-            <div className="text-center mb-5">
-              <div className="flex justify-center mb-3">
-                <div className="inline-flex p-2 rounded-2xl bg-[#0c0e14] border border-[#00e5ff]/30 shadow-[0_0_20px_rgba(0,229,255,0.45)]">
-                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-[#0c0e14] to-[#151922] flex items-center justify-center border border-[#00e5ff]/40">
-                    <span className="material-symbols-outlined text-[#00e5ff] text-[34px] drop-shadow-[0_0_12px_#00e5ff]">
-                      robot_2
-                    </span>
-                  </div>
+            {/* LOGOTIPO E IDENTIDAD OFICIAL: ChessIA // KAIROS CORE */}
+            <div className="text-center mb-5" data-purpose="brand-logo-identity">
+              <div className="flex justify-center mb-4">
+                <div className="inline-flex p-1.5 rounded-2xl bg-[#0c0e14] border border-[#00e5ff]/30 shadow-[0_0_20px_rgba(0,229,255,0.45)] overflow-hidden">
+                  <img
+                    alt="ChessIA Logo"
+                    className="h-20 w-auto rounded-xl object-contain"
+                    src="/img/chessia_logo.png"
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src =
+                        "https://lh3.googleusercontent.com/aida-public/AB6AXuCMO5vNCHUFCALRsMCB3d9zKKZBq2uymquENQzCns1KnL-MM6bgeZembHFCzONDVXmn2D7mlufw6mTJ0PoUsy-2n-FkcyT8gic2zvIUjSc6MyD2rmIEKY7GwNaYRA5yIPOIcbP9M3Z2GbLAvy-Nivp26y-zCUt66g5vzNcjA1q0uBRwTfO1Fyfe2N8NtuP6YMADjpk23a0B7p3IVeTZz3kfN0UI79lVyoVbT6ZhkBfFHKVxQU7djqCHq7vzqvrZ7zDGSMc";
+                    }}
+                  />
                 </div>
               </div>
 
               <h1 className="font-display font-bold text-2xl sm:text-[26px] tracking-tight text-white flex items-center justify-center space-x-1.5">
                 <span>ChessIA</span>
                 <span className="text-slate-500 font-light">//</span>
-                <span className="text-[#00e5ff] drop-shadow-[0_0_10px_#00e5ff]">KAIROS</span>
-                <span className="text-emerald-400 font-semibold drop-shadow-[0_0_10px_#10b981]">CORE</span>
+                <span className="text-[#00e5ff] text-glow-cyan">KAIROS</span>
+                <span className="text-emerald-400 font-semibold text-glow-emerald">CORE</span>
               </h1>
-              <p className="mt-1 text-[10px] font-mono tracking-widest text-[#00e5ff]/80 uppercase">
+              <p className="mt-1 text-[10.5px] font-mono tracking-widest text-[#00e5ff]/80 uppercase">
                 SISTEMA AUTÓNOMO DE AJEDREZ ROBÓTICO
               </p>
             </div>
@@ -524,12 +570,12 @@ export default function Login({ onLoginSuccess }) {
 
                   {/* Caballo de ajedrez avanzando por la pista */}
                   <div
-                    className="z-10 text-[#00e5ff] drop-shadow-[0_0_10px_#00e5ff] transition-all duration-700 ease-out flex items-center"
-                    style={{ transform: `translateX(${progresoTrack * 3.2}px)` }}
+                    className="z-10 animate-chess-step text-[#00e5ff] drop-shadow-[0_0_10px_#00e5ff] flex items-center"
+                    id="chessWalkerPiece"
                   >
-                    <span className="material-symbols-outlined text-[20px] animate-bounce">
-                      chess_pawn
-                    </span>
+                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M19 22H5v-2h14v2zm-2.5-4H7.5l-.8-2.4C6.2 14.1 6 12.6 6 11c0-2.3 1.2-4.4 3-5.5V5c0-1.7 1.3-3 3-3h1c.6 0 1 .4 1 1v1.5c1.4.3 2.5 1.5 2.5 3v1c0 .6-.4 1-1 1h-1v2.5l2 3.5v2.5zM10.5 7c-.6 0-1 .4-1 1s.4 1 1 1 1-.4 1-1-.4-1-1-1z" />
+                    </svg>
                   </div>
 
                   {/* Barra de progreso */}
