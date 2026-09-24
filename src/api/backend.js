@@ -23,8 +23,12 @@ async function solicitar(endpoint, opciones = {}) {
   return respuesta.json();
 }
 
-export function crearPartida(nivel, fenInicial) {
-  const cuerpo = fenInicial ? { nivel, fen_inicial: fenInicial } : { nivel };
+export function crearPartida(nivel, fenInicial, tipoOponente = "modelo") {
+  const cuerpo = {
+    nivel,
+    tipo_oponente: tipoOponente,
+  };
+  if (fenInicial) cuerpo.fen_inicial = fenInicial;
   return solicitar("/partida", { body: JSON.stringify(cuerpo) });
 }
 

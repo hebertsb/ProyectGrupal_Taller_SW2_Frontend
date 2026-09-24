@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import './SalaControl.css';
+import AvatarAgente3D from '../../componentes/AvatarAgente3D';
 import {
   analizarPosicion,
   backendEnLinea,
@@ -35,6 +36,7 @@ const NIVELES_POR_CATEGORIA = [
 export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
   const [partidaId, setPartidaId] = useState(null);
   const [fen, setFen] = useState(null);
+  const [tipoOponente, setTipoOponente] = useState('modelo'); // 'modelo' (Red Neuronal v5) o 'motor' (Stockfish)
   const [nivel, setNivel] = useState(NIVEL_INICIAL);
   const [terminada, setTerminada] = useState(false);
   const [resultado, setResultado] = useState(null);
@@ -84,6 +86,9 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
       setPartidaId(partida.id);
       setFen(partida.fen);
       setNivel(partida.nivel);
+      if (partida.tipo_oponente) {
+        setTipoOponente(partida.tipo_oponente);
+      }
       setTerminada(partida.terminada);
       setResultado(partida.resultado);
       setJugadas(partida.jugadas);
@@ -100,13 +105,15 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
     }
   }
 
-  async function manejarNuevaPartida() {
+  async function manejarNuevaPartida(oponenteDeseado) {
     setError(null);
     setCargando('nueva');
     try {
-      const partida = await crearPartida(nivel);
+      const op = oponenteDeseado !== undefined ? oponenteDeseado : tipoOponente;
+      const partida = await crearPartida(nivel, null, op);
       setPartidaId(partida.id);
       setFen(partida.fen);
+      setTipoOponente(partida.tipo_oponente || op);
       setTerminada(false);
       setResultado(null);
       setJugadas(partida.jugadas);
@@ -221,7 +228,7 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
     setError(null);
     setCargando('nueva');
     try {
-      const partida = await crearPartida(nivel, fenReconocido);
+      const partida = await crearPartida(nivel, fenReconocido, tipoOponente);
       setPartidaId(partida.id);
       setFen(partida.fen);
       setTerminada(false);
@@ -302,8 +309,71 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
       )}
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-space-lg items-start">
-        {/* COLUMNA IZQUIERDA: CÁMARA REAL Y ESTADO DEL BRAZO (simulado, sin hardware) */}
+        {/* COLUMNA IZQUIERDA: AVATAR 3D DEL RIVAL Y VISIÓN FÍSICA */}
         <div className="xl:col-span-3 flex flex-col gap-space-md">
+          {/* AVATAR 3D DEL AGENTE INTELIGENTE (THREE.JS / HU7) */}
+          <AvatarAgente3D
+            pensando={cargando === 'mover' || cargando === 'mover-foto'}
+            tipoOponente={tipoOponente}
+            evaluacionCp={analisis?.evaluacion_cp ?? 0}
+            ultimoMovimiento={jugadas.length > 0 ? jugadas[jugadas.length - 1] : null}
+          />
+
+          {/* SELECTOR DE OPONENTE (MODELO IA v5 vs STOCKFISH 16) */}
+          <div className="bg-surface-container-low rounded-xl p-3.5 shadow-xl flex flex-col gap-2.5 border border-outline-variant/30">
+            <div className="flex items-center justify-between">
+              <span className="font-mono-micro text-[11px] uppercase tracking-wider text-on-surface-variant flex items-center gap-1 font-semibold">
+                <span className="material-symbols-outlined text-[14px] text-primary">swords</span>
+                RIVAL DIGITAL
+              </span>
+              <span className="text-[10px] text-primary font-mono font-bold">
+                {tipoOponente === 'modelo' ? 'IA v5 AUTÓNOMA' : 'STOCKFISH 16'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-surface-container-lowest border border-outline-variant/30">
+              <button
+                type="button"
+                onClick={() => {
+                  setTipoOponente('modelo');
+                  manejarNuevaPartida('modelo');
+                }}
+                disabled={cargando === 'nueva'}
+                className={`py-2 px-1.5 rounded-lg font-mono-label text-[11px] font-semibold flex flex-col items-center justify-center gap-1 transition-all ${
+                  tipoOponente === 'modelo'
+                    ? 'bg-primary text-on-primary shadow-[0_0_14px_rgba(0,229,255,0.45)]'
+                    : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'
+                }`}
+              >
+                <div className="flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[15px]">psychology</span>
+                  <span>MODELO IA v5</span>
+                </div>
+                <span className="text-[9px] opacity-80 font-normal">SE-ResNet-8 FIDE</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setTipoOponente('motor');
+                  manejarNuevaPartida('motor');
+                }}
+                disabled={cargando === 'nueva'}
+                className={`py-2 px-1.5 rounded-lg font-mono-label text-[11px] font-semibold flex flex-col items-center justify-center gap-1 transition-all ${
+                  tipoOponente === 'motor'
+                    ? 'bg-primary text-on-primary shadow-[0_0_14px_rgba(0,229,255,0.45)]'
+                    : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'
+                }`}
+              >
+                <div className="flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[15px]">smart_toy</span>
+                  <span>STOCKFISH</span>
+                </div>
+                <span className="text-[9px] opacity-80 font-normal">Minimax Alfa-Beta</span>
+              </button>
+            </div>
+          </div>
+
           <div className="bg-surface-container-low rounded-xl p-space-md shadow-xl flex flex-col gap-space-sm relative overflow-hidden">
             <div className="flex items-center justify-between">
               <span className="font-mono-micro text-mono-micro uppercase tracking-wider text-on-surface-variant flex items-center gap-1">
@@ -491,24 +561,35 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
                 </div>
               </div>
               <div className="flex items-center gap-space-xs">
-                <label className="font-mono-micro text-mono-micro text-outline uppercase" htmlFor="nivelSelect">Nivel</label>
-                <select
-                  id="nivelSelect"
-                  value={nivel}
-                  onChange={(evento) => setNivel(Number(evento.target.value))}
-                  className="bg-surface-container-high rounded-lg px-2 py-1 font-mono-label text-mono-label text-on-surface"
-                >
-                  {NIVELES_POR_CATEGORIA.map((categoria) => (
-                    <optgroup key={categoria.etiqueta} label={categoria.etiqueta}>
-                      {Array.from(
-                        { length: categoria.hasta - categoria.desde + 1 },
-                        (_, indice) => categoria.desde + indice
-                      ).map((valor) => (
-                        <option key={valor} value={valor}>Nivel {valor}</option>
+                {tipoOponente === 'motor' ? (
+                  <>
+                    <label className="font-mono-micro text-mono-micro text-outline uppercase" htmlFor="nivelSelect">Nivel</label>
+                    <select
+                      id="nivelSelect"
+                      value={nivel}
+                      onChange={(evento) => setNivel(Number(evento.target.value))}
+                      className="bg-surface-container-high rounded-lg px-2 py-1 font-mono-label text-mono-label text-on-surface"
+                    >
+                      {NIVELES_POR_CATEGORIA.map((categoria) => (
+                        <optgroup key={categoria.etiqueta} label={categoria.etiqueta}>
+                          {Array.from(
+                            { length: categoria.hasta - categoria.desde + 1 },
+                            (_, indice) => categoria.desde + indice
+                          ).map((valor) => (
+                            <option key={valor} value={valor}>Nivel {valor}</option>
+                          ))}
+                        </optgroup>
                       ))}
-                    </optgroup>
-                  ))}
-                </select>
+                    </select>
+                  </>
+                ) : (
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface-container-high/80 border border-primary/30">
+                    <span className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-[0_0_6px_#00e5ff]"></span>
+                    <span className="font-mono-micro text-[11px] text-primary font-bold">
+                      FIDE 2200+ · SE-ResNet-8
+                    </span>
+                  </div>
+                )}
                 <button
                   onClick={manejarReevaluar}
                   disabled={cargando === 'reevaluar' || !fen}
@@ -517,7 +598,7 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
                   <span className="material-symbols-outlined text-[16px]">restart_alt</span> REEVALUAR
                 </button>
                 <button
-                  onClick={manejarNuevaPartida}
+                  onClick={() => manejarNuevaPartida()}
                   disabled={cargando === 'nueva'}
                   className="px-space-lg py-2.5 rounded-lg bg-primary-container text-on-primary-container font-headline-sm text-body-lg font-medium shadow-[0_0_16px_rgba(0,229,255,0.35)] hover:shadow-[0_0_24px_rgba(0,229,255,0.6)] hover:bg-primary transition-all flex items-center gap-2 disabled:opacity-50"
                 >
