@@ -1,389 +1,655 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 /**
- * Avatar 3D Interactivo del Agente Autónomo (HU7 / Sprint 3).
- *
- * Renderizado en WebGL con Three.js:
- * - Geometría robótica procedural con materiales PBR metálicos y visor emisivo.
- * - Seguimiento de mirada reactivo (head tracking suave hacia el cursor del usuario).
- * - Animaciones de respiración, pulso sináptico y cálculo tensorial según el estado de la partida.
- * - Soporte para estados: 'neutral', 'pensando' (inferencia red v5), 'ventaja' o 'desafio'.
+ * Catálogo de modelos 3D GLTF / GLB disponibles:
+ * 1. readyplayer_me: Avatar humanoide realista estilo Meta / Ready Player Me con rigging y morph targets.
+ * 2. robot_expressive: Robot 3D humanoide con animaciones completas (Wave, ThumbsUp, Death, Yes, Idle).
+ * 3. xbot: Modelo humanoide oficial Mixamo con huesos y animaciones (idle, agree, headShake, sad_pose).
+ * 4. holograma: Androide procedural con anillos cuánticos y visor emisivo.
  */
+const MODELOS_CATALOGO = [
+  {
+    id: 'readyplayer_me',
+    nombre: 'Ready Player Me',
+    tipo: 'Humanoide Meta',
+    icono: 'person',
+    ruta: '/models/readyplayer.me.glb',
+    descripcion: 'Avatar humanoide completo con rigging esquelético y rasgos realistas.',
+  },
+  {
+    id: 'robot_expressive',
+    nombre: 'Robot Expresivo',
+    tipo: 'Androide 3D',
+    icono: 'smart_toy',
+    ruta: '/models/RobotExpressive.glb',
+    descripcion: 'Robot articulado con clips de animación (saludo, pulgar arriba, derrota, cálculo).',
+  },
+  {
+    id: 'xbot',
+    nombre: 'Mixamo Xbot',
+    tipo: 'Avatar Rigged',
+    icono: 'accessibility_new',
+    ruta: '/models/Xbot.glb',
+    descripcion: 'Personaje humanoide con rigging completo y cinemática Mixamo.',
+  },
+  {
+    id: 'holograma',
+    nombre: 'Ciber-Holograma',
+    tipo: 'Procedural',
+    icono: 'memory',
+    ruta: null,
+    descripcion: 'Entidad de IA holográfica con pulso tensorial y anillos cuánticos.',
+  },
+];
+
 export default function AvatarAgente3D({
   pensando = false,
   tipoOponente = 'modelo',
   evaluacionCp = 0,
   ultimoMovimiento = null,
-  tamano = 'normal', // 'compacto', 'normal', 'ampliado'
+  terminada = false,
+  resultado = null,
 }) {
   const mountRef = useRef(null);
-  const [estadoTexto, setEstadoTexto] = useState('En espera');
+  const [modeloActivo, setModeloActivo] = useState('readyplayer_me');
+  const [cargandoModelo, setCargandoModelo] = useState(false);
+  const [progresoCarga, setProgresoCarga] = useState(0);
+  const [gestoActivo, setGestoActivo] = useState('En reposo');
+  const [urlPersonalizada, setUrlPersonalizada] = useState('');
+  const [mostrarCustomInput, setMostrarCustomInput] = useState(false);
+  const [errorCarga, setErrorCarga] = useState(null);
 
+  // Referencias mutables para el loop de Three.js
+  const controlsRef = useRef(null);
+  const mixerRef = useRef(null);
+  const actionsRef = useRef({});
+  const activeActionRef = useRef(null);
+  const bonesRef = useRef({ head: null, neck: null, spine: null });
+  const morphMeshesRef = useRef([]);
+  const mousePosRef = useRef({ x: 0, y: 0 });
+  const clockRef = useRef(new THREE.Clock());
+  const resetCameraRef = useRef(null);
+  const triggerGestoRef = useRef(null);
+
+  // Función para transicionar suavemente entre animaciones
+  const fadeToAction = useCallback((name, duration = 0.4) => {
+    const actions = actionsRef.current;
+    if (!actions || !actions[name]) return;
+
+    const previousAction = activeActionRef.current;
+    const nextAction = actions[name];
+
+    if (previousAction !== nextAction) {
+      if (previousAction) {
+        previousAction.fadeOut(duration);
+      }
+      nextAction
+        .reset()
+        .setEffectiveTimeScale(1)
+        .setEffectiveWeight(1)
+        .fadeIn(duration)
+        .play();
+
+      activeActionRef.current = nextAction;
+      setGestoActivo(name);
+    }
+  }, []);
+
+  // Exponer disparador de gestos manuales / reactivos
+  const dispararGesto = useCallback((gesto) => {
+    const actions = actionsRef.current;
+    const modelo = modeloActivo;
+
+    setGestoActivo(gesto);
+
+    if (modelo === 'robot_expressive' && actions) {
+      const mapa = {
+        saludo: 'Wave',
+        pensar: 'Yes',
+        victoria: 'ThumbsUp',
+        derrota: 'Death',
+        idle: 'Idle',
+        celebrar: 'Dance',
+      };
+      const clip = mapa[gesto] || 'Idle';
+      if (actions[clip]) {
+        fadeToAction(clip, 0.3);
+        if (clip !== 'Idle' && clip !== 'Death') {
+          setTimeout(() => fadeToAction('Idle', 0.5), 3200);
+        }
+      }
+    } else if (modelo === 'xbot' && actions) {
+      const mapa = {
+        saludo: 'agree',
+        pensar: 'agree',
+        victoria: 'agree',
+        derrota: 'sad_pose',
+        idle: 'idle',
+        duda: 'headShake',
+      };
+      const clip = mapa[gesto] || 'idle';
+      if (actions[clip]) {
+        fadeToAction(clip, 0.3);
+        if (clip !== 'idle') {
+          setTimeout(() => fadeToAction('idle', 0.5), 3000);
+        }
+      }
+    } else {
+      // Para Ready Player Me o procedural: el loop anima huesos y morphs
+      setTimeout(() => setGestoActivo('En reposo'), 2500);
+    }
+  }, [modeloActivo, fadeToAction]);
+
+  triggerGestoRef.current = dispararGesto;
+
+  // Reactividad ante el estado del juego (IA pensando)
+  useEffect(() => {
+    if (pensando) {
+      setGestoActivo('Calculando jugada...');
+      if (modeloActivo === 'robot_expressive' && actionsRef.current['Yes']) {
+        fadeToAction('Yes', 0.3);
+      } else if (modeloActivo === 'xbot' && actionsRef.current['agree']) {
+        fadeToAction('agree', 0.3);
+      }
+    } else {
+      if (modeloActivo === 'robot_expressive' && actionsRef.current['Idle']) {
+        fadeToAction('Idle', 0.4);
+      } else if (modeloActivo === 'xbot' && actionsRef.current['idle']) {
+        fadeToAction('idle', 0.4);
+      }
+      setGestoActivo('Atento al tablero');
+    }
+  }, [pensando, modeloActivo, fadeToAction]);
+
+  // Reactividad al terminar la partida (Victoria / Derrota)
+  useEffect(() => {
+    if (terminada && resultado) {
+      // El jugador es blancas ('w'), la IA es negras ('b')
+      if (resultado === '0-1') {
+        // Ganó la IA
+        dispararGesto('victoria');
+      } else if (resultado === '1-0') {
+        // Perdió la IA
+        dispararGesto('derrota');
+      } else {
+        dispararGesto('idle');
+      }
+    }
+  }, [terminada, resultado, dispararGesto]);
+
+  // Reactividad a jugadas
+  useEffect(() => {
+    if (ultimoMovimiento && !pensando && !terminada) {
+      if (evaluacionCp > 180) {
+        dispararGesto('derrota');
+      } else if (evaluacionCp < -180) {
+        dispararGesto('victoria');
+      }
+    }
+  }, [ultimoMovimiento, evaluacionCp, pensando, terminada, dispararGesto]);
+
+  // Montaje y Renderizado de Three.js
   useEffect(() => {
     const contenedor = mountRef.current;
     if (!contenedor) return;
 
-    const ancho = contenedor.clientWidth || 240;
-    const alto = contenedor.clientHeight || 240;
+    let animId;
+    const ancho = contenedor.clientWidth || 280;
+    const alto = contenedor.clientHeight || 260;
 
-    // 1. Escena, Cámara y Renderizador WebGL
+    // 1. Escena y Renderizador WebGL
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, ancho / alto, 0.1, 1000);
-    camera.position.set(0, 0.4, 4.2);
+    const camera = new THREE.PerspectiveCamera(40, ancho / alto, 0.1, 100);
+    camera.position.set(0, 1.45, 2.2);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(ancho, alto);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.2;
+    renderer.toneMappingExposure = 1.3;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     contenedor.appendChild(renderer.domElement);
 
-    // 2. Iluminación Cinematográfica PBR
-    const luzAmbiente = new THREE.AmbientLight(0x0a192f, 2.5);
+    // 2. Controles de Órbita con amortiguación
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.minDistance = 0.8;
+    controls.maxDistance = 4.5;
+    controls.maxPolarAngle = Math.PI / 2 + 0.05;
+    controls.target.set(0, 1.3, 0);
+    controlsRef.current = controls;
+
+    resetCameraRef.current = () => {
+      camera.position.set(0, 1.45, 2.2);
+      controls.target.set(0, 1.3, 0);
+      controls.update();
+    };
+
+    // 3. Sistema de Iluminación de Estudio PBR
+    const luzAmbiente = new THREE.AmbientLight(0xffffff, 1.4);
     scene.add(luzAmbiente);
 
-    const luzClave = new THREE.DirectionalLight(0x00e5ff, 3.0);
+    const luzClave = new THREE.DirectionalLight(0x00e5ff, 2.8);
     luzClave.position.set(2, 4, 3);
+    luzClave.castShadow = true;
     scene.add(luzClave);
 
-    const luzRelleno = new THREE.DirectionalLight(0x7c4dff, 2.0);
-    luzRelleno.position.set(-3, -1, 2);
+    const luzRelleno = new THREE.DirectionalLight(0x9d4edd, 1.6);
+    luzRelleno.position.set(-2.5, 1, 2);
     scene.add(luzRelleno);
 
-    const luzContorno = new THREE.PointLight(0x00e5ff, 4.0, 10);
-    luzContorno.position.set(0, 2, -2);
+    const luzContorno = new THREE.PointLight(0x00e5ff, 3.5, 8);
+    luzContorno.position.set(0, 2.2, -1.8);
     scene.add(luzContorno);
 
-    // Luz dinámica del visor (pulsa cuando piensa)
-    const luzVisor = new THREE.PointLight(0x00e5ff, 2.5, 3);
-    luzVisor.position.set(0, 0.35, 1.2);
-    scene.add(luzVisor);
+    // Luz dinámica de inferencia (pulsa en la cara del avatar)
+    const luzPensamiento = new THREE.PointLight(0x00e5ff, 1.0, 3);
+    luzPensamiento.position.set(0, 1.5, 0.8);
+    scene.add(luzPensamiento);
 
-    // 3. Construcción del Agente Robótico 3D
-    const grupoAvatar = new THREE.Group();
-    scene.add(grupoAvatar);
-
-    // Materiales
-    const materialMetalOscuro = new THREE.MeshStandardMaterial({
-      color: 0x111625,
-      metalness: 0.9,
-      roughness: 0.25,
-    });
-
-    const materialPlacaTitanio = new THREE.MeshStandardMaterial({
-      color: 0x1e293b,
-      metalness: 0.8,
-      roughness: 0.35,
-    });
-
-    const materialCromo = new THREE.MeshStandardMaterial({
-      color: 0xdbeafe,
-      metalness: 0.95,
-      roughness: 0.1,
-    });
-
-    const materialVisorEmisivo = new THREE.MeshStandardMaterial({
-      color: 0x00e5ff,
+    // Disco / Plataforma holográfica en la base
+    const discoGeo = new THREE.CylinderGeometry(0.75, 0.75, 0.02, 32);
+    const discoMat = new THREE.MeshStandardMaterial({
+      color: 0x09101d,
       emissive: 0x00e5ff,
-      emissiveIntensity: 2.2,
-      roughness: 0.1,
-      metalness: 0.5,
-    });
-
-    const materialNucleoDorado = new THREE.MeshStandardMaterial({
-      color: 0xf59e0b,
-      emissive: 0xd97706,
-      emissiveIntensity: 0.8,
+      emissiveIntensity: 0.35,
       metalness: 0.9,
       roughness: 0.2,
-    });
-
-    // Cabeza Principal
-    const grupoCabeza = new THREE.Group();
-    grupoAvatar.add(grupoCabeza);
-
-    // Casco Craneal
-    const geoCraneo = new THREE.SphereGeometry(0.85, 32, 32);
-    geoCraneo.scale(0.9, 1.05, 0.95);
-    const craneo = new THREE.Mesh(geoCraneo, materialMetalOscuro);
-    grupoCabeza.add(craneo);
-
-    // Placas Laterales
-    const geoPlaca = new THREE.CylinderGeometry(0.86, 0.86, 0.4, 24, 1, true, 0.5, 1.2);
-    const placaIzq = new THREE.Mesh(geoPlaca, materialPlacaTitanio);
-    placaIzq.rotation.y = Math.PI / 2;
-    placaIzq.position.y = 0.1;
-    grupoCabeza.add(placaIzq);
-
-    const placaDer = new THREE.Mesh(geoPlaca, materialPlacaTitanio);
-    placaDer.rotation.y = -Math.PI / 2;
-    placaDer.position.y = 0.1;
-    grupoCabeza.add(placaDer);
-
-    // Visor Óptico / Ojos Cibernéticos
-    const geoVisor = new THREE.BoxGeometry(0.95, 0.22, 0.35);
-    const visor = new THREE.Mesh(geoVisor, materialVisorEmisivo);
-    visor.position.set(0, 0.18, 0.72);
-    grupoCabeza.add(visor);
-
-    // Ojos / Sensores duales dentro del visor
-    const geoLente = new THREE.CylinderGeometry(0.065, 0.065, 0.15, 16);
-    geoLente.rotateX(Math.PI / 2);
-    const matLente = new THREE.MeshBasicMaterial({ color: 0xffffff });
-
-    const lenteIzq = new THREE.Mesh(geoLente, matLente);
-    lenteIzq.position.set(-0.25, 0.18, 0.88);
-    grupoCabeza.add(lenteIzq);
-
-    const lenteDer = new THREE.Mesh(geoLente, matLente);
-    lenteDer.position.set(0.25, 0.18, 0.88);
-    grupoCabeza.add(lenteDer);
-
-    // Mentón / Mandíbula estilizada
-    const geoMenton = new THREE.ConeGeometry(0.45, 0.5, 4);
-    geoMenton.rotateY(Math.PI / 4);
-    const menton = new THREE.Mesh(geoMenton, materialPlacaTitanio);
-    menton.position.set(0, -0.65, 0.4);
-    grupoCabeza.add(menton);
-
-    // Cuello Robótico / Anillos Articulados
-    const grupoCuello = new THREE.Group();
-    grupoCuello.position.y = -0.9;
-    grupoAvatar.add(grupoCuello);
-
-    const geoAnillo = new THREE.TorusGeometry(0.42, 0.06, 16, 32);
-    geoAnillo.rotateX(Math.PI / 2);
-    const anillo1 = new THREE.Mesh(geoAnillo, materialCromo);
-    anillo1.position.y = 0.1;
-    grupoCuello.add(anillo1);
-
-    const anillo2 = new THREE.Mesh(geoAnillo, materialMetalOscuro);
-    anillo2.position.y = -0.15;
-    anillo2.scale.set(1.15, 1.15, 1.15);
-    grupoCuello.add(anillo2);
-
-    // Anillo Giroscópico Holográfico (Orbita alrededor del agente)
-    const geoHalo = new THREE.TorusGeometry(1.35, 0.02, 16, 64);
-    const matHalo = new THREE.MeshBasicMaterial({
-      color: 0x00e5ff,
       transparent: true,
-      opacity: 0.6,
-      wireframe: true,
+      opacity: 0.85,
     });
-    const halo1 = new THREE.Mesh(geoHalo, matHalo);
-    halo1.rotation.x = Math.PI / 3;
-    grupoAvatar.add(halo1);
+    const baseDisco = new THREE.Mesh(discoGeo, discoMat);
+    baseDisco.position.y = 0;
+    scene.add(baseDisco);
 
-    const halo2 = new THREE.Mesh(geoHalo, matHalo);
-    halo2.rotation.x = -Math.PI / 4;
-    halo2.scale.set(1.18, 1.18, 1.18);
-    grupoAvatar.add(halo2);
+    // Anillo exterior brillante
+    const anilloGeo = new THREE.RingGeometry(0.74, 0.77, 36);
+    const anilloMat = new THREE.MeshBasicMaterial({
+      color: 0x00e5ff,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.8,
+    });
+    const anillo = new THREE.Mesh(anilloGeo, anilloMat);
+    anillo.rotation.x = -Math.PI / 2;
+    anillo.position.y = 0.012;
+    scene.add(anillo);
 
-    // Nube de Partículas Sinápticas (Red Neuronal)
-    const totalParticulas = 60;
-    const geoParticulas = new THREE.BufferGeometry();
-    const posiciones = new Float32Array(totalParticulas * 3);
+    // 4. Carga del Modelo seleccionado
+    mixerRef.current = null;
+    actionsRef.current = {};
+    activeActionRef.current = null;
+    bonesRef.current = { head: null, neck: null, spine: null };
+    morphMeshesRef.current = [];
 
-    for (let i = 0; i < totalParticulas * 3; i += 3) {
-      const radio = 1.3 + Math.random() * 0.8;
-      const theta = Math.random() * Math.PI * 2;
-      const phi = (Math.random() - 0.5) * Math.PI;
+    const modeloInfo = MODELOS_CATALOGO.find((m) => m.id === modeloActivo);
+    const rutaCarga = urlPersonalizada.trim() || modeloInfo?.ruta;
 
-      posiciones[i] = radio * Math.cos(phi) * Math.cos(theta);
-      posiciones[i + 1] = radio * Math.sin(phi);
-      posiciones[i + 2] = radio * Math.cos(phi) * Math.sin(theta);
+    if (modeloActivo === 'holograma' || !rutaCarga) {
+      // MODO PROCEDURAL (CIBER-ANDROIDE KAIROS)
+      setCargandoModelo(false);
+      const grupoProcedural = new THREE.Group();
+      scene.add(grupoProcedural);
+
+      const matMetal = new THREE.MeshStandardMaterial({
+        color: 0x111625,
+        metalness: 0.9,
+        roughness: 0.25,
+      });
+      const matVisor = new THREE.MeshStandardMaterial({
+        color: 0x00e5ff,
+        emissive: 0x00e5ff,
+        emissiveIntensity: 2.2,
+        roughness: 0.1,
+      });
+
+      const craneo = new THREE.Mesh(new THREE.SphereGeometry(0.5, 32, 32), matMetal);
+      craneo.position.set(0, 1.45, 0);
+      grupoProcedural.add(craneo);
+
+      const visor = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.14, 0.25), matVisor);
+      visor.position.set(0, 1.48, 0.42);
+      grupoProcedural.add(visor);
+
+      const cuello = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 0.35, 16), matMetal);
+      cuello.position.set(0, 1.15, 0);
+      grupoProcedural.add(cuello);
+    } else {
+      // CARGA DE MODELO GLTF / GLB MEDIANTE GLTFLoader
+      setCargandoModelo(true);
+      setErrorCarga(null);
+      setProgresoCarga(0);
+
+      const loader = new GLTFLoader();
+      loader.load(
+        rutaCarga,
+        (gltf) => {
+          const root = gltf.scene;
+          root.traverse((obj) => {
+            if (obj.isMesh) {
+              obj.castShadow = true;
+              obj.receiveShadow = true;
+              if (obj.morphTargetDictionary) {
+                morphMeshesRef.current.push(obj);
+              }
+            }
+            // Detección de huesos para seguimiento de cabeza
+            const nameLower = (obj.name || '').toLowerCase();
+            if (nameLower.includes('head') && !bonesRef.current.head) {
+              bonesRef.current.head = obj;
+            } else if (nameLower.includes('neck') && !bonesRef.current.neck) {
+              bonesRef.current.neck = obj;
+            } else if (nameLower.includes('spine') && !bonesRef.current.spine) {
+              bonesRef.current.spine = obj;
+            }
+          });
+
+          // Normalizar escala y centrar modelo sobre la base
+          const bbox = new THREE.Box3().setFromObject(root);
+          const size = bbox.getSize(new THREE.Vector3());
+          const maxDim = Math.max(size.x, size.y, size.z);
+          const escalaDeseada = 1.75 / (maxDim || 1);
+          root.scale.setScalar(escalaDeseada);
+
+          // Ajustar altura a nivel de suelo
+          const bboxAjustado = new THREE.Box3().setFromObject(root);
+          root.position.y = -bboxAjustado.min.y;
+          root.position.x = -(bboxAjustado.min.x + bboxAjustado.max.x) / 2;
+          root.position.z = -(bboxAjustado.min.z + bboxAjustado.max.z) / 2;
+
+          scene.add(root);
+
+          // Configurar Animaciones si existen
+          if (gltf.animations && gltf.animations.length > 0) {
+            const mixer = new THREE.AnimationMixer(root);
+            mixerRef.current = mixer;
+            const actions = {};
+
+            gltf.animations.forEach((clip) => {
+              actions[clip.name] = mixer.clipAction(clip);
+            });
+            actionsRef.current = actions;
+
+            // Clip inicial por defecto
+            const defaultClip =
+              actions['Idle'] || actions['idle'] || actions['Standing'] || Object.values(actions)[0];
+            if (defaultClip) {
+              defaultClip.play();
+              activeActionRef.current = defaultClip;
+              setGestoActivo('En reposo');
+            }
+          }
+
+          setCargandoModelo(false);
+          setProgresoCarga(100);
+        },
+        (xhr) => {
+          if (xhr.lengthComputable) {
+            setProgresoCarga(Math.round((xhr.loaded / xhr.total) * 100));
+          }
+        },
+        (err) => {
+          console.error('Error al cargar avatar GLB:', err);
+          setErrorCarga('No se pudo cargar el modelo 3D. Seleccionando holograma de respaldo.');
+          setCargandoModelo(false);
+          setModeloActivo('holograma');
+        }
+      );
     }
 
-    geoParticulas.setAttribute('position', new THREE.BufferAttribute(posiciones, 3));
-    const matParticulas = new THREE.PointsMaterial({
-      color: 0x00e5ff,
-      size: 0.045,
-      transparent: true,
-      opacity: 0.7,
-      blending: THREE.AdditiveBlending,
-    });
-    const nubeParticulas = new THREE.Points(geoParticulas, matParticulas);
-    grupoAvatar.add(nubeParticulas);
-
-    // 4. Variables de Animación y Tracking de Cursor
-    let mouseX = 0;
-    let mouseY = 0;
-    let targetRotX = 0;
-    let targetRotY = 0;
-
+    // 5. Seguimiento del Cursor (Head Tracking)
     const manejarMouseMove = (e) => {
       const rect = contenedor.getBoundingClientRect();
       const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       const y = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
-      mouseX = Math.max(-1, Math.min(1, x));
-      mouseY = Math.max(-1, Math.min(1, y));
+      mousePosRef.current = { x: Math.max(-1, Math.min(1, x)), y: Math.max(-1, Math.min(1, y)) };
     };
 
     window.addEventListener('mousemove', manejarMouseMove);
 
-    // 5. Loop de Renderizado (60 FPS)
-    let animationFrameId;
-    let reloj = new THREE.Clock();
+    // 6. Bucle de Animación (Render Loop)
+    let blinkTimer = 0;
+    const animate = () => {
+      animId = requestAnimationFrame(animate);
 
-    const animar = () => {
-      animationFrameId = requestAnimationFrame(animar);
-      const tiempo = reloj.getElapsedTime();
+      const delta = clockRef.current.getDelta();
+      const elapsed = clockRef.current.getElapsedTime();
 
-      // Respiración sutil / Flotación
-      grupoAvatar.position.y = Math.sin(tiempo * 1.5) * 0.06;
+      // Actualizar AnimationMixer
+      if (mixerRef.current) {
+        mixerRef.current.update(delta);
+      }
 
-      // Rotación de halos y partículas orbitales
-      halo1.rotation.z = tiempo * 0.4;
-      halo2.rotation.y = tiempo * -0.3;
-      nubeParticulas.rotation.y = tiempo * 0.15;
+      // Procedural Head Tracking & Eye Blinking para Ready Player Me / Rigged sin clips
+      const { head, neck } = bonesRef.current;
+      if (head) {
+        const targetRotY = mousePosRef.current.x * 0.45;
+        const targetRotX = -mousePosRef.current.y * 0.35 + (pensando ? 0.25 : 0);
+        head.rotation.y = THREE.MathUtils.lerp(head.rotation.y, targetRotY, 0.08);
+        head.rotation.x = THREE.MathUtils.lerp(head.rotation.x, targetRotX, 0.08);
+      }
+      if (neck) {
+        neck.rotation.y = THREE.MathUtils.lerp(neck.rotation.y, mousePosRef.current.x * 0.2, 0.06);
+      }
 
-      // Seguimiento suave del mouse (Head Tracking con Damping)
-      targetRotY = mouseX * 0.45;
-      targetRotX = -mouseY * 0.35;
-      grupoCabeza.rotation.y += (targetRotY - grupoCabeza.rotation.y) * 0.08;
-      grupoCabeza.rotation.x += (targetRotX - grupoCabeza.rotation.x) * 0.08;
+      // Parpadeo ocular procedural (Morph Targets de Ready Player Me)
+      blinkTimer += delta;
+      if (morphMeshesRef.current.length > 0) {
+        const blinkValue = blinkTimer % 3.5 < 0.15 ? Math.sin((blinkTimer % 3.5) * 20) : 0;
+        morphMeshesRef.current.forEach((mesh) => {
+          const dict = mesh.morphTargetDictionary;
+          const infl = mesh.morphTargetInfluences;
+          if (dict && infl) {
+            if (dict['eyeBlinkLeft'] !== undefined) infl[dict['eyeBlinkLeft']] = blinkValue;
+            if (dict['eyeBlinkRight'] !== undefined) infl[dict['eyeBlinkRight']] = blinkValue;
+          }
+        });
+      }
 
-      // Modulación según estado (Pensando vs En Espera)
+      // Pulso dinámico de pensamiento tensorial
       if (pensando) {
-        // Pulso rápido de energía (Inferencia activa)
-        const pulso = Math.sin(tiempo * 12) * 0.5 + 0.5;
-        materialVisorEmisivo.emissiveIntensity = 2.0 + pulso * 2.5;
-        luzVisor.intensity = 2.5 + pulso * 3.0;
-        halo1.rotation.z = tiempo * 1.8;
-        nubeParticulas.rotation.y = tiempo * 0.8;
-        // Cabeza se inclina analizando la posición
-        grupoCabeza.rotation.x += (0.15 - grupoCabeza.rotation.x) * 0.1;
+        luzPensamiento.intensity = 2.0 + Math.sin(elapsed * 12) * 1.5;
+        anillo.rotation.z += 0.04;
       } else {
-        // Pulso calmo de respiración
-        const pulso = Math.sin(tiempo * 2.5) * 0.5 + 0.5;
-        materialVisorEmisivo.emissiveIntensity = 1.8 + pulso * 0.6;
-        luzVisor.intensity = 2.0 + pulso * 0.8;
+        luzPensamiento.intensity = 0.8;
+        anillo.rotation.z += 0.005;
       }
 
-      // Reacción al balance táctico (evaluacionCp)
-      if (evaluacionCp > 150) {
-        // Ventaja de la IA: resplandor cian esmeralda
-        materialVisorEmisivo.emissive.setHex(0x10b981);
-        luzVisor.color.setHex(0x10b981);
-      } else if (evaluacionCp < -150) {
-        // En apuros: alerta ámbar
-        materialVisorEmisivo.emissive.setHex(0xf59e0b);
-        luzVisor.color.setHex(0xf59e0b);
-      } else {
-        materialVisorEmisivo.emissive.setHex(0x00e5ff);
-        luzVisor.color.setHex(0x00e5ff);
-      }
-
+      controls.update();
       renderer.render(scene, camera);
     };
 
-    animar();
+    animate();
 
-    // 6. Redimensionamiento Responsivo
-    const manejarResize = () => {
-      if (!contenedor) return;
-      const w = contenedor.clientWidth;
-      const h = contenedor.clientHeight;
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
-    };
-
-    window.addEventListener('resize', manejarResize);
-
-    // 7. Limpieza al Desmontar
+    // 7. Limpieza al desmontar
     return () => {
-      cancelAnimationFrame(animationFrameId);
+      cancelAnimationFrame(animId);
       window.removeEventListener('mousemove', manejarMouseMove);
-      window.removeEventListener('resize', manejarResize);
+      controls.dispose();
+      renderer.dispose();
       if (contenedor.contains(renderer.domElement)) {
         contenedor.removeChild(renderer.domElement);
       }
-      renderer.dispose();
-      geoCraneo.dispose();
-      geoVisor.dispose();
-      geoHalo.dispose();
-      geoParticulas.dispose();
     };
-  }, [pensando, evaluacionCp]);
-
-  // Actualizar texto del estado
-  useEffect(() => {
-    if (pensando) {
-      setEstadoTexto('Calculando inferencia neural...');
-    } else if (evaluacionCp > 200) {
-      setEstadoTexto('Posición dominante (+)');
-    } else if (evaluacionCp < -200) {
-      setEstadoTexto('Buscando contrajuego táctico');
-    } else {
-      setEstadoTexto('Atento a tu movimiento');
-    }
-  }, [pensando, evaluacionCp]);
-
-  const esModelo = tipoOponente === 'modelo';
+  }, [modeloActivo, urlPersonalizada, pensando]);
 
   return (
-    <div className="relative flex flex-col items-center justify-center p-3 rounded-2xl bg-gradient-to-b from-surface-container-high/60 to-surface-container-lowest/80 border border-outline-variant/30 shadow-2xl backdrop-blur-md overflow-hidden">
-      {/* Halo de luz decorativo de fondo */}
-      <div
-        className={`absolute -top-10 w-44 h-44 rounded-full blur-3xl pointer-events-none transition-all duration-700 ${
-          pensando
-            ? 'bg-primary/40 scale-125'
-            : evaluacionCp > 150
-            ? 'bg-emerald-500/25'
-            : 'bg-primary/20'
-        }`}
-      />
-
-      {/* Cabecera del Agente */}
-      <div className="w-full flex items-center justify-between z-10 mb-1 px-1">
-        <div className="flex items-center gap-2">
-          <span
-            className={`w-2.5 h-2.5 rounded-full ${
-              pensando
-                ? 'bg-primary animate-ping'
-                : esModelo
-                ? 'bg-primary shadow-[0_0_8px_#00e5ff]'
-                : 'bg-amber-400'
-            }`}
-          />
-          <div className="flex flex-col">
-            <span className="font-mono-micro text-[11px] font-bold text-on-surface tracking-wider uppercase">
-              {esModelo ? 'NOVA v5 · SE-ResNet-8' : 'STOCKFISH 16'}
-            </span>
-            <span className="font-mono-micro text-[9px] text-outline">
-              {esModelo ? 'Gran Maestro FIDE (Autónomo)' : 'Motor de Cálculo Minimax'}
-            </span>
-          </div>
+    <div className="bg-surface-container-low rounded-xl p-3.5 shadow-xl flex flex-col gap-2.5 border border-outline-variant/30 relative overflow-hidden">
+      {/* CABECERA Y METADATOS DEL AGENTE */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00e5ff] opacity-80" />
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#00e5ff]" />
+          </span>
+          <span className="font-mono-micro text-[11px] font-bold text-slate-200 uppercase tracking-wide">
+            {modeloActivo === 'readyplayer_me'
+              ? 'AVATAR HUMANOIDE // RPM'
+              : modeloActivo === 'robot_expressive'
+              ? 'ROBOT 3D EXPRESSIVE'
+              : modeloActivo === 'xbot'
+              ? 'MIXAMO XBOT RIGGED'
+              : 'CIBER-HOLOGRAMA'}
+          </span>
         </div>
-
-        <span className="font-mono-micro text-[10px] px-2 py-0.5 rounded-full bg-surface-container-highest/80 text-primary-fixed-dim border border-primary/20">
-          {pensando ? '⚡ PROCESANDO' : '● EN LÍNEA'}
+        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950/60 text-[#00e5ff] border border-[#00e5ff]/30 font-semibold">
+          {tipoOponente === 'modelo' ? 'IA v5 AUTÓNOMA' : 'STOCKFISH 16'}
         </span>
       </div>
 
-      {/* Canvas 3D de Three.js */}
-      <div
-        ref={mountRef}
-        className="w-full h-44 sm:h-52 relative flex items-center justify-center cursor-grab active:cursor-grabbing"
-        title="Avatar 3D interactivo: mueve el cursor para que siga tu mirada"
-      />
+      {/* SELECTOR DE MODELO 3D (TABS GLTF / GLB / PROCEDURAL) */}
+      <div className="grid grid-cols-4 gap-1 p-1 rounded-lg bg-surface-container-lowest border border-outline-variant/30 text-[10px] font-mono">
+        {MODELOS_CATALOGO.map((mod) => (
+          <button
+            key={mod.id}
+            type="button"
+            onClick={() => {
+              setModeloActivo(mod.id);
+              setUrlPersonalizada('');
+              setMostrarCustomInput(false);
+            }}
+            className={`py-1.5 px-1 rounded flex flex-col items-center justify-center gap-0.5 transition-all ${
+              modeloActivo === mod.id && !mostrarCustomInput
+                ? 'bg-[#00e5ff] text-black font-bold shadow-[0_0_12px_rgba(0,229,255,0.4)]'
+                : 'text-slate-400 hover:text-white hover:bg-white/5'
+            }`}
+            title={mod.descripcion}
+          >
+            <span className="material-symbols-outlined text-[15px]">{mod.icono}</span>
+            <span className="truncate w-full text-center">{mod.nombre.split(' ')[0]}</span>
+          </button>
+        ))}
+      </div>
 
-      {/* Globo de Diálogo / Estado Cognitivo */}
-      <div className="w-full z-10 mt-1 flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-surface-container-lowest/90 border border-outline-variant/20 shadow-inner">
-        <div className="flex items-center gap-1.5 overflow-hidden">
-          <span className="material-symbols-outlined text-[15px] text-primary shrink-0 animate-pulse">
-            psychology
-          </span>
-          <span className="font-mono-micro text-[10px] text-on-surface-variant truncate">
-            {estadoTexto}
-          </span>
+      {/* ÁREA DE VISUALIZACIÓN THREE.JS VIEWPORT */}
+      <div className="relative w-full h-[250px] rounded-lg overflow-hidden bg-gradient-to-b from-[#0a0d14] to-[#111319] border border-white/10 flex items-center justify-center group">
+        <div ref={mountRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
+
+        {/* SPINNER DE CARGA DEL MODELO GLB */}
+        {cargandoModelo && (
+          <div className="absolute inset-0 bg-[#0c0e14]/90 backdrop-blur-sm flex flex-col items-center justify-center gap-2 z-20">
+            <div className="w-8 h-8 border-2 border-[#00e5ff]/20 border-t-[#00e5ff] rounded-full animate-spin" />
+            <span className="font-mono text-[11px] text-[#00e5ff] tracking-wider animate-pulse">
+              DESCARGANDO MODELO 3D ({progresoCarga}%)...
+            </span>
+          </div>
+        )}
+
+        {/* BADGE DE ESTADO DINÁMICO */}
+        <div className="absolute top-2 left-2 z-10 pointer-events-none">
+          <div className="px-2 py-0.5 rounded bg-black/60 border border-[#00e5ff]/30 backdrop-blur-md flex items-center gap-1.5 text-[10px] font-mono text-[#00e5ff]">
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                pensando ? 'bg-amber-400 animate-ping' : 'bg-[#00e5ff]'
+              }`}
+            />
+            <span>{gestoActivo}</span>
+          </div>
         </div>
-        {ultimoMovimiento && (
-          <span className="font-mono-micro text-[10px] font-semibold text-primary px-1.5 py-0.5 rounded bg-primary/10 shrink-0">
-            Último: {ultimoMovimiento}
-          </span>
+
+        {/* BOTÓN CENTRAR CÁMARA */}
+        <button
+          type="button"
+          onClick={() => resetCameraRef.current?.()}
+          className="absolute bottom-2 right-2 p-1.5 rounded bg-black/60 hover:bg-[#00e5ff]/20 border border-white/10 hover:border-[#00e5ff]/40 text-slate-300 hover:text-[#00e5ff] text-[10px] font-mono transition-all z-10 flex items-center gap-1"
+          title="Centrar y reajustar cámara frontal"
+        >
+          <span className="material-symbols-outlined text-[13px]">center_focus_strong</span>
+          <span>Centrar</span>
+        </button>
+
+        {/* GUÍA TÁCTIL PARA ORBITAR */}
+        <div className="absolute bottom-2 left-2 text-[9px] font-mono text-slate-500 pointer-events-none opacity-60">
+          Arrastra para rotar en 3D
+        </div>
+      </div>
+
+      {/* BOTONERA DE GESTOS RÁPIDOS Y EMOCIONES (TESTING INTERACTIVO) */}
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
+          <span>GESTOS Y EXPRESIONES:</span>
+          <button
+            type="button"
+            onClick={() => setMostrarCustomInput(!mostrarCustomInput)}
+            className="text-[#00e5ff] hover:underline"
+          >
+            {mostrarCustomInput ? 'Ocultar URL' : '+ URL Personalizada'}
+          </button>
+        </div>
+
+        <div className="grid grid-cols-5 gap-1 font-mono text-[9px]">
+          <button
+            type="button"
+            onClick={() => triggerGestoRef.current?.('saludo')}
+            className="py-1 px-1 rounded bg-surface-container-high hover:bg-[#00e5ff]/20 hover:text-[#00e5ff] transition border border-white/5 text-center truncate"
+            title="Saludar amistosamente"
+          >
+            👋 Saludo
+          </button>
+          <button
+            type="button"
+            onClick={() => triggerGestoRef.current?.('pensar')}
+            className="py-1 px-1 rounded bg-surface-container-high hover:bg-[#00e5ff]/20 hover:text-[#00e5ff] transition border border-white/5 text-center truncate"
+            title="Simular análisis profundo"
+          >
+            🤔 Pensar
+          </button>
+          <button
+            type="button"
+            onClick={() => triggerGestoRef.current?.('victoria')}
+            className="py-1 px-1 rounded bg-surface-container-high hover:bg-emerald-500/20 hover:text-emerald-400 transition border border-white/5 text-center truncate"
+            title="Celebrar ventaja o victoria"
+          >
+            👍 Victoria
+          </button>
+          <button
+            type="button"
+            onClick={() => triggerGestoRef.current?.('derrota')}
+            className="py-1 px-1 rounded bg-surface-container-high hover:bg-rose-500/20 hover:text-rose-400 transition border border-white/5 text-center truncate"
+            title="Reacción ante error o derrota"
+          >
+            💔 Derrota
+          </button>
+          <button
+            type="button"
+            onClick={() => triggerGestoRef.current?.('idle')}
+            className="py-1 px-1 rounded bg-surface-container-high hover:bg-[#00e5ff]/20 hover:text-[#00e5ff] transition border border-white/5 text-center truncate"
+            title="Regresar a postura de reposo"
+          >
+            🧍 Reposo
+          </button>
+        </div>
+
+        {/* INPUT DE URL PERSONALIZADA (READY PLAYER ME .GLB) */}
+        {mostrarCustomInput && (
+          <div className="mt-1 p-2 rounded bg-surface-container-lowest border border-[#00e5ff]/30 flex flex-col gap-1.5 text-[11px] font-mono">
+            <span className="text-slate-300 text-[10px]">
+              Ingresa cualquier URL pública de Ready Player Me (.glb):
+            </span>
+            <div className="flex gap-1.5">
+              <input
+                type="text"
+                placeholder="https://models.readyplayer.me/...glb"
+                value={urlPersonalizada}
+                onChange={(e) => setUrlPersonalizada(e.target.value)}
+                className="flex-1 bg-black/60 border border-white/10 rounded px-2 py-1 text-white text-[10px] focus:outline-none focus:border-[#00e5ff]"
+              />
+              <button
+                type="button"
+                onClick={() => setModeloActivo('custom')}
+                disabled={!urlPersonalizada.trim()}
+                className="px-2.5 py-1 rounded bg-[#00e5ff] text-black font-bold disabled:opacity-40 text-[10px]"
+              >
+                Cargar
+              </button>
+            </div>
+            {errorCarga && <span className="text-rose-400 text-[9px]">{errorCarga}</span>}
+          </div>
         )}
       </div>
     </div>

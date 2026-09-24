@@ -317,6 +317,8 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
             tipoOponente={tipoOponente}
             evaluacionCp={analisis?.evaluacion_cp ?? 0}
             ultimoMovimiento={jugadas.length > 0 ? jugadas[jugadas.length - 1] : null}
+            terminada={terminada}
+            resultado={resultado}
           />
 
           {/* SELECTOR DE OPONENTE (MODELO IA v5 vs STOCKFISH 16) */}
