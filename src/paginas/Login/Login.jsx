@@ -546,14 +546,23 @@ export default function Login({ onLoginSuccess }) {
               <p className="font-mono-micro text-[10px] text-slate-400 text-center mb-1.5 uppercase tracking-wider">
                 Credenciales de prueba rápida (clic para rellenar):
               </p>
-              <div className="grid grid-cols-2 gap-1.5 font-mono text-[10px]">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 font-mono text-[10px]">
+                <button
+                  type="button"
+                  onClick={() => rellenarPrueba('suarezburgoshebert@gmail.com', 'admin123', 'facilitador')}
+                  className="p-1.5 rounded bg-surface-container-high hover:bg-[#00e5ff]/20 border border-outline-variant/20 hover:border-[#00e5ff]/50 transition-all text-left flex flex-col"
+                >
+                  <span className="text-[#00e5ff] font-bold">🛡️ Facilitador Hebert</span>
+                  <span className="text-slate-300 truncate" title="suarezburgoshebert@gmail.com">suarezburgoshebert@gmail.com</span>
+                  <span className="text-slate-500">clave: admin123</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => rellenarPrueba('facilitador@test.com', 'admin123', 'facilitador')}
                   className="p-1.5 rounded bg-surface-container-high hover:bg-[#00e5ff]/20 border border-outline-variant/20 hover:border-[#00e5ff]/50 transition-all text-left flex flex-col"
                 >
-                  <span className="text-[#00e5ff] font-bold">Facilitador / Árbitro</span>
-                  <span className="text-slate-300">facilitador@test.com</span>
+                  <span className="text-[#00e5ff] font-bold">🛡️ Facilitador Demo</span>
+                  <span className="text-slate-300 truncate">facilitador@test.com</span>
                   <span className="text-slate-500">clave: admin123</span>
                 </button>
                 <button
@@ -561,8 +570,8 @@ export default function Login({ onLoginSuccess }) {
                   onClick={() => rellenarPrueba('jugador@test.com', 'test123456', 'jugador')}
                   className="p-1.5 rounded bg-surface-container-high hover:bg-[#00e5ff]/20 border border-outline-variant/20 hover:border-[#00e5ff]/50 transition-all text-left flex flex-col"
                 >
-                  <span className="text-emerald-400 font-bold">Jugador</span>
-                  <span className="text-slate-300">jugador@test.com</span>
+                  <span className="text-emerald-400 font-bold">👤 Jugador Test</span>
+                  <span className="text-slate-300 truncate">jugador@test.com</span>
                   <span className="text-slate-500">clave: test123456</span>
                 </button>
               </div>
