@@ -2,26 +2,26 @@ import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import AvatarGrandmasterCyber from './AvatarGrandmasterCyber';
+import AvatarMetaPerson3D from './AvatarMetaPerson3D';
 
 /**
- * Catálogo de modelos 3D y avatares disponibles
+ * Catálogo de modelos 3D disponibles
  */
 const MODELOS_CATALOGO = [
   {
-    id: 'kairos_grandmaster',
-    nombre: 'KAIROS Gran Maestro',
-    tipo: 'Cyber-Realista 3D',
+    id: 'metaperson',
+    nombre: 'MetaPerson 3D',
+    tipo: 'Humanoide 360° Real',
     icono: 'person',
-    descripcion: 'Gran Maestro Cyberpunk fotorrealista con micro-expresiones autónomas, circuitos neuronales activos y piezas de ajedrez holográficas flotantes 3D.',
+    descripcion: 'Avatar humanoide 3D completo con volumen en todos sus lados (no 2D), 51 micro-expresiones ARKit (Wicked, Suspicious, Confused, XD) y esqueleto cinemático de 73 huesos.',
   },
   {
     id: 'facecap',
-    nombre: 'Digital Human ARKit',
-    tipo: '52 Blendshapes',
+    nombre: 'Digital Human',
+    tipo: 'Apple ARKit',
     icono: 'sentiment_very_satisfied',
     ruta: '/models/facecap.glb',
-    descripcion: 'Rostro digital 3D de alta fidelidad con las 52 micro-expresiones de Apple ARKit.',
+    descripcion: 'Rostro digital 3D de alta fidelidad con 52 micro-expresiones de Apple ARKit.',
   },
   {
     id: 'robot_expressive',
@@ -34,18 +34,10 @@ const MODELOS_CATALOGO = [
   {
     id: 'xbot',
     nombre: 'Mixamo Rig',
-    tipo: 'Humanoide 3D',
+    tipo: 'Humanoide Mocap',
     icono: 'accessibility_new',
     ruta: '/models/Xbot.glb',
     descripcion: 'Personaje humanoide con rigging cinemático completo Mixamo.',
-  },
-  {
-    id: 'holograma',
-    nombre: 'Ciber-Holograma',
-    tipo: 'Procedural',
-    icono: 'memory',
-    ruta: null,
-    descripcion: 'Entidad de IA procedural con pulso tensorial y anillos cuánticos.',
   },
 ];
 
@@ -70,14 +62,14 @@ function calcularFacetaEmocional({
         titulo: 'Victoria Magistral',
         icono: '👑',
         color: '#10b981', // Esmeralda
-        descripcion: 'La IA ha ganado la partida. Júbilo y sonrisa triunfante.',
+        descripcion: 'La IA ha ganado la partida. Gesto XD triunfante.',
         emocion: 'victoria',
-        sonrisa: 0.9,
-        cejasUp: 0.3,
+        sonrisa: 0.95,
+        cejasUp: 0.35,
         cejasDown: 0.0,
-        ojosSquint: 0.2,
+        ojosSquint: 0.3,
         ojosWide: 0.1,
-        bocaAbierta: 0.0,
+        bocaAbierta: 0.15,
       };
     }
     if (resultado === '1-0') {
@@ -89,9 +81,9 @@ function calcularFacetaEmocional({
         descripcion: 'El humano ha superado a la IA. Mirada gacha y resignación.',
         emocion: 'derrota',
         sonrisa: 0.0,
-        cejasUp: 0.6,
-        cejasDown: 0.5,
-        ojosSquint: 0.3,
+        cejasUp: 0.7,
+        cejasDown: 0.4,
+        ojosSquint: 0.2,
         ojosWide: 0.0,
         bocaAbierta: 0.0,
       };
@@ -119,7 +111,7 @@ function calcularFacetaEmocional({
       titulo: 'Cálculo Tensorial v5',
       icono: '🧠',
       color: '#00e5ff', // Cian de alta concentración
-      descripcion: 'Explorando matrices SE-ResNet. Ceño concentrado y escaneo del tablero.',
+      descripcion: 'Explorando matrices SE-ResNet. Ceño concentrado y análisis de tablero.',
       emocion: 'pensando',
       sonrisa: 0.0,
       cejasUp: 0.1,
@@ -133,36 +125,34 @@ function calcularFacetaEmocional({
   // 3. Red de Mate Anunciada
   if (mateEn !== null && mateEn !== undefined) {
     if (mateEn < 0) {
-      // Mate a favor de la IA (Negras)
       return {
         id: 'MATE_INMINENTE',
         titulo: `Mate en ${Math.abs(mateEn)} (Triunfo IA)`,
         icono: '🏆',
         color: '#f59e0b', // Dorado
-        descripcion: 'Red de mate detectada sin escape. Smirk amplio y dominante.',
+        descripcion: 'Red de mate detectada sin escape. Gesto XD victorioso.',
         emocion: 'triunfo',
-        sonrisa: 0.85,
-        cejasUp: 0.35,
+        sonrisa: 0.9,
+        cejasUp: 0.4,
         cejasDown: 0.0,
-        ojosSquint: 0.3,
+        ojosSquint: 0.35,
         ojosWide: 0.2,
-        bocaAbierta: 0.1,
+        bocaAbierta: 0.2,
       };
     } else {
-      // Mate a favor del Jugador (Blancas)
       return {
         id: 'PELIGRO_EXTREMO',
         titulo: `Peligro Crítico: Mate en ${mateEn}`,
         icono: '🚨',
         color: '#ef4444', // Rojo peligro
-        descripcion: 'Rey bajo asedio inevitable. Alarma y ojos desorbitados.',
+        descripcion: 'Rey bajo asedio. Gesto Confused de alarma e incredulidad.',
         emocion: 'alarma',
         sonrisa: 0.0,
-        cejasUp: 0.8,
+        cejasUp: 0.85,
         cejasDown: 0.2,
         ojosSquint: 0.0,
         ojosWide: 0.85,
-        bocaAbierta: 0.45,
+        bocaAbierta: 0.4,
       };
     }
   }
@@ -179,13 +169,13 @@ function calcularFacetaEmocional({
         titulo: '¡Jaque al Rey Rival!',
         icono: '⚔️',
         color: '#00e5ff',
-        descripcion: 'Ataque frontal. Mirada penetrante e inquisitiva al rival.',
-        emocion: 'desafio',
-        sonrisa: 0.45,
-        cejasUp: 0.4,
+        descripcion: 'Ataque frontal. Smirk Wicked desafiante.',
+        emocion: 'confianza',
+        sonrisa: 0.65,
+        cejasUp: 0.35,
         cejasDown: 0.2,
-        ojosSquint: 0.3,
-        ojosWide: 0.2,
+        ojosSquint: 0.35,
+        ojosWide: 0.1,
         bocaAbierta: 0.0,
       };
     } else {
@@ -197,10 +187,10 @@ function calcularFacetaEmocional({
         descripcion: 'Rey amenazado. Búsqueda urgente de casillas de escape.',
         emocion: 'tension',
         sonrisa: 0.0,
-        cejasUp: 0.7,
+        cejasUp: 0.75,
         cejasDown: 0.3,
         ojosSquint: 0.2,
-        ojosWide: 0.5,
+        ojosWide: 0.6,
         bocaAbierta: 0.2,
       };
     }
@@ -213,14 +203,14 @@ function calcularFacetaEmocional({
       titulo: `Gran Ventaja IA (${(evaluacionCp / -100).toFixed(1)})`,
       icono: '😎',
       color: '#10b981', // Verde
-      descripcion: 'Posición dominante. Smirk confiado y cabeza erguida.',
+      descripcion: 'Posición dominante. Faceta XD con gran sonrisa y cabeza erguida.',
       emocion: 'confianza_alta',
-      sonrisa: 0.75,
-      cejasUp: 0.2,
+      sonrisa: 0.85,
+      cejasUp: 0.3,
       cejasDown: 0.0,
-      ojosSquint: 0.35,
+      ojosSquint: 0.4,
       ojosWide: 0.0,
-      bocaAbierta: 0.0,
+      bocaAbierta: 0.1,
     };
   }
   if (evaluacionCp <= -60) {
@@ -229,12 +219,12 @@ function calcularFacetaEmocional({
       titulo: `Ventaja Táctica (${(evaluacionCp / -100).toFixed(1)})`,
       icono: '😏',
       color: '#34d399',
-      descripcion: 'Iniciativa y mejor estructura. Media sonrisa de Gran Maestro.',
+      descripcion: 'Mejor estructura. Faceta Wicked con media sonrisa pícara.',
       emocion: 'confianza',
-      sonrisa: 0.45,
-      cejasUp: 0.15,
+      sonrisa: 0.75,
+      cejasUp: 0.2,
       cejasDown: 0.1,
-      ojosSquint: 0.2,
+      ojosSquint: 0.3,
       ojosWide: 0.0,
       bocaAbierta: 0.0,
     };
@@ -245,14 +235,14 @@ function calcularFacetaEmocional({
       titulo: `Desventaja Severa (+${(evaluacionCp / 100).toFixed(1)})`,
       icono: '😰',
       color: '#ef4444',
-      descripcion: 'Déficit de material o ataque rival. Ceño preocupado y tensión.',
+      descripcion: 'Déficit de material. Faceta Confused de preocupación y alerta.',
       emocion: 'alarma',
       sonrisa: 0.0,
-      cejasUp: 0.75,
+      cejasUp: 0.8,
       cejasDown: 0.3,
       ojosSquint: 0.1,
-      ojosWide: 0.6,
-      bocaAbierta: 0.25,
+      ojosWide: 0.7,
+      bocaAbierta: 0.3,
     };
   }
   if (evaluacionCp >= 60) {
@@ -261,13 +251,13 @@ function calcularFacetaEmocional({
       titulo: `Bajo Presión (+${(evaluacionCp / 100).toFixed(1)})`,
       icono: '😟',
       color: '#fb923c',
-      descripcion: 'Posición incómoda. Mirada tensa y análisis profundo.',
+      descripcion: 'Posición incómoda. Faceta Suspicious con ojos entrecerrados.',
       emocion: 'preocupacion',
       sonrisa: 0.0,
-      cejasUp: 0.55,
-      cejasDown: 0.35,
-      ojosSquint: 0.25,
-      ojosWide: 0.1,
+      cejasUp: 0.3,
+      cejasDown: 0.55,
+      ojosSquint: 0.75,
+      ojosWide: 0.0,
       bocaAbierta: 0.0,
     };
   }
@@ -318,14 +308,14 @@ export default function AvatarAgente3D({
   resultado = null,
 }) {
   const mountRef = useRef(null);
-  const [modeloActivo, setModeloActivo] = useState('kairos_grandmaster');
+  const [modeloActivo, setModeloActivo] = useState('metaperson');
   const [cargandoModelo, setCargandoModelo] = useState(false);
   const [progresoCarga, setProgresoCarga] = useState(0);
   const [facetaForzada, setFacetaForzada] = useState(null);
   const [mostrarCalibracion, setMostrarCalibracion] = useState(false);
   const [errorCarga, setErrorCarga] = useState(null);
 
-  // Referencias para Three.js en modelos GLTF
+  // Referencias para Three.js en modelos secundarios
   const controlsRef = useRef(null);
   const mixerRef = useRef(null);
   const actionsRef = useRef({});
@@ -352,7 +342,7 @@ export default function AvatarAgente3D({
     });
   }, [facetaForzada, pensando, evaluacionCp, mateEn, terminada, resultado, cantidadJugadas, ultimoMovimiento]);
 
-  // Transición suave entre animaciones
+  // Transición suave entre animaciones para modelos GLTF secundarios
   const fadeToAction = useCallback((name, duration = 0.4) => {
     const actions = actionsRef.current;
     if (!actions || !actions[name]) return;
@@ -375,7 +365,7 @@ export default function AvatarAgente3D({
     }
   }, []);
 
-  // Animaciones para modelos GLTF (Robot / Xbot)
+  // Animaciones para modelos GLTF secundarios (Robot / Xbot)
   useEffect(() => {
     const actions = actionsRef.current;
     if (!actions) return;
@@ -385,7 +375,7 @@ export default function AvatarAgente3D({
     if (modeloActivo === 'robot_expressive') {
       if (emocion === 'pensando') {
         fadeToAction('Yes', 0.3);
-      } else if (emocion === 'triunfo' || emocion === 'victoria') {
+      } else if (emocion === 'triunfo' || emocion === 'victoria' || emocion === 'confianza_alta') {
         fadeToAction('ThumbsUp', 0.4);
       } else if (emocion === 'alarma' || emocion === 'derrota') {
         fadeToAction('Death', 0.5);
@@ -409,8 +399,7 @@ export default function AvatarAgente3D({
 
   // Montaje de Three.js para modelos GLTF secundarios (FaceCap, Robot, Xbot)
   useEffect(() => {
-    if (modeloActivo === 'kairos_grandmaster') {
-      // El Gran Maestro se renderiza en su propio canvas especializado de micro-expresiones
+    if (modeloActivo === 'metaperson') {
       return;
     }
 
@@ -469,7 +458,6 @@ export default function AvatarAgente3D({
     scene.add(luzFaceta);
     luzFacetaRef.current = luzFaceta;
 
-    // Disco base
     const discoGeo = new THREE.CylinderGeometry(0.72, 0.72, 0.02, 32);
     const discoMat = new THREE.MeshStandardMaterial({
       color: 0x09101d,
@@ -490,22 +478,7 @@ export default function AvatarAgente3D({
     const modeloInfo = MODELOS_CATALOGO.find((m) => m.id === modeloActivo);
     const rutaCarga = modeloInfo?.ruta;
 
-    if (modeloActivo === 'holograma' || !rutaCarga) {
-      setCargandoModelo(false);
-      const grupoProcedural = new THREE.Group();
-      scene.add(grupoProcedural);
-
-      const matMetal = new THREE.MeshStandardMaterial({ color: 0x111625, metalness: 0.9, roughness: 0.25 });
-      const matVisor = new THREE.MeshStandardMaterial({ color: 0x00e5ff, emissive: 0x00e5ff, emissiveIntensity: 2.2 });
-
-      const craneo = new THREE.Mesh(new THREE.SphereGeometry(0.5, 32, 32), matMetal);
-      craneo.position.set(0, 1.45, 0);
-      grupoProcedural.add(craneo);
-
-      const visor = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.14, 0.25), matVisor);
-      visor.position.set(0, 1.48, 0.42);
-      grupoProcedural.add(visor);
-    } else {
+    if (rutaCarga) {
       setCargandoModelo(true);
       setErrorCarga(null);
       setProgresoCarga(0);
@@ -621,7 +594,6 @@ export default function AvatarAgente3D({
         neck.rotation.y = THREE.MathUtils.lerp(neck.rotation.y, mousePosRef.current.x * 0.2, 0.06);
       }
 
-      // Parpadeo y blendshapes ARKit
       blinkTimer += delta;
       const isBlinking = blinkTimer % 3.2 < 0.14;
       const blinkTarget = isBlinking ? Math.sin((blinkTimer % 3.2) * 22) : 0;
@@ -687,7 +659,7 @@ export default function AvatarAgente3D({
             />
           </span>
           <span className="font-mono-micro text-[11px] font-bold text-slate-200 uppercase tracking-wide">
-            {MODELOS_CATALOGO.find((m) => m.id === modeloActivo)?.nombre || 'AVATAR KAIROS'}
+            {MODELOS_CATALOGO.find((m) => m.id === modeloActivo)?.nombre || 'AVATAR 3D'}
           </span>
         </div>
         <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950/60 text-[#00e5ff] border border-[#00e5ff]/30 font-semibold">
@@ -696,7 +668,7 @@ export default function AvatarAgente3D({
       </div>
 
       {/* SELECTOR DE AVATAR (PESTAÑAS ESTILIZADAS) */}
-      <div className="grid grid-cols-5 gap-1 p-1 rounded-lg bg-surface-container-lowest border border-outline-variant/30 text-[9px] font-mono">
+      <div className="grid grid-cols-4 gap-1 p-1 rounded-lg bg-surface-container-lowest border border-outline-variant/30 text-[9px] font-mono">
         {MODELOS_CATALOGO.map((mod) => (
           <button
             key={mod.id}
@@ -713,23 +685,25 @@ export default function AvatarAgente3D({
           >
             <span className="material-symbols-outlined text-[14px]">{mod.icono}</span>
             <span className="truncate w-full text-center">
-              {mod.id === 'kairos_grandmaster' ? 'Gran M.' : mod.nombre.split(' ')[0]}
+              {mod.nombre.split(' ')[0]}
             </span>
           </button>
         ))}
       </div>
 
-      {/* ÁREA DE VISUALIZACIÓN THREE.JS VIEWPORT */}
+      {/* ÁREA DE VISUALIZACIÓN THREE.JS VIEWPORT (ENCUADRE DE LA CINTURA PARA ARRIBA) */}
       <div className="relative w-full h-[280px] rounded-lg overflow-hidden bg-gradient-to-b from-[#0a0d14] to-[#111319] border border-white/10 flex items-center justify-center group">
-        {/* MODELO 1: KAIROS GRAN MAESTRO CYBERPUNK (RECOMENDADO / POR DEFECTO) */}
-        {modeloActivo === 'kairos_grandmaster' ? (
-          <AvatarGrandmasterCyber
+        {/* MODELO 1: METAPERSON 3D (HUMANOIDE 360° REAL CON VOLUMEN EN TODOS SUS LADOS) */}
+        {modeloActivo === 'metaperson' ? (
+          <AvatarMetaPerson3D
             pensando={pensando}
             facetaActual={facetaActual}
             onResetCamera={resetCameraRef}
+            onProgresoCarga={setProgresoCarga}
+            onError={setErrorCarga}
           />
         ) : (
-          /* MODELOS SECUNDARIOS GLTF / PROCEDURAL */
+          /* MODELOS SECUNDARIOS GLTF */
           <div ref={mountRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
         )}
 
@@ -764,16 +738,16 @@ export default function AvatarAgente3D({
           type="button"
           onClick={() => resetCameraRef.current?.()}
           className="absolute bottom-2 right-2 p-1.5 rounded bg-black/60 hover:bg-[#00e5ff]/20 border border-white/10 hover:border-[#00e5ff]/40 text-slate-300 hover:text-[#00e5ff] text-[10px] font-mono transition-all z-10 flex items-center gap-1"
-          title="Centrar encuadre frontal"
+          title="Centrar encuadre frontal de la cintura para arriba"
         >
           <span className="material-symbols-outlined text-[13px]">center_focus_strong</span>
           <span>Centrar</span>
         </button>
 
-        {/* INDICADOR DE INTERACCIÓN 3D */}
+        {/* INDICADOR DE INTERACCIÓN 3D REAL */}
         <div className="absolute bottom-2 left-2 text-[9px] font-mono text-slate-400 pointer-events-none opacity-60 flex items-center gap-1">
           <span className="w-1.5 h-1.5 rounded-full bg-[#00e5ff] animate-ping" />
-          <span>Parallax 3D Activo</span>
+          <span>Rotación 360° Libre</span>
         </div>
       </div>
 
@@ -793,7 +767,7 @@ export default function AvatarAgente3D({
 
         {/* ENLACE DISCRETO PARA MODO CALIBRACIÓN (OPCIONAL PARA DESARROLLO) */}
         <div className="flex items-center justify-between text-[9px] text-slate-500 pt-0.5">
-          <span>Reactivo a jaques, ventajas y mates</span>
+          <span>Reactivo a los gestos MetaPerson (Wicked, Suspicious, XD, Confused)</span>
           <button
             type="button"
             onClick={() => setMostrarCalibracion(!mostrarCalibracion)}
@@ -807,7 +781,7 @@ export default function AvatarAgente3D({
         {mostrarCalibracion && (
           <div className="mt-1 p-2 rounded-lg bg-black/60 border border-[#00e5ff]/20 flex flex-col gap-1.5 animate-fadeIn">
             <div className="flex items-center justify-between text-[9px] text-slate-400">
-              <span>Forzar expresión para prueba:</span>
+              <span>Probar facetas y gestos MetaPerson:</span>
               {facetaForzada && (
                 <button
                   type="button"
@@ -818,116 +792,94 @@ export default function AvatarAgente3D({
                 </button>
               )}
             </div>
-            <div className="grid grid-cols-5 gap-1 text-[9px]">
+            <div className="grid grid-cols-4 gap-1 text-[9px]">
               <button
                 type="button"
                 onClick={() =>
                   setFacetaForzada({
-                    id: 'FORZADO_PENSAR',
-                    titulo: 'Cálculo Intenso',
-                    icono: '🧠',
-                    color: '#00e5ff',
-                    descripcion: 'Ceño fruncido, escaneo ocular y pulsos rápidos en sienes.',
-                    emocion: 'pensando',
-                    sonrisa: 0.0,
-                    cejasUp: 0.1,
-                    cejasDown: 0.7,
-                    ojosSquint: 0.6,
-                    ojosWide: 0.0,
-                    bocaAbierta: 0.0,
-                  })
-                }
-                className="py-1 px-0.5 rounded bg-surface-container-high hover:bg-[#00e5ff]/20 hover:text-[#00e5ff] border border-white/5 text-center truncate"
-              >
-                🧠 Pensar
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setFacetaForzada({
-                    id: 'FORZADO_CONFIANZA',
-                    titulo: 'Smirk Confiado',
+                    id: 'FORZADO_WICKED',
+                    titulo: 'Wicked Smirk',
                     icono: '😏',
                     color: '#34d399',
-                    descripcion: 'Media sonrisa de Gran Maestro y ceja arqueada.',
+                    descripcion: 'Gesto Wicked: media sonrisa pícara y ceja derecha arqueada.',
                     emocion: 'confianza',
-                    sonrisa: 0.7,
-                    cejasUp: 0.25,
-                    cejasDown: 0.0,
-                    ojosSquint: 0.2,
+                    sonrisa: 0.75,
+                    cejasUp: 0.2,
+                    cejasDown: 0.1,
+                    ojosSquint: 0.3,
                     ojosWide: 0.0,
                     bocaAbierta: 0.0,
                   })
                 }
                 className="py-1 px-0.5 rounded bg-surface-container-high hover:bg-emerald-500/20 hover:text-emerald-400 border border-white/5 text-center truncate"
               >
-                😏 Smirk
+                😏 Wicked
               </button>
               <button
                 type="button"
                 onClick={() =>
                   setFacetaForzada({
-                    id: 'FORZADO_TRIUNFO',
-                    titulo: 'Triunfo Magistral',
-                    icono: '🏆',
-                    color: '#f59e0b',
-                    descripcion: 'Sonrisa amplia triunfal y ojos iluminados.',
-                    emocion: 'triunfo',
-                    sonrisa: 0.9,
-                    cejasUp: 0.35,
-                    cejasDown: 0.0,
-                    ojosSquint: 0.2,
-                    ojosWide: 0.2,
-                    bocaAbierta: 0.1,
-                  })
-                }
-                className="py-1 px-0.5 rounded bg-surface-container-high hover:bg-amber-500/20 hover:text-amber-400 border border-white/5 text-center truncate"
-              >
-                🏆 Triunfo
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setFacetaForzada({
-                    id: 'FORZADO_PRESION',
-                    titulo: 'Bajo Presión',
+                    id: 'FORZADO_SUSPICIOUS',
+                    titulo: 'Suspicious Focus',
                     icono: '😟',
                     color: '#fb923c',
-                    descripcion: 'Mirada tensa, cejas preocupadas y sienes en alerta.',
+                    descripcion: 'Gesto Suspicious: ojos entrecerrados y boca tensa bajo presión.',
                     emocion: 'preocupacion',
                     sonrisa: 0.0,
-                    cejasUp: 0.6,
-                    cejasDown: 0.4,
-                    ojosSquint: 0.25,
-                    ojosWide: 0.1,
+                    cejasUp: 0.3,
+                    cejasDown: 0.55,
+                    ojosSquint: 0.75,
+                    ojosWide: 0.0,
                     bocaAbierta: 0.0,
                   })
                 }
                 className="py-1 px-0.5 rounded bg-surface-container-high hover:bg-orange-500/20 hover:text-orange-400 border border-white/5 text-center truncate"
               >
-                😟 Presión
+                😟 Suspicious
               </button>
               <button
                 type="button"
                 onClick={() =>
                   setFacetaForzada({
-                    id: 'FORZADO_SORPRESA',
-                    titulo: '¡Jaque / Sorpresa!',
+                    id: 'FORZADO_CONFUSED',
+                    titulo: 'Confused Alert',
                     icono: '💥',
                     color: '#ef4444',
-                    descripcion: 'Ojos muy abiertos, cejas elevadas y pulsos carmesí.',
+                    descripcion: 'Gesto Confused: ojos muy abiertos, boca abierta e incredulidad.',
                     emocion: 'alarma',
                     sonrisa: 0.0,
                     cejasUp: 0.85,
-                    cejasDown: 0.1,
+                    cejasDown: 0.2,
                     ojosSquint: 0.0,
-                    ojosWide: 0.9,
-                    bocaAbierta: 0.45,
+                    ojosWide: 0.85,
+                    bocaAbierta: 0.4,
                   })
                 }
                 className="py-1 px-0.5 rounded bg-surface-container-high hover:bg-rose-500/20 hover:text-rose-400 border border-white/5 text-center truncate"
               >
-                💥 Sorpresa
+                💥 Confused
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setFacetaForzada({
+                    id: 'FORZADO_XD',
+                    titulo: 'XD Triunfal',
+                    icono: '😆',
+                    color: '#f59e0b',
+                    descripcion: 'Gesto XD: gran sonrisa abierta de triunfo magistral.',
+                    emocion: 'confianza_alta',
+                    sonrisa: 0.9,
+                    cejasUp: 0.4,
+                    cejasDown: 0.0,
+                    ojosSquint: 0.4,
+                    ojosWide: 0.0,
+                    bocaAbierta: 0.2,
+                  })
+                }
+                className="py-1 px-0.5 rounded bg-surface-container-high hover:bg-amber-500/20 hover:text-amber-400 border border-white/5 text-center truncate"
+              >
+                😆 XD Triunfo
               </button>
             </div>
           </div>
