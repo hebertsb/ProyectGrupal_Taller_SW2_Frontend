@@ -6,7 +6,7 @@
  */
 
 async function solicitar(endpoint, opciones = {}) {
-  const token = localStorage.getItem('access_token');
+  const token = localStorage.getItem("access_token");
   const headers = { "Content-Type": "application/json", ...opciones.headers };
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
@@ -42,7 +42,9 @@ export function listarPartidas() {
 }
 
 export function moverPartida(partidaId, jugada) {
-  return solicitar(`/partida/${partidaId}/mover`, { body: JSON.stringify({ jugada }) });
+  return solicitar(`/partida/${partidaId}/mover`, {
+    body: JSON.stringify({ jugada }),
+  });
 }
 
 /** Detecta la jugada hecha en el tablero físico (cámara fija) y la aplica (RF11). */
@@ -52,12 +54,16 @@ export function moverPartidaDesdeFoto(partidaId) {
 
 /** Casillas destino legales para la pieza parada en `casilla`, para resaltarlas al seleccionarla. */
 export function obtenerJugadasLegales(partidaId, casilla) {
-  return solicitar(`/partida/${partidaId}/jugadas-legales?casilla=${casilla}`, { method: "GET" });
+  return solicitar(`/partida/${partidaId}/jugadas-legales?casilla=${casilla}`, {
+    method: "GET",
+  });
 }
 
 /** Análisis jugada por jugada de una partida ya jugada, para la vista de Aprendizaje. */
 export function analisisCompletoPartida(partidaId) {
-  return solicitar(`/partida/${partidaId}/analisis-completo`, { method: "GET" });
+  return solicitar(`/partida/${partidaId}/analisis-completo`, {
+    method: "GET",
+  });
 }
 
 export function calcularJugada(fen, nivel) {
@@ -75,7 +81,7 @@ export function analizarPosicion(fen, nivel) {
  * encuadre justo en el momento de mostrar el sistema.
  */
 export async function reconocerTablero(turno = "w", archivoFoto = null) {
-  const token = localStorage.getItem('access_token');
+  const token = localStorage.getItem("access_token");
   const datos = new FormData();
   datos.append("turno", turno);
   if (archivoFoto) {
@@ -85,7 +91,11 @@ export async function reconocerTablero(turno = "w", archivoFoto = null) {
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
-  const respuesta = await fetch("/vision/reconocer", { method: "POST", body: datos, headers });
+  const respuesta = await fetch("/vision/reconocer", {
+    method: "POST",
+    body: datos,
+    headers,
+  });
   if (!respuesta.ok) {
     const detalle = await respuesta.json().catch(() => null);
     throw new Error(detalle?.detail ?? `Error ${respuesta.status}`);
@@ -108,12 +118,50 @@ export async function backendEnLinea() {
   }
 }
 
-/** Autenticación */
+/** Autenticación tradicional */
 export async function login(email, password, rolEsperado) {
   const respuesta = await fetch("/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password, rol_esperado: rolEsperado }),
+  });
+  if (!respuesta.ok) {
+    const detalle = await respuesta.json().catch(() => null);
+    throw new Error(detalle?.detail ?? `Error ${respuesta.status}`);
+  }
+  return respuesta.json();
+}
+
+/** Autenticación con Google OAuth (ID Token / Credential) */
+export async function loginGoogle(credential, rolSeleccionado = "jugador", claveFacilitador = null) {
+  const respuesta = await fetch("/auth/google", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      credential,
+      rol_seleccionado: rolSeleccionado,
+      clave_facilitador: claveFacilitador,
+    }),
+  });
+  if (!respuesta.ok) {
+    const detalle = await respuesta.json().catch(() => null);
+    throw new Error(detalle?.detail ?? `Error ${respuesta.status}`);
+  }
+  return respuesta.json();
+}
+
+/** Registro de nueva cuenta */
+export async function registro(email, nombre, password, rol = "jugador", claveFacilitador = null) {
+  const respuesta = await fetch("/auth/registro", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email,
+      nombre,
+      password,
+      rol,
+      clave_facilitador: claveFacilitador,
+    }),
   });
   if (!respuesta.ok) {
     const detalle = await respuesta.json().catch(() => null);
@@ -129,18 +177,20 @@ export function estadoModelo() {
 
 /** Inferencia del modelo propio: candidatas, saliencia, etc. */
 export function inferenciaModelo(fen) {
-  return solicitar("/aprendizaje/inferencia", { body: JSON.stringify({ fen }) });
+  return solicitar("/aprendizaje/inferencia", {
+    body: JSON.stringify({ fen }),
+  });
 }
 
 /** Gestión de usuarios (solo facilitadores) */
 
 async function solicitarAuth(endpoint, opciones = {}) {
-  const token = localStorage.getItem('access_token');
+  const token = localStorage.getItem("access_token");
   const respuesta = await fetch(endpoint, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${token}`,
+      Authorization: `Bearer ${token}`,
       ...opciones.headers,
     },
     ...opciones,
@@ -157,5 +207,7 @@ export function listarUsuarios() {
 }
 
 export function historialPartidasUsuario(usuarioId, limit = 10, offset = 0) {
-  return solicitarAuth(`/auth/usuarios/${usuarioId}/historial-partidas?limit=${limit}&offset=${offset}`);
+  return solicitarAuth(
+    `/auth/usuarios/${usuarioId}/historial-partidas?limit=${limit}&offset=${offset}`,
+  );
 }
