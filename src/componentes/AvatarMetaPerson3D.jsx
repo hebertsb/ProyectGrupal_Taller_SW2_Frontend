@@ -89,13 +89,12 @@ function crearGeometriaPieza(tipo) {
 }
 
 /**
- * Avatar 3D MetaPerson Completo (Humanoide 360° Real con postura natural de brazos y 51 blendshapes)
- * - Malla tridimensional completa (volumen 360° en todos sus lados)
- * - Brazos caídos de forma natural (sin postura en T) con animación Idle horneada
- * - Encuadre de primer plano de la cintura para arriba (pecho, traje, corbata, gafas, rostro)
- * - 51 Apple ARKit Blendshapes (Wicked smirk, Suspicious, Confused, XD)
- * - Esqueleto de huesos con respiración, head-tracking y sacadas oculares
- * - Piezas de ajedrez holográficas flotando en 3D
+ * Avatar 3D MetaPerson Dinámico
+ * - Mira SIEMPRE DE FRENTE al usuario (NO sigue el mouse)
+ * - Mira abajo al tablero ÚNICAMENTE cuando está pensando/haciendo la jugada
+ * - Risa con carcajadas y vaivén animado estilo metaperson_xd (1).gif al tener ventaja
+ * - Reacción de enojo con ceño fruncido y negación de cabeza si comete error / jaque
+ * - Brazos caídos de forma natural con animación Idle
  */
 export default function AvatarMetaPerson3D({
   pensando = false,
@@ -105,7 +104,6 @@ export default function AvatarMetaPerson3D({
   onError,
 }) {
   const mountRef = useRef(null);
-  const mousePosRef = useRef({ x: 0, y: 0 });
   const clockRef = useRef(new THREE.Clock());
   const mixerRef = useRef(null);
 
@@ -132,12 +130,10 @@ export default function AvatarMetaPerson3D({
     const ancho = contenedor.clientWidth || 320;
     const alto = contenedor.clientHeight || 280;
 
-    // 1. Escena y Cámara 3D
+    // 1. Escena y Cámara 3D (Siempre de frente)
     const scene = new THREE.Scene();
-    // Ángulo de 34° para retrato cinematográfico de primer plano
     const camera = new THREE.PerspectiveCamera(34, ancho / alto, 0.1, 100);
-    // Encuadre optimizado de la cintura para arriba:
-    // Foco en el pecho/cuello (y: 1.56), cámara a 1.62m de altura y 0.88m de distancia
+    // Cámara frontal a la altura del pecho/rostro
     camera.position.set(0, 1.62, 0.88);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -149,14 +145,14 @@ export default function AvatarMetaPerson3D({
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     contenedor.appendChild(renderer.domElement);
 
-    // OrbitControls 360° libre
+    // OrbitControls para rotación manual del usuario
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.06;
     controls.minDistance = 0.45;
     controls.maxDistance = 2.4;
     controls.maxPolarAngle = Math.PI / 2 + 0.15;
-    controls.target.set(0, 1.56, 0); // Foco en el pecho y rostro
+    controls.target.set(0, 1.56, 0);
 
     if (onResetCamera) {
       onResetCamera.current = () => {
@@ -167,7 +163,7 @@ export default function AvatarMetaPerson3D({
     }
 
     // 2. Iluminación PBR de Estudio
-    const luzAmbiente = new THREE.AmbientLight(0xffffff, 1.4);
+    const luzAmbiente = new THREE.AmbientLight(0xffffff, 1.45);
     scene.add(luzAmbiente);
 
     const luzClave = new THREE.DirectionalLight(0xffffff, 2.8);
@@ -179,17 +175,17 @@ export default function AvatarMetaPerson3D({
     luzRelleno.position.set(-2.0, 1.2, 1.8);
     scene.add(luzRelleno);
 
-    // Rim Light (Luz de contorno cian para silueta, hombros y traje)
+    // Rim Light (Luz de contorno cian para silueta)
     const luzContorno = new THREE.PointLight(0x00e5ff, 3.8, 6);
     luzContorno.position.set(0, 2.2, -1.2);
     scene.add(luzContorno);
 
-    // Luz de Faceta Emocional (tiñe dinámicamente según el estado de la partida)
+    // Luz dinámica de emoción
     const luzFaceta = new THREE.PointLight(0x00e5ff, 1.6, 3.2);
     luzFaceta.position.set(0, 1.6, 0.7);
     scene.add(luzFaceta);
 
-    // 3. Piezas de Ajedrez Holográficas Flotando en el Fondo 3D
+    // 3. Piezas de Ajedrez Holográficas en el Fondo 3D
     const grupoPiezas = new THREE.Group();
     scene.add(grupoPiezas);
 
@@ -222,7 +218,7 @@ export default function AvatarMetaPerson3D({
       return { mesh, cfg };
     });
 
-    // 4. Carga del Modelo 3D MetaPerson (.GLB con todos los lados y animación Idle)
+    // 4. Carga del Modelo 3D MetaPerson (.GLB)
     morphMeshesRef.current = [];
     mixerRef.current = null;
     bonesRef.current = {
@@ -269,12 +265,11 @@ export default function AvatarMetaPerson3D({
           else if (name === 'RightForeArm') bonesRef.current.rightForeArm = obj;
         });
 
-        // Activar la animación Idle horneada para que los brazos caigan de forma natural
+        // Activar la animación Idle horneada para postura natural de brazos abajo
         if (gltf.animations && gltf.animations.length > 0) {
           const mixer = new THREE.AnimationMixer(root);
           mixerRef.current = mixer;
 
-          // Buscar clip Idle
           const idleClip =
             gltf.animations.find((a) => a.name.toLowerCase().includes('idle')) ||
             gltf.animations[0];
@@ -285,12 +280,11 @@ export default function AvatarMetaPerson3D({
             action.play();
           }
         } else {
-          // Salvaguarda: si no hubiera animación, bajar los brazos programáticamente
+          // Salvaguarda
           if (bonesRef.current.leftArm) bonesRef.current.leftArm.rotation.z = -1.25;
           if (bonesRef.current.rightArm) bonesRef.current.rightArm.rotation.z = 1.25;
         }
 
-        // Posición base apoyada en Y=0
         root.position.set(0, 0, 0);
         scene.add(root);
 
@@ -308,40 +302,25 @@ export default function AvatarMetaPerson3D({
       }
     );
 
-    // 5. Seguimiento del ratón para Head Tracking interactivo
-    const manejarMouseMove = (e) => {
-      const rect = contenedor.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
-      mousePosRef.current = {
-        x: Math.max(-1, Math.min(1, x)),
-        y: Math.max(-1, Math.min(1, y)),
-      };
-    };
-    window.addEventListener('mousemove', manejarMouseMove);
-
-    // 6. Timers de parpadeo y sacadas oculares
+    // 5. Timers de parpadeo
     let blinkTimer = 0;
     let nextBlinkTime = 3.2;
     let blinkProgress = 0;
     let isBlinking = false;
 
-    let saccadeTimer = 0;
-    let saccadeOffset = { x: 0, y: 0 };
-
-    // 7. Bucle de Animación 3D a 60 FPS
+    // 6. Bucle de Animación 3D a 60 FPS
     const animate = () => {
       animId = requestAnimationFrame(animate);
 
       const delta = clockRef.current.getDelta();
       const elapsed = clockRef.current.getElapsedTime();
 
-      // Actualizar AnimationMixer (mantiene los brazos abajo y respiración natural)
+      // Actualizar AnimationMixer (brazos abajo y respiración de cuerpo)
       if (mixerRef.current) {
         mixerRef.current.update(delta);
       }
 
-      // A. Color dinámico de iluminación según la faceta emocional autónoma
+      // A. Color dinámico de iluminación según la faceta emocional
       if (facetaActual) {
         const colorObj = new THREE.Color(facetaActual.color);
         luzFaceta.color.lerp(colorObj, 0.05);
@@ -355,64 +334,79 @@ export default function AvatarMetaPerson3D({
         mesh.position.y = cfg.pos[1] + Math.sin(elapsed * 1.5 + idx * 1.1) * 0.025;
       });
 
-      // C. Fisiología y Huesos: Respiración adicional y Seguimiento del Cursor
-      const { head, neck, leftEye, rightEye } = bonesRef.current;
+      // C. Control Fisiológico de Cabeza y Cuello (SIEMPRE DE FRENTE, NO SIGUE EL MOUSE)
+      const { head, neck, spine1, leftEye, rightEye } = bonesRef.current;
+      const emocion = facetaActual?.emocion || 'neutral';
 
-      // Head Tracking y Posturas según el estado de ajedrez
       if (head) {
-        saccadeTimer += delta;
-        if (pensando && saccadeTimer > 0.75) {
-          saccadeTimer = 0;
-          saccadeOffset = {
-            x: (Math.random() - 0.5) * 0.08,
-            y: (Math.random() - 0.5) * 0.05,
-          };
-        } else if (!pensando && saccadeTimer > 2.5) {
-          saccadeTimer = 0;
-          saccadeOffset = { x: (Math.random() - 0.5) * 0.02, y: 0 };
-        }
-
-        const mouse = mousePosRef.current;
-        const targetRotY = mouse.x * 0.28 + saccadeOffset.x;
-        let targetRotX = -mouse.y * 0.20 + saccadeOffset.y;
+        let targetRotX = 0;
+        let targetRotY = 0;
         let targetRotZ = 0;
 
-        // Posturas psicológicas autónomas:
         if (pensando) {
-          targetRotX += 0.16; // Cabeza inclinada hacia abajo analizando el tablero
-        } else if (facetaActual?.emocion === 'confianza') {
-          // Gesto "Wicked" (media sonrisa pícara y cabeza ladeada)
-          targetRotX -= 0.04;
-          targetRotZ = -0.06;
-        } else if (facetaActual?.emocion === 'confianza_alta' || facetaActual?.emocion === 'victoria') {
-          // Gesto "XD" (triunfo y cabeza erguida)
-          targetRotX -= 0.08;
-        } else if (facetaActual?.emocion === 'alarma' || facetaActual?.emocion === 'tension') {
-          // Gesto "Confused" (incredulidad / sorpresa / jaque)
-          targetRotX -= 0.08;
-          targetRotZ = 0.08;
+          // --- 1. MIRAR AL TABLERO ÚNICAMENTE CUANDO VA A JUGAR / CALCULAR ---
+          targetRotX = 0.28; // Cabeza inclinada hacia abajo analizando el tablero
+          targetRotY = (Math.sin(elapsed * 2.5) * 0.04); // Leve paneo analizando casillas
+          targetRotZ = 0;
+        } else if (emocion === 'confianza_alta' || emocion === 'victoria' || emocion === 'triunfo') {
+          // --- 2. RISA VIVA COMO metaperson_xd (1).gif (Carcajadas y Vaivén de Alegría) ---
+          const laughWave = Math.sin(elapsed * 13);
+          const laughBody = Math.sin(elapsed * 6.5);
+          targetRotX = -0.06 + laughWave * 0.045; // Cabeza cabecea alegremente de risa
+          targetRotZ = laughBody * 0.035; // Leve vaivén juguetón
+          targetRotY = 0; // De frente al usuario riéndose
+
+          if (spine1) {
+            spine1.rotation.x = laughWave * 0.015; // Pecho vibra con la risa
+          }
+        } else if (emocion === 'confianza') {
+          // Gesto Wicked: Media sonrisa pícara, cabeza de frente con leve inclinación
+          targetRotX = -0.03;
+          targetRotZ = -0.05;
+          targetRotY = 0;
+        } else if (emocion === 'alarma' || emocion === 'derrota' || emocion === 'preocupacion' || emocion === 'tension') {
+          // --- 3. REACCIÓN DE ENOJO / FRUSTRACIÓN (Negación de cabeza y ceño fruncido) ---
+          const angryShake = Math.sin(elapsed * 8);
+          targetRotY = angryShake * 0.10; // Sacude la cabeza diciendo "NO" con fastidio
+          targetRotX = 0.07; // Mandíbula tensa hacia adelante
+          targetRotZ = 0;
+        } else {
+          // Posición Neutral / Apertura: Perfectamente de frente y sereno
+          targetRotX = 0;
+          targetRotY = 0;
+          targetRotZ = 0;
         }
 
-        head.rotation.y = THREE.MathUtils.lerp(head.rotation.y, targetRotY, 0.07);
-        head.rotation.x = THREE.MathUtils.lerp(head.rotation.x, targetRotX, 0.07);
-        head.rotation.z = THREE.MathUtils.lerp(head.rotation.z, targetRotZ, 0.07);
+        // Interpolación fluida
+        head.rotation.y = THREE.MathUtils.lerp(head.rotation.y, targetRotY, 0.08);
+        head.rotation.x = THREE.MathUtils.lerp(head.rotation.x, targetRotX, 0.08);
+        head.rotation.z = THREE.MathUtils.lerp(head.rotation.z, targetRotZ, 0.08);
       }
 
       if (neck) {
-        neck.rotation.y = THREE.MathUtils.lerp(neck.rotation.y, mousePosRef.current.x * 0.12, 0.05);
+        neck.rotation.y = THREE.MathUtils.lerp(neck.rotation.y, 0, 0.06);
       }
 
-      // Huesos oculares (LeftEye / RightEye)
+      // Huesos Oculares: Miran abajo al tablero SOLO cuando piensa; de frente el resto del tiempo
       if (leftEye && rightEye) {
-        const eyeLookY = mousePosRef.current.x * 0.12;
-        const eyeLookX = -mousePosRef.current.y * 0.10 + (pensando ? 0.08 : 0);
-        leftEye.rotation.y = THREE.MathUtils.lerp(leftEye.rotation.y, eyeLookY, 0.1);
-        leftEye.rotation.x = THREE.MathUtils.lerp(leftEye.rotation.x, eyeLookX, 0.1);
-        rightEye.rotation.y = THREE.MathUtils.lerp(rightEye.rotation.y, eyeLookY, 0.1);
-        rightEye.rotation.x = THREE.MathUtils.lerp(rightEye.rotation.x, eyeLookX, 0.1);
+        let eyeTargetX = 0;
+        let eyeTargetY = 0;
+
+        if (pensando) {
+          eyeTargetX = 0.20; // Ojos orientados hacia el tablero
+          eyeTargetY = Math.sin(elapsed * 3) * 0.04;
+        } else {
+          eyeTargetX = 0; // Ojos al frente mirando al jugador
+          eyeTargetY = 0;
+        }
+
+        leftEye.rotation.x = THREE.MathUtils.lerp(leftEye.rotation.x, eyeTargetX, 0.12);
+        leftEye.rotation.y = THREE.MathUtils.lerp(leftEye.rotation.y, eyeTargetY, 0.12);
+        rightEye.rotation.x = THREE.MathUtils.lerp(rightEye.rotation.x, eyeTargetX, 0.12);
+        rightEye.rotation.y = THREE.MathUtils.lerp(rightEye.rotation.y, eyeTargetY, 0.12);
       }
 
-      // D. Micro-Expresiones Faciales con los 51 Blendshapes de Apple ARKit
+      // D. Micro-Expresiones Faciales con Blendshapes Apple ARKit
       blinkTimer += delta;
       if (!isBlinking && blinkTimer > nextBlinkTime) {
         isBlinking = true;
@@ -420,7 +414,7 @@ export default function AvatarMetaPerson3D({
         nextBlinkTime = pensando ? 2.5 + Math.random() * 1.8 : 3.5 + Math.random() * 2.2;
       }
       if (isBlinking) {
-        blinkProgress += delta * 7.0; // Duración ~140ms
+        blinkProgress += delta * 7.0;
         if (blinkProgress >= 1.0) {
           isBlinking = false;
           blinkProgress = 0;
@@ -428,111 +422,115 @@ export default function AvatarMetaPerson3D({
       }
       const blinkTarget = isBlinking ? Math.sin(blinkProgress * Math.PI) : 0;
 
-      // Aplicar blendshapes a todas las mallas faciales
+      // Aplicar morph targets a la cabeza y pestañas
       if (morphMeshesRef.current.length > 0) {
         morphMeshesRef.current.forEach((mesh) => {
           const dict = mesh.morphTargetDictionary;
           const infl = mesh.morphTargetInfluences;
           if (!dict || !infl) return;
 
-          const setMorph = (nombre, valor, vel = 0.08) => {
+          const setMorph = (nombre, valor, vel = 0.09) => {
             const idx = dict[nombre];
             if (idx !== undefined) {
               infl[idx] = THREE.MathUtils.lerp(infl[idx], valor, vel);
             }
           };
 
-          // 1. Parpadeo orgánico
+          // Parpadeo orgánico
           setMorph('eyeBlinkLeft', blinkTarget, 0.35);
           setMorph('eyeBlinkRight', blinkTarget, 0.35);
 
-          // 2. Evaluaciones Emocionales según la Faceta y los GIFs MetaPerson:
-          const emocion = facetaActual?.emocion || 'neutral';
-
           if (pensando) {
-            // Cálculo Tensorial v5 (Ceño fruncido, ojos entrecerrados y concentración)
-            setMorph('browDownLeft', 0.65, 0.08);
-            setMorph('browDownRight', 0.65, 0.08);
-            setMorph('browInnerUp', 0.0, 0.08);
-            setMorph('eyeSquintLeft', 0.45, 0.08);
-            setMorph('eyeSquintRight', 0.45, 0.08);
-            setMorph('eyeWideLeft', 0.0, 0.08);
-            setMorph('eyeWideRight', 0.0, 0.08);
-            setMorph('mouthSmileLeft', 0.0, 0.08);
-            setMorph('mouthSmileRight', 0.0, 0.08);
-            setMorph('mouthPressLeft', 0.4, 0.08);
-            setMorph('mouthPressRight', 0.4, 0.08);
-            setMorph('jawOpen', 0.0, 0.08);
-            setMorph('eyeLookDownLeft', 0.35, 0.08);
-            setMorph('eyeLookDownRight', 0.35, 0.08);
+            // --- 1. MIENTRAS PIENSA: MIRANDO AL TABLERO CON CEÑO CONCENTRADO ---
+            setMorph('browDownLeft', 0.8, 0.09);
+            setMorph('browDownRight', 0.8, 0.09);
+            setMorph('browInnerUp', 0.0, 0.09);
+            setMorph('eyeSquintLeft', 0.45, 0.09);
+            setMorph('eyeSquintRight', 0.45, 0.09);
+            setMorph('eyeWideLeft', 0.0, 0.09);
+            setMorph('eyeWideRight', 0.0, 0.09);
+            setMorph('mouthSmileLeft', 0.0, 0.09);
+            setMorph('mouthSmileRight', 0.0, 0.09);
+            setMorph('mouthPressLeft', 0.5, 0.09);
+            setMorph('mouthPressRight', 0.5, 0.09);
+            setMorph('jawOpen', 0.0, 0.09);
+            setMorph('mouthOpen', 0.0, 0.09);
+            setMorph('noseSneerLeft', 0.0, 0.09);
+            setMorph('noseSneerRight', 0.0, 0.09);
+            setMorph('eyeLookDownLeft', 0.75, 0.09);
+            setMorph('eyeLookDownRight', 0.75, 0.09);
+          } else if (emocion === 'confianza_alta' || emocion === 'victoria' || emocion === 'triunfo') {
+            // --- 2. RISA VIVA Y CARCAJADA COMO metaperson_xd (1).gif ---
+            const laughJaw = 0.22 + Math.sin(elapsed * 13) * 0.14; // Apertura pulsante de risa
+            setMorph('mouthSmileLeft', 0.95, 0.1);
+            setMorph('mouthSmileRight', 0.95, 0.1);
+            setMorph('mouthSmile', 0.9, 0.1);
+            setMorph('mouthDimpleLeft', 0.55, 0.09);
+            setMorph('mouthDimpleRight', 0.55, 0.09);
+            setMorph('jawOpen', laughJaw, 0.15);
+            setMorph('mouthOpen', laughJaw, 0.15);
+            setMorph('cheekSquintLeft', 0.85, 0.09);
+            setMorph('cheekSquintRight', 0.85, 0.09);
+            setMorph('eyeSquintLeft', 0.65, 0.09);
+            setMorph('eyeSquintRight', 0.65, 0.09);
+            setMorph('browOuterUpLeft', 0.5, 0.09);
+            setMorph('browOuterUpRight', 0.5, 0.09);
+            setMorph('browDownLeft', 0.0, 0.09);
+            setMorph('browDownRight', 0.0, 0.09);
+            setMorph('browInnerUp', 0.2, 0.09);
+            setMorph('mouthPressLeft', 0.0, 0.09);
+            setMorph('mouthPressRight', 0.0, 0.09);
+            setMorph('noseSneerLeft', 0.0, 0.09);
+            setMorph('noseSneerRight', 0.0, 0.09);
+            setMorph('eyeLookDownLeft', 0.0, 0.09);
+            setMorph('eyeLookDownRight', 0.0, 0.09);
           } else if (emocion === 'confianza') {
-            // Faceta "metaperson_wicked.gif": Smirk pícaro asimétrico de Gran Maestro
-            setMorph('mouthSmileRight', 0.85, 0.08);
-            setMorph('mouthDimpleRight', 0.55, 0.08);
-            setMorph('mouthSmileLeft', 0.15, 0.08);
-            setMorph('browOuterUpRight', 0.65, 0.08);
-            setMorph('browDownLeft', 0.25, 0.08);
-            setMorph('browInnerUp', 0.0, 0.08);
-            setMorph('eyeSquintRight', 0.35, 0.08);
-            setMorph('eyeSquintLeft', 0.15, 0.08);
-            setMorph('mouthPressLeft', 0.0, 0.08);
-            setMorph('mouthPressRight', 0.0, 0.08);
-            setMorph('jawOpen', 0.0, 0.08);
-          } else if (emocion === 'confianza_alta' || emocion === 'victoria') {
-            // Faceta "metaperson_xd.gif": Sonrisa amplia de triunfo
-            setMorph('mouthSmileLeft', 0.9, 0.08);
-            setMorph('mouthSmileRight', 0.9, 0.08);
-            setMorph('cheekSquintLeft', 0.65, 0.08);
-            setMorph('cheekSquintRight', 0.65, 0.08);
-            setMorph('browOuterUpLeft', 0.45, 0.08);
-            setMorph('browOuterUpRight', 0.45, 0.08);
-            setMorph('browDownLeft', 0.0, 0.08);
-            setMorph('browDownRight', 0.0, 0.08);
-            setMorph('eyeSquintLeft', 0.4, 0.08);
-            setMorph('eyeSquintRight', 0.4, 0.08);
-            setMorph('jawOpen', 0.18, 0.08);
-          } else if (emocion === 'preocupacion') {
-            // Faceta "metaperson_suspicious.gif": Ojos entrecerrados y boca tensa bajo presión
-            setMorph('eyeSquintLeft', 0.75, 0.08);
-            setMorph('eyeSquintRight', 0.75, 0.08);
-            setMorph('browDownLeft', 0.55, 0.08);
-            setMorph('browDownRight', 0.55, 0.08);
-            setMorph('browInnerUp', 0.25, 0.08);
-            setMorph('mouthPressLeft', 0.6, 0.08);
-            setMorph('mouthPressRight', 0.6, 0.08);
-            setMorph('mouthFrownLeft', 0.35, 0.08);
-            setMorph('mouthFrownRight', 0.35, 0.08);
-            setMorph('mouthSmileLeft', 0.0, 0.08);
-            setMorph('mouthSmileRight', 0.0, 0.08);
-            setMorph('jawOpen', 0.0, 0.08);
-          } else if (emocion === 'alarma' || emocion === 'derrota') {
-            // Faceta "metaperson_confused.gif": Alarma / Incredulidad / Peligro de mate
-            setMorph('browInnerUp', 0.85, 0.08);
-            setMorph('browDownLeft', 0.35, 0.08);
-            setMorph('browDownRight', 0.35, 0.08);
-            setMorph('eyeWideLeft', 0.85, 0.1);
-            setMorph('eyeWideRight', 0.85, 0.1);
-            setMorph('eyeSquintLeft', 0.0, 0.08);
-            setMorph('eyeSquintRight', 0.0, 0.08);
-            setMorph('mouthFrownLeft', 0.45, 0.08);
-            setMorph('mouthFrownRight', 0.45, 0.08);
-            setMorph('jawOpen', 0.35, 0.08);
-            setMorph('mouthSmileLeft', 0.0, 0.08);
-            setMorph('mouthSmileRight', 0.0, 0.08);
+            // Faceta Wicked: Media sonrisa de satisfacción y ceja arqueada
+            setMorph('mouthSmileRight', 0.85, 0.09);
+            setMorph('mouthDimpleRight', 0.55, 0.09);
+            setMorph('mouthSmileLeft', 0.15, 0.09);
+            setMorph('browOuterUpRight', 0.65, 0.09);
+            setMorph('browDownLeft', 0.25, 0.09);
+            setMorph('browInnerUp', 0.0, 0.09);
+            setMorph('eyeSquintRight', 0.35, 0.09);
+            setMorph('eyeSquintLeft', 0.15, 0.09);
+            setMorph('jawOpen', 0.0, 0.09);
+            setMorph('eyeLookDownLeft', 0.0, 0.09);
+            setMorph('eyeLookDownRight', 0.0, 0.09);
+          } else if (emocion === 'alarma' || emocion === 'derrota' || emocion === 'preocupacion' || emocion === 'tension') {
+            // --- 3. REACCIÓN DE ENOJO Y FASTIDIO ANTE ERROR O JAQUE ---
+            setMorph('browDownLeft', 0.95, 0.09);
+            setMorph('browDownRight', 0.95, 0.09);
+            setMorph('browInnerUp', 0.0, 0.09);
+            setMorph('noseSneerLeft', 0.7, 0.09); // Nariz arrugada con furia
+            setMorph('noseSneerRight', 0.7, 0.09);
+            setMorph('mouthFrownLeft', 0.8, 0.09);
+            setMorph('mouthFrownRight', 0.8, 0.09);
+            setMorph('mouthPressLeft', 0.85, 0.09);
+            setMorph('mouthPressRight', 0.85, 0.09);
+            setMorph('mouthSmileLeft', 0.0, 0.09);
+            setMorph('mouthSmileRight', 0.0, 0.09);
+            setMorph('eyeSquintLeft', 0.7, 0.09);
+            setMorph('eyeSquintRight', 0.7, 0.09);
+            setMorph('jawOpen', 0.0, 0.09);
+            setMorph('eyeLookDownLeft', 0.0, 0.09);
+            setMorph('eyeLookDownRight', 0.0, 0.09);
           } else {
-            // Estado Neutral / Apertura
-            setMorph('browDownLeft', 0.0, 0.08);
-            setMorph('browDownRight', 0.0, 0.08);
-            setMorph('browInnerUp', 0.0, 0.08);
-            setMorph('eyeSquintLeft', 0.0, 0.08);
-            setMorph('eyeSquintRight', 0.0, 0.08);
-            setMorph('eyeWideLeft', 0.0, 0.08);
-            setMorph('eyeWideRight', 0.0, 0.08);
-            setMorph('mouthSmileLeft', 0.0, 0.08);
-            setMorph('mouthSmileRight', 0.0, 0.08);
-            setMorph('mouthPressLeft', 0.0, 0.08);
-            setMorph('mouthPressRight', 0.0, 0.08);
-            setMorph('jawOpen', 0.0, 0.08);
+            // Estado Neutral / Apertura: Sereno y de frente
+            setMorph('browDownLeft', 0.0, 0.09);
+            setMorph('browDownRight', 0.0, 0.09);
+            setMorph('browInnerUp', 0.0, 0.09);
+            setMorph('eyeSquintLeft', 0.0, 0.09);
+            setMorph('eyeSquintRight', 0.0, 0.09);
+            setMorph('mouthSmileLeft', 0.0, 0.09);
+            setMorph('mouthSmileRight', 0.0, 0.09);
+            setMorph('mouthPressLeft', 0.0, 0.09);
+            setMorph('mouthPressRight', 0.0, 0.09);
+            setMorph('jawOpen', 0.0, 0.09);
+            setMorph('noseSneerLeft', 0.0, 0.09);
+            setMorph('noseSneerRight', 0.0, 0.09);
+            setMorph('eyeLookDownLeft', 0.0, 0.09);
+            setMorph('eyeLookDownRight', 0.0, 0.09);
           }
         });
       }
@@ -545,7 +543,6 @@ export default function AvatarMetaPerson3D({
 
     return () => {
       cancelAnimationFrame(animId);
-      window.removeEventListener('mousemove', manejarMouseMove);
       controls.dispose();
       renderer.dispose();
       if (contenedor.contains(renderer.domElement)) {

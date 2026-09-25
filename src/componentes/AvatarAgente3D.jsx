@@ -797,89 +797,89 @@ export default function AvatarAgente3D({
                 type="button"
                 onClick={() =>
                   setFacetaForzada({
+                    id: 'FORZADO_XD',
+                    titulo: 'Risa Viva (XD)',
+                    icono: '😆',
+                    color: '#f59e0b',
+                    descripcion: 'Carcajadas, vaivén de cabeza y risa viva estilo metaperson_xd (1).gif.',
+                    emocion: 'confianza_alta',
+                    sonrisa: 0.95,
+                    cejasUp: 0.4,
+                    cejasDown: 0.0,
+                    ojosSquint: 0.65,
+                    ojosWide: 0.0,
+                    bocaAbierta: 0.35,
+                  })
+                }
+                className="py-1 px-0.5 rounded bg-surface-container-high hover:bg-amber-500/20 hover:text-amber-400 border border-white/5 text-center truncate font-bold"
+              >
+                😆 Risa (XD)
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setFacetaForzada({
+                    id: 'FORZADO_ENOJO',
+                    titulo: 'Enojo / Furia',
+                    icono: '😡',
+                    color: '#ef4444',
+                    descripcion: 'Ceño muy fruncido, nariz arrugada y negación con la cabeza.',
+                    emocion: 'alarma',
+                    sonrisa: 0.0,
+                    cejasUp: 0.0,
+                    cejasDown: 0.95,
+                    ojosSquint: 0.7,
+                    ojosWide: 0.0,
+                    bocaAbierta: 0.0,
+                  })
+                }
+                className="py-1 px-0.5 rounded bg-surface-container-high hover:bg-rose-500/20 hover:text-rose-400 border border-white/5 text-center truncate font-bold"
+              >
+                😡 Enojo
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setFacetaForzada({
+                    id: 'FORZADO_PENSANDO',
+                    titulo: 'Mirar al Tablero',
+                    icono: '♟️',
+                    color: '#00e5ff',
+                    descripcion: 'Cabeza y ojos orientados hacia abajo analizando la jugada en el tablero.',
+                    emocion: 'pensando',
+                    sonrisa: 0.0,
+                    cejasUp: 0.0,
+                    cejasDown: 0.8,
+                    ojosSquint: 0.45,
+                    ojosWide: 0.0,
+                    bocaAbierta: 0.0,
+                  })
+                }
+                className="py-1 px-0.5 rounded bg-surface-container-high hover:bg-[#00e5ff]/20 hover:text-[#00e5ff] border border-white/5 text-center truncate font-bold"
+              >
+                ♟️ Tablero
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setFacetaForzada({
                     id: 'FORZADO_WICKED',
                     titulo: 'Wicked Smirk',
                     icono: '😏',
                     color: '#34d399',
-                    descripcion: 'Gesto Wicked: media sonrisa pícara y ceja derecha arqueada.',
+                    descripcion: 'Media sonrisa pícara y ceja derecha alzada.',
                     emocion: 'confianza',
-                    sonrisa: 0.75,
-                    cejasUp: 0.2,
+                    sonrisa: 0.85,
+                    cejasUp: 0.25,
                     cejasDown: 0.1,
-                    ojosSquint: 0.3,
+                    ojosSquint: 0.35,
                     ojosWide: 0.0,
                     bocaAbierta: 0.0,
                   })
                 }
-                className="py-1 px-0.5 rounded bg-surface-container-high hover:bg-emerald-500/20 hover:text-emerald-400 border border-white/5 text-center truncate"
+                className="py-1 px-0.5 rounded bg-surface-container-high hover:bg-emerald-500/20 hover:text-emerald-400 border border-white/5 text-center truncate font-bold"
               >
-                😏 Wicked
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setFacetaForzada({
-                    id: 'FORZADO_SUSPICIOUS',
-                    titulo: 'Suspicious Focus',
-                    icono: '😟',
-                    color: '#fb923c',
-                    descripcion: 'Gesto Suspicious: ojos entrecerrados y boca tensa bajo presión.',
-                    emocion: 'preocupacion',
-                    sonrisa: 0.0,
-                    cejasUp: 0.3,
-                    cejasDown: 0.55,
-                    ojosSquint: 0.75,
-                    ojosWide: 0.0,
-                    bocaAbierta: 0.0,
-                  })
-                }
-                className="py-1 px-0.5 rounded bg-surface-container-high hover:bg-orange-500/20 hover:text-orange-400 border border-white/5 text-center truncate"
-              >
-                😟 Suspicious
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setFacetaForzada({
-                    id: 'FORZADO_CONFUSED',
-                    titulo: 'Confused Alert',
-                    icono: '💥',
-                    color: '#ef4444',
-                    descripcion: 'Gesto Confused: ojos muy abiertos, boca abierta e incredulidad.',
-                    emocion: 'alarma',
-                    sonrisa: 0.0,
-                    cejasUp: 0.85,
-                    cejasDown: 0.2,
-                    ojosSquint: 0.0,
-                    ojosWide: 0.85,
-                    bocaAbierta: 0.4,
-                  })
-                }
-                className="py-1 px-0.5 rounded bg-surface-container-high hover:bg-rose-500/20 hover:text-rose-400 border border-white/5 text-center truncate"
-              >
-                💥 Confused
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setFacetaForzada({
-                    id: 'FORZADO_XD',
-                    titulo: 'XD Triunfal',
-                    icono: '😆',
-                    color: '#f59e0b',
-                    descripcion: 'Gesto XD: gran sonrisa abierta de triunfo magistral.',
-                    emocion: 'confianza_alta',
-                    sonrisa: 0.9,
-                    cejasUp: 0.4,
-                    cejasDown: 0.0,
-                    ojosSquint: 0.4,
-                    ojosWide: 0.0,
-                    bocaAbierta: 0.2,
-                  })
-                }
-                className="py-1 px-0.5 rounded bg-surface-container-high hover:bg-amber-500/20 hover:text-amber-400 border border-white/5 text-center truncate"
-              >
-                😆 XD Triunfo
+                😏 Smirk
               </button>
             </div>
           </div>
