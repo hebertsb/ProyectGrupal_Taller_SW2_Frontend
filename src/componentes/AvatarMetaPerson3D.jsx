@@ -89,11 +89,12 @@ function crearGeometriaPieza(tipo) {
 }
 
 /**
- * Avatar 3D MetaPerson Completo (Humanoide 360° Real)
- * - Modelo 3D con volumen en todos sus lados (no es 2D)
- * - Encuadre de la cintura para arriba (cuerpo superior, ropa, gafas, cabello)
- * - 51 Apple ARKit Blendshapes para micro-expresiones (Wicked smirk, Suspicious, Confused, XD)
- * - Esqueleto de 73 huesos con respiración, head-tracking y sacadas oculares
+ * Avatar 3D MetaPerson Completo (Humanoide 360° Real con postura natural de brazos y 51 blendshapes)
+ * - Malla tridimensional completa (volumen 360° en todos sus lados)
+ * - Brazos caídos de forma natural (sin postura en T) con animación Idle horneada
+ * - Encuadre de primer plano de la cintura para arriba (pecho, traje, corbata, gafas, rostro)
+ * - 51 Apple ARKit Blendshapes (Wicked smirk, Suspicious, Confused, XD)
+ * - Esqueleto de huesos con respiración, head-tracking y sacadas oculares
  * - Piezas de ajedrez holográficas flotando en 3D
  */
 export default function AvatarMetaPerson3D({
@@ -106,16 +107,20 @@ export default function AvatarMetaPerson3D({
   const mountRef = useRef(null);
   const mousePosRef = useRef({ x: 0, y: 0 });
   const clockRef = useRef(new THREE.Clock());
+  const mixerRef = useRef(null);
 
   // Referencias esqueléticas y morfológicas
   const bonesRef = useRef({
     head: null,
     neck: null,
-    neck1: null,
     spine: null,
     spine1: null,
     leftEye: null,
     rightEye: null,
+    leftArm: null,
+    rightArm: null,
+    leftForeArm: null,
+    rightForeArm: null,
   });
   const morphMeshesRef = useRef([]);
 
@@ -129,10 +134,11 @@ export default function AvatarMetaPerson3D({
 
     // 1. Escena y Cámara 3D
     const scene = new THREE.Scene();
-    // Cámara con ángulo de 36° estilo retrato cinematográfico
-    const camera = new THREE.PerspectiveCamera(36, ancho / alto, 0.1, 100);
-    // Encuadre exacto de la cintura para arriba (cabeza a 1.65m, pecho a 1.45m, cintura a 1.10m)
-    camera.position.set(0, 1.54, 1.05);
+    // Ángulo de 34° para retrato cinematográfico de primer plano
+    const camera = new THREE.PerspectiveCamera(34, ancho / alto, 0.1, 100);
+    // Encuadre optimizado de la cintura para arriba:
+    // Foco en el pecho/cuello (y: 1.56), cámara a 1.62m de altura y 0.88m de distancia
+    camera.position.set(0, 1.62, 0.88);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(ancho, alto);
@@ -147,15 +153,15 @@ export default function AvatarMetaPerson3D({
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.06;
-    controls.minDistance = 0.55;
-    controls.maxDistance = 2.8;
+    controls.minDistance = 0.45;
+    controls.maxDistance = 2.4;
     controls.maxPolarAngle = Math.PI / 2 + 0.15;
-    controls.target.set(0, 1.48, 0); // Foco en el cuello / rostro
+    controls.target.set(0, 1.56, 0); // Foco en el pecho y rostro
 
     if (onResetCamera) {
       onResetCamera.current = () => {
-        camera.position.set(0, 1.54, 1.05);
-        controls.target.set(0, 1.48, 0);
+        camera.position.set(0, 1.62, 0.88);
+        controls.target.set(0, 1.56, 0);
         controls.update();
       };
     }
@@ -173,13 +179,13 @@ export default function AvatarMetaPerson3D({
     luzRelleno.position.set(-2.0, 1.2, 1.8);
     scene.add(luzRelleno);
 
-    // Rim Light (Luz de contorno cian para resaltar silueta, hombros y cabello)
+    // Rim Light (Luz de contorno cian para silueta, hombros y traje)
     const luzContorno = new THREE.PointLight(0x00e5ff, 3.8, 6);
     luzContorno.position.set(0, 2.2, -1.2);
     scene.add(luzContorno);
 
-    // Luz de Faceta Emocional (tiñe dinámicamente según el estado anímico)
-    const luzFaceta = new THREE.PointLight(0x00e5ff, 1.5, 3.2);
+    // Luz de Faceta Emocional (tiñe dinámicamente según el estado de la partida)
+    const luzFaceta = new THREE.PointLight(0x00e5ff, 1.6, 3.2);
     luzFaceta.position.set(0, 1.6, 0.7);
     scene.add(luzFaceta);
 
@@ -199,10 +205,10 @@ export default function AvatarMetaPerson3D({
     });
 
     const piezasConfig = [
-      { tipo: 'caballo', pos: [-0.65, 1.7, -0.45], escala: 0.55, rotVel: 0.4 },
-      { tipo: 'alfil', pos: [0.65, 1.65, -0.4], escala: 0.5, rotVel: -0.35 },
-      { tipo: 'rey', pos: [0.55, 1.25, -0.3], escala: 0.48, rotVel: 0.25 },
-      { tipo: 'dama', pos: [-0.55, 1.2, -0.35], escala: 0.5, rotVel: -0.3 },
+      { tipo: 'caballo', pos: [-0.65, 1.75, -0.45], escala: 0.55, rotVel: 0.4 },
+      { tipo: 'alfil', pos: [0.65, 1.70, -0.4], escala: 0.5, rotVel: -0.35 },
+      { tipo: 'rey', pos: [0.55, 1.35, -0.3], escala: 0.48, rotVel: 0.25 },
+      { tipo: 'dama', pos: [-0.55, 1.30, -0.35], escala: 0.5, rotVel: -0.3 },
       { tipo: 'peon', pos: [-0.45, 1.95, -0.55], escala: 0.42, rotVel: 0.45 },
       { tipo: 'peon', pos: [0.45, 1.98, -0.55], escala: 0.4, rotVel: -0.4 },
     ];
@@ -216,16 +222,20 @@ export default function AvatarMetaPerson3D({
       return { mesh, cfg };
     });
 
-    // 4. Carga del Modelo 3D MetaPerson (.GLB con todos los lados)
+    // 4. Carga del Modelo 3D MetaPerson (.GLB con todos los lados y animación Idle)
     morphMeshesRef.current = [];
+    mixerRef.current = null;
     bonesRef.current = {
       head: null,
       neck: null,
-      neck1: null,
       spine: null,
       spine1: null,
       leftEye: null,
       rightEye: null,
+      leftArm: null,
+      rightArm: null,
+      leftForeArm: null,
+      rightForeArm: null,
     };
 
     const loader = new GLTFLoader();
@@ -239,7 +249,7 @@ export default function AvatarMetaPerson3D({
             obj.castShadow = true;
             obj.receiveShadow = true;
 
-            // Recolectar mallas con blendshapes faciales (AvatarHead, AvatarEyelashes, etc.)
+            // Recolectar mallas con blendshapes faciales
             if (obj.morphTargetDictionary && Object.keys(obj.morphTargetDictionary).length > 0) {
               morphMeshesRef.current.push(obj);
             }
@@ -249,14 +259,38 @@ export default function AvatarMetaPerson3D({
           const name = obj.name || '';
           if (name === 'Head') bonesRef.current.head = obj;
           else if (name === 'Neck') bonesRef.current.neck = obj;
-          else if (name === 'Neck1') bonesRef.current.neck1 = obj;
           else if (name === 'Spine') bonesRef.current.spine = obj;
           else if (name === 'Spine1' || name === 'Spine2') bonesRef.current.spine1 = obj;
           else if (name === 'LeftEye') bonesRef.current.leftEye = obj;
           else if (name === 'RightEye') bonesRef.current.rightEye = obj;
+          else if (name === 'LeftArm') bonesRef.current.leftArm = obj;
+          else if (name === 'RightArm') bonesRef.current.rightArm = obj;
+          else if (name === 'LeftForeArm') bonesRef.current.leftForeArm = obj;
+          else if (name === 'RightForeArm') bonesRef.current.rightForeArm = obj;
         });
 
-        // Asegurar que el avatar esté apoyado en Y=0
+        // Activar la animación Idle horneada para que los brazos caigan de forma natural
+        if (gltf.animations && gltf.animations.length > 0) {
+          const mixer = new THREE.AnimationMixer(root);
+          mixerRef.current = mixer;
+
+          // Buscar clip Idle
+          const idleClip =
+            gltf.animations.find((a) => a.name.toLowerCase().includes('idle')) ||
+            gltf.animations[0];
+
+          if (idleClip) {
+            const action = mixer.clipAction(idleClip);
+            action.setEffectiveTimeScale(0.95);
+            action.play();
+          }
+        } else {
+          // Salvaguarda: si no hubiera animación, bajar los brazos programáticamente
+          if (bonesRef.current.leftArm) bonesRef.current.leftArm.rotation.z = -1.25;
+          if (bonesRef.current.rightArm) bonesRef.current.rightArm.rotation.z = 1.25;
+        }
+
+        // Posición base apoyada en Y=0
         root.position.set(0, 0, 0);
         scene.add(root);
 
@@ -302,6 +336,11 @@ export default function AvatarMetaPerson3D({
       const delta = clockRef.current.getDelta();
       const elapsed = clockRef.current.getElapsedTime();
 
+      // Actualizar AnimationMixer (mantiene los brazos abajo y respiración natural)
+      if (mixerRef.current) {
+        mixerRef.current.update(delta);
+      }
+
       // A. Color dinámico de iluminación según la faceta emocional autónoma
       if (facetaActual) {
         const colorObj = new THREE.Color(facetaActual.color);
@@ -316,17 +355,8 @@ export default function AvatarMetaPerson3D({
         mesh.position.y = cfg.pos[1] + Math.sin(elapsed * 1.5 + idx * 1.1) * 0.025;
       });
 
-      // C. Fisiología y Huesos: Respiración y Seguimiento del Cursor
-      const { head, neck, neck1, spine, spine1, leftEye, rightEye } = bonesRef.current;
-
-      // Respiración armónica de pecho y cuello
-      const respFactor = Math.sin(elapsed * 1.6);
-      if (spine) {
-        spine.rotation.x = respFactor * 0.012;
-      }
-      if (spine1) {
-        spine1.rotation.x = respFactor * 0.015;
-      }
+      // C. Fisiología y Huesos: Respiración adicional y Seguimiento del Cursor
+      const { head, neck, leftEye, rightEye } = bonesRef.current;
 
       // Head Tracking y Posturas según el estado de ajedrez
       if (head) {
@@ -369,10 +399,7 @@ export default function AvatarMetaPerson3D({
       }
 
       if (neck) {
-        neck.rotation.y = THREE.MathUtils.lerp(neck.rotation.y, mousePosRef.current.x * 0.14, 0.05);
-      }
-      if (neck1) {
-        neck1.rotation.y = THREE.MathUtils.lerp(neck1.rotation.y, mousePosRef.current.x * 0.10, 0.05);
+        neck.rotation.y = THREE.MathUtils.lerp(neck.rotation.y, mousePosRef.current.x * 0.12, 0.05);
       }
 
       // Huesos oculares (LeftEye / RightEye)
