@@ -4,97 +4,13 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 /**
- * Generador procedural de piezas de ajedrez 3D holográficas (LatheGeometry)
- */
-function crearGeometriaPieza(tipo) {
-  let puntos = [];
-  if (tipo === 'peon') {
-    puntos = [
-      new THREE.Vector2(0, 0),
-      new THREE.Vector2(0.16, 0),
-      new THREE.Vector2(0.14, 0.03),
-      new THREE.Vector2(0.10, 0.08),
-      new THREE.Vector2(0.07, 0.20),
-      new THREE.Vector2(0.10, 0.23),
-      new THREE.Vector2(0.06, 0.25),
-      new THREE.Vector2(0.08, 0.32),
-      new THREE.Vector2(0.05, 0.37),
-      new THREE.Vector2(0, 0.40),
-    ];
-  } else if (tipo === 'torre') {
-    puntos = [
-      new THREE.Vector2(0, 0),
-      new THREE.Vector2(0.18, 0),
-      new THREE.Vector2(0.16, 0.04),
-      new THREE.Vector2(0.12, 0.09),
-      new THREE.Vector2(0.09, 0.32),
-      new THREE.Vector2(0.14, 0.35),
-      new THREE.Vector2(0.14, 0.46),
-      new THREE.Vector2(0.09, 0.46),
-      new THREE.Vector2(0, 0.42),
-    ];
-  } else if (tipo === 'alfil') {
-    puntos = [
-      new THREE.Vector2(0, 0),
-      new THREE.Vector2(0.17, 0),
-      new THREE.Vector2(0.15, 0.04),
-      new THREE.Vector2(0.10, 0.10),
-      new THREE.Vector2(0.06, 0.32),
-      new THREE.Vector2(0.11, 0.35),
-      new THREE.Vector2(0.08, 0.39),
-      new THREE.Vector2(0.10, 0.49),
-      new THREE.Vector2(0.03, 0.55),
-      new THREE.Vector2(0, 0.58),
-    ];
-  } else if (tipo === 'rey') {
-    puntos = [
-      new THREE.Vector2(0, 0),
-      new THREE.Vector2(0.20, 0),
-      new THREE.Vector2(0.18, 0.05),
-      new THREE.Vector2(0.12, 0.12),
-      new THREE.Vector2(0.08, 0.38),
-      new THREE.Vector2(0.14, 0.42),
-      new THREE.Vector2(0.09, 0.47),
-      new THREE.Vector2(0.13, 0.58),
-      new THREE.Vector2(0.03, 0.64),
-      new THREE.Vector2(0, 0.68),
-    ];
-  } else if (tipo === 'caballo') {
-    puntos = [
-      new THREE.Vector2(0, 0),
-      new THREE.Vector2(0.18, 0),
-      new THREE.Vector2(0.15, 0.04),
-      new THREE.Vector2(0.11, 0.11),
-      new THREE.Vector2(0.10, 0.28),
-      new THREE.Vector2(0.13, 0.40),
-      new THREE.Vector2(0.07, 0.50),
-      new THREE.Vector2(0, 0.54),
-    ];
-  } else {
-    // Dama
-    puntos = [
-      new THREE.Vector2(0, 0),
-      new THREE.Vector2(0.19, 0),
-      new THREE.Vector2(0.17, 0.05),
-      new THREE.Vector2(0.11, 0.12),
-      new THREE.Vector2(0.07, 0.36),
-      new THREE.Vector2(0.13, 0.40),
-      new THREE.Vector2(0.08, 0.44),
-      new THREE.Vector2(0.13, 0.54),
-      new THREE.Vector2(0.02, 0.60),
-      new THREE.Vector2(0, 0.63),
-    ];
-  }
-  return new THREE.LatheGeometry(puntos, 20);
-}
-
-/**
  * Avatar 3D MetaPerson Dinámico
- * - Mira SIEMPRE DE FRENTE al usuario (NO sigue el mouse)
- * - Mira abajo al tablero ÚNICAMENTE cuando está pensando/haciendo la jugada
+ * - Encuadre perfectamente centrado de la cintura para arriba (sin piezas volando)
+ * - Mira SIEMPRE DE FRENTE al usuario (contacto visual constante, no sigue el ratón)
+ * - Inclina la cabeza y mira abajo al tablero ÚNICAMENTE cuando está pensando/analizando
  * - Risa con carcajadas y vaivén animado estilo metaperson_xd (1).gif al tener ventaja
  * - Reacción de enojo con ceño fruncido y negación de cabeza si comete error / jaque
- * - Brazos caídos de forma natural con animación Idle
+ * - Postura natural con brazos relajados abajo gracias a la animación Idle horneada
  */
 export default function AvatarMetaPerson3D({
   pensando = false,
@@ -130,11 +46,11 @@ export default function AvatarMetaPerson3D({
     const ancho = contenedor.clientWidth || 320;
     const alto = contenedor.clientHeight || 280;
 
-    // 1. Escena y Cámara 3D (Siempre de frente)
+    // 1. Escena y Cámara 3D (Frontal, perfectamente centrada)
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(34, ancho / alto, 0.1, 100);
-    // Cámara frontal a la altura del pecho/rostro
-    camera.position.set(0, 1.62, 0.88);
+    // Cámara posicionada de frente enfocando el torso y rostro
+    camera.position.set(0, 1.49, 1.15);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(ancho, alto);
@@ -149,21 +65,45 @@ export default function AvatarMetaPerson3D({
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.06;
-    controls.minDistance = 0.45;
-    controls.maxDistance = 2.4;
+    controls.minDistance = 0.5;
+    controls.maxDistance = 2.5;
     controls.maxPolarAngle = Math.PI / 2 + 0.15;
-    controls.target.set(0, 1.56, 0);
+    controls.target.set(0, 1.44, 0);
+
+    // Función para centrar la cámara exactamente en el rostro/torso
+    const centrarEncuadre = () => {
+      let targetY = 1.44;
+      if (bonesRef.current.head) {
+        const headWorld = new THREE.Vector3();
+        bonesRef.current.head.getWorldPosition(headWorld);
+        if (headWorld.y > 1) {
+          targetY = headWorld.y - 0.16; // Nivel de la barbilla/cuello
+        }
+      }
+      controls.target.set(0, targetY, 0);
+      camera.position.set(0, targetY + 0.05, 1.15);
+      controls.update();
+    };
 
     if (onResetCamera) {
-      onResetCamera.current = () => {
-        camera.position.set(0, 1.62, 0.88);
-        controls.target.set(0, 1.56, 0);
-        controls.update();
-      };
+      onResetCamera.current = centrarEncuadre;
     }
 
-    // 2. Iluminación PBR de Estudio
-    const luzAmbiente = new THREE.AmbientLight(0xffffff, 1.45);
+    // Adaptación dinámica si cambia el tamaño del contenedor
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        if (width > 0 && height > 0) {
+          camera.aspect = width / height;
+          camera.updateProjectionMatrix();
+          renderer.setSize(width, height);
+        }
+      }
+    });
+    resizeObserver.observe(contenedor);
+
+    // 2. Iluminación PBR de Estudio Fotográfico
+    const luzAmbiente = new THREE.AmbientLight(0xffffff, 1.5);
     scene.add(luzAmbiente);
 
     const luzClave = new THREE.DirectionalLight(0xffffff, 2.8);
@@ -175,50 +115,17 @@ export default function AvatarMetaPerson3D({
     luzRelleno.position.set(-2.0, 1.2, 1.8);
     scene.add(luzRelleno);
 
-    // Rim Light (Luz de contorno cian para silueta)
-    const luzContorno = new THREE.PointLight(0x00e5ff, 3.8, 6);
+    // Rim Light (Luz de contorno cian para resaltar silueta y hombros)
+    const luzContorno = new THREE.PointLight(0x00e5ff, 3.5, 6);
     luzContorno.position.set(0, 2.2, -1.2);
     scene.add(luzContorno);
 
-    // Luz dinámica de emoción
-    const luzFaceta = new THREE.PointLight(0x00e5ff, 1.6, 3.2);
-    luzFaceta.position.set(0, 1.6, 0.7);
+    // Luz dinámica de emoción facial
+    const luzFaceta = new THREE.PointLight(0x00e5ff, 1.5, 3.2);
+    luzFaceta.position.set(0, 1.5, 0.7);
     scene.add(luzFaceta);
 
-    // 3. Piezas de Ajedrez Holográficas en el Fondo 3D
-    const grupoPiezas = new THREE.Group();
-    scene.add(grupoPiezas);
-
-    const matHoloCyan = new THREE.MeshStandardMaterial({
-      color: 0x00e5ff,
-      emissive: 0x00e5ff,
-      emissiveIntensity: 0.65,
-      wireframe: true,
-      transparent: true,
-      opacity: 0.28,
-      roughness: 0.15,
-      metalness: 0.9,
-    });
-
-    const piezasConfig = [
-      { tipo: 'caballo', pos: [-0.65, 1.75, -0.45], escala: 0.55, rotVel: 0.4 },
-      { tipo: 'alfil', pos: [0.65, 1.70, -0.4], escala: 0.5, rotVel: -0.35 },
-      { tipo: 'rey', pos: [0.55, 1.35, -0.3], escala: 0.48, rotVel: 0.25 },
-      { tipo: 'dama', pos: [-0.55, 1.30, -0.35], escala: 0.5, rotVel: -0.3 },
-      { tipo: 'peon', pos: [-0.45, 1.95, -0.55], escala: 0.42, rotVel: 0.45 },
-      { tipo: 'peon', pos: [0.45, 1.98, -0.55], escala: 0.4, rotVel: -0.4 },
-    ];
-
-    const piezasMeshes = piezasConfig.map((cfg) => {
-      const geo = crearGeometriaPieza(cfg.tipo);
-      const mesh = new THREE.Mesh(geo, matHoloCyan);
-      mesh.position.set(...cfg.pos);
-      mesh.scale.setScalar(cfg.escala);
-      grupoPiezas.add(mesh);
-      return { mesh, cfg };
-    });
-
-    // 4. Carga del Modelo 3D MetaPerson (.GLB)
+    // 3. Carga del Modelo 3D MetaPerson (.GLB)
     morphMeshesRef.current = [];
     mixerRef.current = null;
     bonesRef.current = {
@@ -285,8 +192,18 @@ export default function AvatarMetaPerson3D({
           if (bonesRef.current.rightArm) bonesRef.current.rightArm.rotation.z = 1.25;
         }
 
-        root.position.set(0, 0, 0);
+        // Centrado geométrico riguroso en los ejes X y Z
+        const bbox = new THREE.Box3().setFromObject(root);
+        const center = new THREE.Vector3();
+        bbox.getCenter(center);
+        root.position.x = -center.x;
+        root.position.z = -center.z;
+        root.position.y = 0; // Pies en el plano base
+
         scene.add(root);
+
+        // Auto-centrar la cámara exactamente a la altura del rostro del modelo cargado
+        centrarEncuadre();
 
         onProgresoCarga?.(100);
       },
@@ -302,39 +219,31 @@ export default function AvatarMetaPerson3D({
       }
     );
 
-    // 5. Timers de parpadeo
+    // 4. Timers de parpadeo fisiológico
     let blinkTimer = 0;
-    let nextBlinkTime = 3.2;
-    let blinkProgress = 0;
+    let nextBlinkTime = 3.5;
     let isBlinking = false;
+    let blinkProgress = 0;
 
-    // 6. Bucle de Animación 3D a 60 FPS
+    // 5. Bucle de Renderizado 3D a 60 FPS
     const animate = () => {
       animId = requestAnimationFrame(animate);
 
       const delta = clockRef.current.getDelta();
       const elapsed = clockRef.current.getElapsedTime();
 
-      // Actualizar AnimationMixer (brazos abajo y respiración de cuerpo)
+      // Actualizar AnimationMixer (brazos abajo y respiración orgánica)
       if (mixerRef.current) {
         mixerRef.current.update(delta);
       }
 
-      // A. Color dinámico de iluminación según la faceta emocional
+      // A. Color dinámico de iluminación según la emoción
       if (facetaActual) {
         const colorObj = new THREE.Color(facetaActual.color);
         luzFaceta.color.lerp(colorObj, 0.05);
-        matHoloCyan.color.lerp(colorObj, 0.04);
-        matHoloCyan.emissive.lerp(colorObj, 0.04);
       }
 
-      // B. Rotación suave de las piezas holográficas en 3D
-      piezasMeshes.forEach(({ mesh, cfg }, idx) => {
-        mesh.rotation.y += cfg.rotVel * delta;
-        mesh.position.y = cfg.pos[1] + Math.sin(elapsed * 1.5 + idx * 1.1) * 0.025;
-      });
-
-      // C. Control Fisiológico de Cabeza y Cuello (SIEMPRE DE FRENTE, NO SIGUE EL MOUSE)
+      // B. Control de Cabeza y Cuello (SIEMPRE DE FRENTE, SIN SEGUIR EL RATÓN)
       const { head, neck, spine1, leftEye, rightEye } = bonesRef.current;
       const emocion = facetaActual?.emocion || 'neutral';
 
@@ -377,7 +286,7 @@ export default function AvatarMetaPerson3D({
           targetRotZ = 0;
         }
 
-        // Interpolación fluida
+        // Interpolación suave y orgánica
         head.rotation.y = THREE.MathUtils.lerp(head.rotation.y, targetRotY, 0.08);
         head.rotation.x = THREE.MathUtils.lerp(head.rotation.x, targetRotX, 0.08);
         head.rotation.z = THREE.MathUtils.lerp(head.rotation.z, targetRotZ, 0.08);
@@ -406,7 +315,7 @@ export default function AvatarMetaPerson3D({
         rightEye.rotation.y = THREE.MathUtils.lerp(rightEye.rotation.y, eyeTargetY, 0.12);
       }
 
-      // D. Micro-Expresiones Faciales con Blendshapes Apple ARKit
+      // C. Micro-Expresiones Faciales con Blendshapes Apple ARKit
       blinkTimer += delta;
       if (!isBlinking && blinkTimer > nextBlinkTime) {
         isBlinking = true;
@@ -543,6 +452,7 @@ export default function AvatarMetaPerson3D({
 
     return () => {
       cancelAnimationFrame(animId);
+      resizeObserver.disconnect();
       controls.dispose();
       renderer.dispose();
       if (contenedor.contains(renderer.domElement)) {

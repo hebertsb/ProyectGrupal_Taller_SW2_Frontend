@@ -692,7 +692,7 @@ export default function AvatarAgente3D({
       </div>
 
       {/* ÁREA DE VISUALIZACIÓN THREE.JS VIEWPORT (ENCUADRE DE LA CINTURA PARA ARRIBA) */}
-      <div className="relative w-full h-[280px] rounded-lg overflow-hidden bg-gradient-to-b from-[#0a0d14] to-[#111319] border border-white/10 flex items-center justify-center group">
+      <div className="relative w-full h-[290px] rounded-lg overflow-hidden bg-gradient-to-b from-[#0a0d14] to-[#111319] border border-white/10 flex items-center justify-center group">
         {/* MODELO 1: METAPERSON 3D (HUMANOIDE 360° REAL CON VOLUMEN EN TODOS SUS LADOS) */}
         {modeloActivo === 'metaperson' ? (
           <AvatarMetaPerson3D
@@ -718,19 +718,16 @@ export default function AvatarAgente3D({
         )}
 
         {/* BADGE DE FACETA EMOCIONAL EN TIEMPO REAL (100% AUTÓNOMO) */}
-        <div className="absolute top-2 left-2 z-10 pointer-events-none max-w-[85%]">
+        <div className="absolute top-2 left-2 z-10 pointer-events-none">
           <div
-            className="px-2.5 py-1 rounded bg-black/80 border backdrop-blur-md flex items-center gap-1.5 text-[11px] font-mono shadow-lg transition-all duration-300"
-            style={{ borderColor: `${facetaActual.color}77` }}
+            className="px-2.5 py-1 rounded-full bg-[#0c0e14]/85 border backdrop-blur-md flex items-center gap-1.5 text-[10px] font-mono shadow-lg transition-all duration-300"
+            style={{ borderColor: `${facetaActual.color}88` }}
           >
-            <span className="text-[14px]">{facetaActual.icono}</span>
-            <span className="font-bold tracking-wide" style={{ color: facetaActual.color }}>
+            <span className="text-[12px]">{facetaActual.icono}</span>
+            <span className="font-semibold tracking-wide text-[10px]" style={{ color: facetaActual.color }}>
               {facetaActual.titulo}
             </span>
           </div>
-          <p className="mt-1 text-[9px] font-mono text-slate-300 drop-shadow-md bg-black/70 px-2 py-0.5 rounded backdrop-blur-sm truncate">
-            {facetaActual.descripcion}
-          </p>
         </div>
 
         {/* BOTÓN CENTRAR CÁMARA */}
@@ -764,6 +761,14 @@ export default function AvatarAgente3D({
             {pensando ? 'ANALIZANDO JUGADA...' : 'ESPERANDO MOVIMIENTO'}
           </span>
         </div>
+
+        {/* DESCRIPCIÓN DE LA ESTRATEGIA Y GESTO */}
+        {facetaActual.descripcion && (
+          <div className="px-2 py-1 rounded bg-[#00e5ff]/5 border border-[#00e5ff]/15 flex items-center justify-between text-[9px] text-slate-300">
+            <span className="text-slate-400 truncate">{facetaActual.descripcion}</span>
+            <span className="text-[10px] ml-2 shrink-0">{facetaActual.icono}</span>
+          </div>
+        )}
 
         {/* ENLACE DISCRETO PARA MODO CALIBRACIÓN (OPCIONAL PARA DESARROLLO) */}
         <div className="flex items-center justify-between text-[9px] text-slate-500 pt-0.5">
