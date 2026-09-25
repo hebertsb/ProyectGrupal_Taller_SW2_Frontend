@@ -16,12 +16,12 @@ const MODELOS_CATALOGO = [
     descripcion: 'Avatar humanoide 3D completo con volumen en todos sus lados (no 2D), 51 micro-expresiones ARKit (Wicked, Suspicious, Confused, XD) y esqueleto cinemático de 73 huesos.',
   },
   {
-    id: 'facecap',
-    nombre: 'Digital Human',
-    tipo: 'Apple ARKit',
-    icono: 'sentiment_very_satisfied',
-    ruta: '/models/facecap.glb',
-    descripcion: 'Rostro digital 3D de alta fidelidad con 52 micro-expresiones de Apple ARKit.',
+    id: 'cyber_head',
+    nombre: 'Cyber Head',
+    tipo: 'Mesh Descargado',
+    icono: 'view_in_ar',
+    ruta: '/models/avatar_cyber_head.glb',
+    descripcion: 'Modelo descargado avatar_cyber_head (1).glb (Trimesh procedural).',
   },
   {
     id: 'robot_expressive',
@@ -308,7 +308,7 @@ export default function AvatarAgente3D({
   resultado = null,
 }) {
   const mountRef = useRef(null);
-  const [modeloActivo, setModeloActivo] = useState('metaperson');
+  const [modeloActivo, setModeloActivo] = useState('cyber_head');
   const [cargandoModelo, setCargandoModelo] = useState(false);
   const [progresoCarga, setProgresoCarga] = useState(0);
   const [facetaForzada, setFacetaForzada] = useState(null);
@@ -413,8 +413,8 @@ export default function AvatarAgente3D({
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(38, ancho / alto, 0.1, 100);
 
-    if (modeloActivo === 'facecap') {
-      camera.position.set(0, 1.45, 1.15);
+    if (modeloActivo === 'cyber_head') {
+      camera.position.set(0, 1.35, 1.85);
     } else {
       camera.position.set(0, 1.42, 2.15);
     }
@@ -509,16 +509,25 @@ export default function AvatarAgente3D({
           const bbox = new THREE.Box3().setFromObject(root);
           const size = bbox.getSize(new THREE.Vector3());
           const maxDim = Math.max(size.x, size.y, size.z);
-          const escalaDeseada = modeloActivo === 'facecap' ? 1.1 : 1.75 / (maxDim || 1);
+          const escalaDeseada = modeloActivo === 'cyber_head' ? 1.35 / (maxDim || 1) : 1.75 / (maxDim || 1);
           root.scale.setScalar(escalaDeseada);
 
           const bboxAjustado = new THREE.Box3().setFromObject(root);
-          if (modeloActivo === 'facecap') {
-            root.position.set(0, 1.4, 0);
-          } else {
-            root.position.y = -bboxAjustado.min.y;
-            root.position.x = -(bboxAjustado.min.x + bboxAjustado.max.x) / 2;
-            root.position.z = -(bboxAjustado.min.z + bboxAjustado.max.z) / 2;
+          root.position.y = -bboxAjustado.min.y;
+          root.position.x = -(bboxAjustado.min.x + bboxAjustado.max.x) / 2;
+          root.position.z = -(bboxAjustado.min.z + bboxAjustado.max.z) / 2;
+
+          if (modeloActivo === 'cyber_head') {
+            root.traverse((obj) => {
+              if (obj.isMesh) {
+                obj.material = new THREE.MeshStandardMaterial({
+                  color: 0x00e5ff,
+                  roughness: 0.25,
+                  metalness: 0.85,
+                  wireframe: false,
+                });
+              }
+            });
           }
 
           scene.add(root);
