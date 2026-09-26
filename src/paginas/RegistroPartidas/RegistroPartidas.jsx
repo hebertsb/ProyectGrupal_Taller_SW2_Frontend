@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { listarPartidas, obtenerPartida } from '../../api/backend';
+import { listarPartidas, obtenerPartida, obtenerDemostracionActiva } from '../../api/backend';
+
+const INTERVALO_SONDEO_DEMOSTRACION_MS = 8000;
 
 const FILTROS = {
   todas: () => true,
@@ -23,7 +25,13 @@ function fechaLegible(iso) {
   }
 }
 
-export default function RegistroPartidas({ alIrASalaControl, alIrARazonamiento, alIrAAprendizaje }) {
+export default function RegistroPartidas({
+  alIrASalaControl,
+  alIrARazonamiento,
+  alIrAAprendizaje,
+  alVerDemostracion,
+  esFacilitador = false,
+}) {
   const [historial, setHistorial] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
@@ -31,6 +39,7 @@ export default function RegistroPartidas({ alIrASalaControl, alIrARazonamiento, 
   const [busqueda, setBusqueda] = useState('');
   const [seleccionadaId, setSeleccionadaId] = useState(null);
   const [detalle, setDetalle] = useState(null);
+  const [demoActiva, setDemoActiva] = useState(null);
 
   useEffect(() => {
     listarPartidas()
@@ -38,6 +47,29 @@ export default function RegistroPartidas({ alIrASalaControl, alIrARazonamiento, 
       .catch((err) => setError(err.message))
       .finally(() => setCargando(false));
   }, []);
+
+  // Banner "tu facilitador está transmitiendo" — solo tiene sentido para el
+  // rol jugador (el facilitador ya ve/controla la transmisión desde Sala de
+  // Control). Silencioso si falla: no hace falta molestar al jugador por un
+  // sondeo de fondo que no pidió explícitamente.
+  useEffect(() => {
+    if (esFacilitador) {
+      setDemoActiva(null);
+      return;
+    }
+    let cancelado = false;
+    const sondear = () => {
+      obtenerDemostracionActiva()
+        .then((datos) => { if (!cancelado) setDemoActiva(datos); })
+        .catch(() => { if (!cancelado) setDemoActiva(null); });
+    };
+    sondear();
+    const intervalo = setInterval(sondear, INTERVALO_SONDEO_DEMOSTRACION_MS);
+    return () => {
+      cancelado = true;
+      clearInterval(intervalo);
+    };
+  }, [esFacilitador]);
 
   useEffect(() => {
     if (!seleccionadaId) {
@@ -62,6 +94,28 @@ export default function RegistroPartidas({ alIrASalaControl, alIrARazonamiento, 
 
   return (
     <div className="flex flex-col w-full gap-space-md p-space-lg animate-in fade-in duration-500">
+      {/* Banner de transmisión en vivo — solo jugador, solo si hay una demo activa */}
+      {demoActiva && (
+        <div className="flex items-center justify-between gap-space-sm px-space-md py-space-sm rounded-lg bg-primary/10 border border-primary/30">
+          <div className="flex items-center gap-space-sm">
+            <span className="relative flex h-2.5 w-2.5 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-primary"></span>
+            </span>
+            <span className="font-body-sm text-body-sm text-on-surface">
+              Tu facilitador está mostrando una partida en vivo
+            </span>
+          </div>
+          <button
+            onClick={() => alVerDemostracion?.(demoActiva.id)}
+            className="px-space-md py-space-2xs rounded-lg bg-primary text-on-primary font-body-sm text-body-sm font-medium hover:brightness-110 transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary shrink-0"
+            type="button"
+          >
+            Ver
+          </button>
+        </div>
+      )}
+
       {/* Franja superior */}
       <section className="bg-surface-container-lowest/80 backdrop-blur-md rounded-lg p-space-md flex flex-col lg:flex-row items-start lg:items-center justify-between gap-space-md shadow-sm">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-space-md w-full lg:w-auto">
@@ -165,6 +219,15 @@ export default function RegistroPartidas({ alIrASalaControl, alIrARazonamiento, 
                     <span>{fechaLegible(partida.creada_en)}</span>
                     <span className="text-surface-variant">/</span>
                     <span>{partida.cantidad_jugadas} jugadas</span>
+                    {esFacilitador && partida.usuario_nombre && (
+                      <>
+                        <span className="text-surface-variant">/</span>
+                        <span className="flex items-center gap-1 text-primary-fixed-dim">
+                          <span className="material-symbols-outlined text-[13px]">person</span>
+                          {partida.usuario_nombre}
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
               </article>
@@ -184,6 +247,12 @@ export default function RegistroPartidas({ alIrASalaControl, alIrARazonamiento, 
                   <h2 className="font-headline-lg text-headline-lg text-on-surface font-semibold tracking-tight">
                     #{detalle.id.slice(0, 6)} — {resultadoLegible(detalle.resultado)}
                   </h2>
+                  {esFacilitador && detalle.usuario_nombre && (
+                    <span className="flex items-center gap-1 font-mono-micro text-mono-micro text-primary-fixed-dim mt-space-2xs">
+                      <span className="material-symbols-outlined text-[13px]">person</span>
+                      {detalle.usuario_nombre}
+                    </span>
+                  )}
                 </div>
                 <div className="text-right">
                   <span className="font-mono-micro text-mono-micro text-outline block">CREADA</span>

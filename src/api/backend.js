@@ -61,9 +61,17 @@ export function obtenerJugadasLegales(partidaId, casilla) {
   });
 }
 
-/** Análisis jugada por jugada de una partida ya jugada, para la vista de Aprendizaje. */
-export function analisisCompletoPartida(partidaId) {
-  return solicitar(`/partida/${partidaId}/analisis-completo`, {
+/**
+ * Análisis jugada por jugada de una partida ya jugada, para la vista de
+ * Aprendizaje y el Panel de Aprendizaje (tutor Turing). `rango` es opcional
+ * ("Principiante" | "Intermedio" | "Avanzado") — el backend todavía no lo
+ * lee (ver HU5/HU6, retroalimentación adaptada al nivel, en curso), pero ya
+ * se manda: en cuanto el backend lo soporte, la retroalimentación se ajusta
+ * sola sin tocar este archivo.
+ */
+export function analisisCompletoPartida(partidaId, rango) {
+  const query = rango ? `?rango=${encodeURIComponent(rango)}` : "";
+  return solicitar(`/partida/${partidaId}/analisis-completo${query}`, {
     method: "GET",
   });
 }
@@ -77,6 +85,50 @@ export function abrirSimulacion3D(partidaId) {
   return solicitar("/simulacion/abrir-ventana-3d", {
     body: JSON.stringify({ partida_id: partidaId }),
   });
+}
+
+/**
+ * Prende/apaga, por partida, si el jugador puede ver la simulación 3D, usar
+ * la cámara del tablero físico, y/o si la partida se transmite en vivo a los
+ * jugadores (`permite_simulacion_3d`, `permite_camara`, `es_demostracion`).
+ * Edición parcial — solo facilitadores, y `es_demostracion` solo se puede
+ * prender en una partida propia del facilitador (400 si no lo es). Todos los
+ * parámetros son opcionales.
+ */
+export function actualizarPermisosPartida(partidaId, permisos) {
+  return solicitar(`/partida/${partidaId}/permisos`, {
+    method: "PATCH",
+    body: JSON.stringify(permisos),
+  });
+}
+
+/**
+ * Partida que el facilitador marcó como demostración en vivo (`es_demostracion`),
+ * si hay alguna — cualquier usuario autenticado puede consultarla, para poder
+ * avisarle al jugador que hay una transmisión activa. Devuelve `null` si no hay
+ * ninguna. El contrato exacto de "no hay ninguna" todavía puede cambiar del
+ * lado del backend (204, 404, o un cuerpo vacío/`{activa: false}`), así que se
+ * cubren los casos más probables en vez de asumir uno solo.
+ */
+export async function obtenerDemostracionActiva() {
+  const token = localStorage.getItem("access_token");
+  const headers = { "Content-Type": "application/json" };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  const respuesta = await fetch("/partida/demostracion-activa", { method: "GET", headers });
+  if (respuesta.status === 204 || respuesta.status === 404) {
+    return null;
+  }
+  if (!respuesta.ok) {
+    const detalle = await respuesta.json().catch(() => null);
+    const error = new Error(detalle?.detail ?? `Error ${respuesta.status}`);
+    error.status = respuesta.status;
+    throw error;
+  }
+  const datos = await respuesta.json().catch(() => null);
+  if (!datos || datos.activa === false) return null;
+  return datos;
 }
 
 export function calcularJugada(fen, nivel) {
@@ -195,8 +247,6 @@ export function inferenciaModelo(fen) {
   });
 }
 
-/** Gestión de usuarios (solo facilitadores) */
-
 async function solicitarAuth(endpoint, opciones = {}) {
   const token = localStorage.getItem("access_token");
   const respuesta = await fetch(endpoint, {
@@ -210,10 +260,25 @@ async function solicitarAuth(endpoint, opciones = {}) {
   });
   if (!respuesta.ok) {
     const detalle = await respuesta.json().catch(() => null);
-    throw new Error(detalle?.detail ?? `Error ${respuesta.status}`);
+    const error = new Error(detalle?.detail ?? `Error ${respuesta.status}`);
+    error.status = respuesta.status;
+    throw error;
   }
   return respuesta.json();
 }
+
+/**
+ * Edición del propio perfil — cualquier rol autenticado (RF/HU perfil).
+ * Edición parcial: solo se pisan los campos incluidos en `datos`.
+ */
+export function actualizarPerfil(datos) {
+  return solicitarAuth("/auth/me", {
+    method: "PATCH",
+    body: JSON.stringify(datos),
+  });
+}
+
+/** Gestión de usuarios (solo facilitadores) */
 
 export function listarUsuarios() {
   return solicitarAuth("/auth/usuarios");
@@ -223,4 +288,55 @@ export function historialPartidasUsuario(usuarioId, limit = 10, offset = 0) {
   return solicitarAuth(
     `/auth/usuarios/${usuarioId}/historial-partidas?limit=${limit}&offset=${offset}`,
   );
+}
+
+/**
+ * Historial de partidas del usuario logueado (cualquier rol, no solo
+ * facilitador) — para el Panel de Aprendizaje del jugador ("Repaso de tu
+ * partida", insignia "Primera partida jugada"). Ya existía en el backend
+ * para HU14 (`backend/rutas/ruta_usuario.py`) aunque hasta ahora ningún
+ * componente del frontend lo consumía — no hizo falta pedir un endpoint
+ * nuevo.
+ */
+export function historialPartidasPropio(limit = 10, offset = 0) {
+  return solicitarAuth(`/usuario/historial-partidas?limit=${limit}&offset=${offset}`);
+}
+
+/**
+ * Videos por pieza que el facilitador autenticado ya subió — Configuración
+ * de Enseñanza. Dict `tipo_pieza -> url`; una pieza ausente significa que
+ * se usa el video por defecto del sistema, no que hubo un error.
+ */
+export function obtenerVideosFacilitador() {
+  return solicitarAuth("/facilitador/videos");
+}
+
+/**
+ * Sube (o reemplaza) el video educativo del facilitador para `tipoPieza`
+ * ("rey" | "dama" | "torre" | "alfil" | "caballo" | "peon"). Multipart
+ * aparte de `solicitar`/`solicitarAuth`: el content-type con boundary lo
+ * arma el navegador solo al mandar un `FormData`, así que acá no se fija
+ * "Content-Type" a mano (ver `reconocerTablero` más arriba, mismo patrón).
+ * Devuelve `{tipo_pieza, url}`.
+ */
+export async function subirVideoPieza(tipoPieza, archivo) {
+  const token = localStorage.getItem("access_token");
+  const datos = new FormData();
+  datos.append("archivo", archivo);
+  const headers = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  const respuesta = await fetch(`/facilitador/videos/${tipoPieza}`, {
+    method: "POST",
+    body: datos,
+    headers,
+  });
+  if (!respuesta.ok) {
+    const detalle = await respuesta.json().catch(() => null);
+    const error = new Error(detalle?.detail ?? `Error ${respuesta.status}`);
+    error.status = respuesta.status;
+    throw error;
+  }
+  return respuesta.json();
 }

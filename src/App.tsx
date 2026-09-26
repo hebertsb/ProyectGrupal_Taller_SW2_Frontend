@@ -9,7 +9,13 @@ import RazonamientoNeuronal from './paginas/RazonamientoNeuronal/RazonamientoNeu
 import Administracion from './paginas/Administracion/Administracion';
 import RegistroPartidas from './paginas/RegistroPartidas/RegistroPartidas';
 import Aprendizaje from './paginas/Aprendizaje/Aprendizaje';
+import PanelAprendizaje from './paginas/PanelAprendizaje/PanelAprendizaje';
+import DemostracionEnVivo from './paginas/DemostracionEnVivo/DemostracionEnVivo';
+import Monitoreo from './paginas/Monitoreo/Monitoreo';
+import ConfiguracionEnsenanza from './paginas/ConfiguracionEnsenanza/ConfiguracionEnsenanza';
+import Perfil from './paginas/Perfil/Perfil';
 import Login from './paginas/Login/Login';
+import AccesoRestringido from './componentes/AccesoRestringido';
 import { backendEnLinea } from './api/backend';
 import { ProveedorRazonamiento } from './contexto/ContextoRazonamiento';
 
@@ -34,6 +40,9 @@ export default function App() {
   // así que al volver a montarse recupera la MISMA partida en vez de arrancar una nueva.
   const [partidaActivaId, setPartidaActivaId] = useState<string | null>(null);
   const [partidaParaAprender, setPartidaParaAprender] = useState<string | null>(null);
+  // Partida que el jugador abrió desde el banner "tu facilitador está
+  // transmitiendo" — ver Registro de Partidas y DemostracionEnVivo.
+  const [partidaDemostracionId, setPartidaDemostracionId] = useState<string | null>(null);
   const [usuario, setUsuario] = useState(() => obtenerUsuarioGuardado());
 
   const manejarLogin = (usuarioData) => {
@@ -43,6 +52,16 @@ export default function App() {
       setPantallaActiva('usuarios');
     } else {
       setPantallaActiva('control');
+    }
+  };
+
+  const manejarActualizarUsuario = (usuarioActualizado) => {
+    setUsuario(usuarioActualizado);
+    try {
+      localStorage.setItem('usuario', JSON.stringify(usuarioActualizado));
+    } catch {
+      // localStorage puede fallar (modo privado, cuota, etc.) — no es crítico,
+      // el estado en memoria ya se actualizó.
     }
   };
 
@@ -67,6 +86,11 @@ export default function App() {
   function irAAprendizaje(partidaId?: string) {
     setPartidaParaAprender(partidaId ?? null);
     setPantallaActiva('aprendizaje');
+  }
+
+  function irADemostracion(partidaId?: string) {
+    setPartidaDemostracionId(partidaId ?? null);
+    setPantallaActiva('demostracion');
   }
 
   useEffect(() => {
@@ -124,9 +148,21 @@ export default function App() {
               <button onClick={() => setPantallaActiva('control')} className={navClasses('control')}>
                 <span className="material-symbols-outlined text-[18px]">sports_esports</span>Sala de Control
               </button>
-              <button onClick={() => setPantallaActiva('neuronal')} className={navClasses('neuronal')}>
-                <span className="material-symbols-outlined text-[18px]">neurology</span>Razonamiento Neuronal
-              </button>
+              {!esFacilitador && (
+                <button onClick={() => setPantallaActiva('panelAprendizaje')} className={navClasses('panelAprendizaje')}>
+                  <span className="material-symbols-outlined text-[18px]">auto_stories</span>Panel de Aprendizaje
+                </button>
+              )}
+              {esFacilitador && (
+                <button onClick={() => setPantallaActiva('neuronal')} className={navClasses('neuronal')}>
+                  <span className="material-symbols-outlined text-[18px]">neurology</span>Razonamiento Neuronal
+                </button>
+              )}
+              {esFacilitador && (
+                <button onClick={() => setPantallaActiva('monitoreo')} className={navClasses('monitoreo')}>
+                  <span className="material-symbols-outlined text-[18px]">grid_view</span>Monitoreo
+                </button>
+              )}
               <button onClick={() => setPantallaActiva('admin')} className={navClasses('admin')}>
                 <span className="material-symbols-outlined text-[18px]">tune</span>Administración
               </button>
@@ -135,6 +171,14 @@ export default function App() {
                   <span className="material-symbols-outlined text-[18px]">manage_accounts</span>Gestión de Usuarios
                 </button>
               )}
+              {esFacilitador && (
+                <button onClick={() => setPantallaActiva('ensenanza')} className={navClasses('ensenanza')}>
+                  <span className="material-symbols-outlined text-[18px]">video_settings</span>Configuración de Enseñanza
+                </button>
+              )}
+              <button onClick={() => setPantallaActiva('perfil')} className={navClasses('perfil')}>
+                <span className="material-symbols-outlined text-[18px]">account_circle</span>Mi Perfil
+              </button>
               <div className="pl-space-md flex flex-col gap-space-2xs border-l border-outline-variant/20 ml-space-sm mt-space-2xs">
                 <button onClick={() => setPantallaActiva('registro')} className={navClasses('registro')}>
                   <span className="material-symbols-outlined text-[16px]">history_edu</span>Registro de Partidas
@@ -160,11 +204,25 @@ export default function App() {
             </div>
           </div>
           <div className="p-space-sm rounded-lg bg-surface-container-lowest/60 flex items-center gap-space-sm">
-            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-              <span className="material-symbols-outlined text-on-primary text-[18px]">
-                {esFacilitador ? 'admin_panel_settings' : 'person'}
-              </span>
-            </div>
+            <button
+              onClick={() => setPantallaActiva('perfil')}
+              className="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0 overflow-hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              type="button"
+              title="Ver mi perfil"
+            >
+              {usuario.avatar_url ? (
+                <img
+                  src={usuario.avatar_url}
+                  alt=""
+                  className="w-full h-full object-cover"
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                />
+              ) : (
+                <span className="material-symbols-outlined text-on-primary text-[18px]">
+                  {esFacilitador ? 'admin_panel_settings' : 'person'}
+                </span>
+              )}
+            </button>
             <div className="flex-1 min-w-0 flex flex-col">
               <span className="font-body-sm text-body-sm font-medium text-on-surface truncate">{usuario.nombre}</span>
               <span className={`font-mono-micro text-mono-micro ${esFacilitador ? 'text-tertiary' : 'text-secondary'}`}>
@@ -197,11 +255,23 @@ export default function App() {
               </div>
               <nav className="hidden xl:flex items-center gap-space-xs">
                 <button onClick={() => setPantallaActiva('control')} className={headerNavClasses('control')}>SALA DE CONTROL</button>
-                <button onClick={() => setPantallaActiva('neuronal')} className={headerNavClasses('neuronal')}>RAZONAMIENTO NEURONAL</button>
+                {!esFacilitador && (
+                  <button onClick={() => setPantallaActiva('panelAprendizaje')} className={headerNavClasses('panelAprendizaje')}>PANEL DE APRENDIZAJE</button>
+                )}
+                {esFacilitador && (
+                  <button onClick={() => setPantallaActiva('neuronal')} className={headerNavClasses('neuronal')}>RAZONAMIENTO NEURONAL</button>
+                )}
+                {esFacilitador && (
+                  <button onClick={() => setPantallaActiva('monitoreo')} className={headerNavClasses('monitoreo')}>MONITOREO</button>
+                )}
                 <button onClick={() => setPantallaActiva('admin')} className={headerNavClasses('admin')}>ADMINISTRACIÓN</button>
                 {esFacilitador && (
                   <button onClick={() => setPantallaActiva('usuarios')} className={headerNavClasses('usuarios')}>GESTIÓN USUARIOS</button>
                 )}
+                {esFacilitador && (
+                  <button onClick={() => setPantallaActiva('ensenanza')} className={headerNavClasses('ensenanza')}>ENSEÑANZA</button>
+                )}
+                <button onClick={() => setPantallaActiva('perfil')} className={headerNavClasses('perfil')}>MI PERFIL</button>
               </nav>
             </div>
             <div className="flex items-center gap-space-md">
@@ -213,29 +283,108 @@ export default function App() {
                   </span>
                 </div>
               </div>
+              {esFacilitador && (
+                <button
+                  disabled
+                  title="No disponible — el brazo físico todavía no está conectado (ver CLAUDE.md)"
+                  className="flex items-center gap-space-xs px-space-sm py-space-2xs rounded-lg bg-surface-container text-outline cursor-not-allowed font-mono-micro text-mono-micro font-medium tracking-wider uppercase"
+                  type="button"
+                >
+                  <span className="material-symbols-outlined text-[14px]">emergency</span><span className="hidden sm:inline">E-STOP</span>
+                </button>
+              )}
               <button
-                disabled
-                title="No disponible — el brazo físico todavía no está conectado (ver CLAUDE.md)"
-                className="flex items-center gap-space-xs px-space-sm py-space-2xs rounded-lg bg-surface-container text-outline cursor-not-allowed font-mono-micro text-mono-micro font-medium tracking-wider uppercase"
+                onClick={() => setPantallaActiva('perfil')}
+                className="w-8 h-8 rounded-full bg-primary flex items-center justify-center overflow-hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                 type="button"
+                title="Ver mi perfil"
               >
-                <span className="material-symbols-outlined text-[14px]">emergency</span><span className="hidden sm:inline">E-STOP</span>
+                {usuario.avatar_url ? (
+                  <img
+                    src={usuario.avatar_url}
+                    alt=""
+                    className="w-full h-full object-cover"
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                  />
+                ) : (
+                  <span className="material-symbols-outlined text-on-primary text-[18px]">
+                    {esFacilitador ? 'admin_panel_settings' : 'person'}
+                  </span>
+                )}
               </button>
-              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-                <span className="material-symbols-outlined text-on-primary text-[18px]">
-                  {esFacilitador ? 'admin_panel_settings' : 'person'}
-                </span>
-              </div>
             </div>
           </div>
         </header>
 
         <main className="w-full pt-16 bg-surface-container-lowest min-h-screen">
           {pantallaActiva === 'control' && (
-            <SalaControl partidaIdInicial={partidaActivaId} onPartidaActivaChange={setPartidaActivaId} />
+            <SalaControl
+              partidaIdInicial={partidaActivaId}
+              onPartidaActivaChange={setPartidaActivaId}
+              esFacilitador={esFacilitador}
+              usuarioIdPropio={usuario?.id ?? null}
+            />
           )}
-          {pantallaActiva === 'neuronal' && <RazonamientoNeuronal />}
+          {pantallaActiva === 'neuronal' && (
+            esFacilitador ? (
+              <RazonamientoNeuronal />
+            ) : (
+              <AccesoRestringido
+                icono="smartphone"
+                colorIcono="text-primary"
+                titulo="Esta vista es para tu facilitador"
+                mensaje="El Razonamiento Neuronal es un panel de diagnóstico para tu facilitador. Para jugar y aprender desde tu celular, usá la app móvil."
+                textoBoton="Ir a Registro de Partidas"
+                alClickBoton={() => setPantallaActiva('registro')}
+              />
+            )
+          )}
+          {pantallaActiva === 'monitoreo' && (
+            esFacilitador ? (
+              <Monitoreo />
+            ) : (
+              <AccesoRestringido
+                icono="smartphone"
+                colorIcono="text-primary"
+                titulo="Esta vista es para tu facilitador"
+                mensaje="El Monitoreo de partidas es un panel de supervisión para tu facilitador. Para jugar y aprender desde tu celular, usá la app móvil."
+                textoBoton="Ir a Registro de Partidas"
+                alClickBoton={() => setPantallaActiva('registro')}
+              />
+            )
+          )}
+          {pantallaActiva === 'ensenanza' && (
+            esFacilitador ? (
+              <ConfiguracionEnsenanza usuario={usuario} alActualizarUsuario={manejarActualizarUsuario} />
+            ) : (
+              <AccesoRestringido
+                icono="smartphone"
+                colorIcono="text-primary"
+                titulo="Esta vista es para tu facilitador"
+                mensaje="La Configuración de Enseñanza es un panel para tu facilitador. Para jugar y aprender desde tu celular, usá la app móvil."
+                textoBoton="Ir a Registro de Partidas"
+                alClickBoton={() => setPantallaActiva('registro')}
+              />
+            )
+          )}
+          {pantallaActiva === 'panelAprendizaje' && (
+            esFacilitador ? (
+              <AccesoRestringido
+                icono="school"
+                colorIcono="text-secondary"
+                titulo="Este panel es para el jugador"
+                mensaje="El Panel de Aprendizaje es la vista de tutoría personal de cada jugador. Como facilitador, podés ver el progreso desde Gestión de Usuarios."
+                textoBoton="Ir a Gestión de Usuarios"
+                alClickBoton={() => setPantallaActiva('usuarios')}
+              />
+            ) : (
+              <PanelAprendizaje usuario={usuario} />
+            )
+          )}
           {pantallaActiva === 'admin' && <Administracion />}
+          {pantallaActiva === 'perfil' && (
+            <Perfil usuario={usuario} alActualizarUsuario={manejarActualizarUsuario} />
+          )}
           {pantallaActiva === 'usuarios' && esFacilitador && (
             <Suspense fallback={
               <div className="w-full px-space-lg py-space-lg flex flex-col items-center justify-center min-h-[40vh]">
@@ -251,10 +400,18 @@ export default function App() {
               alIrASalaControl={irASalaControl}
               alIrARazonamiento={() => setPantallaActiva('neuronal')}
               alIrAAprendizaje={irAAprendizaje}
+              alVerDemostracion={irADemostracion}
+              esFacilitador={esFacilitador}
             />
           )}
           {pantallaActiva === 'aprendizaje' && (
             <Aprendizaje partidaIdInicial={partidaParaAprender} alCargarPartida={() => setPartidaParaAprender(null)} />
+          )}
+          {pantallaActiva === 'demostracion' && (
+            <DemostracionEnVivo
+              partidaId={partidaDemostracionId}
+              alVolver={() => setPantallaActiva('registro')}
+            />
           )}
           {pantallaActiva === 'usuarios' && !esFacilitador && (
             <div className="w-full px-space-lg py-space-lg flex flex-col items-center justify-center min-h-[40vh] text-center">

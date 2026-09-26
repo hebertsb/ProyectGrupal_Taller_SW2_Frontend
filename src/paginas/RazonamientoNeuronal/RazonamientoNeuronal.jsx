@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { listarPartidas, obtenerPartida, estadoModelo } from '../../api/backend';
+import { listarUsuarios, historialPartidasUsuario, obtenerPartida, estadoModelo } from '../../api/backend';
 import { fenAMatriz, rutaImagenPieza, POSICION_INICIAL_FEN } from '../../ajedrez';
 import { clasificarJugada, caidaDeJugada, comoMejorarPorCategoria, ESTILO_CATEGORIA } from '../../aprendizaje';
 import { useRazonamiento } from '../../contexto/ContextoRazonamiento';
@@ -103,12 +103,16 @@ function formatearFechaBolivia(iso) {
 
 /**
  * El humano siempre juega blancas (ver `Partida`, backend). `resultado` viene
- * en notación PGN ("1-0", "0-1", "1/2-1/2") — se traduce a algo legible.
+ * en notación PGN ("1-0", "0-1", "1/2-1/2") — se traduce a algo legible, en
+ * tercera persona porque quien lee esto es el facilitador mirando la partida
+ * de otro estudiante, no el propio jugador. `historialPartidasUsuario` no
+ * manda `terminada`: viene `resultado: null` mientras la partida sigue en curso
+ * (mismo criterio que ya usa `GestionUsuarios.jsx` con este mismo endpoint).
  */
 function resultadoPartida(p) {
-  if (!p.terminada) return { etiqueta: 'En curso', clase: 'text-neon-cyan bg-neon-cyan/10 border-neon-cyan/30' };
-  if (p.resultado === '1-0') return { etiqueta: 'Ganaste', clase: 'text-neon-lime bg-neon-lime/10 border-neon-lime/30' };
-  if (p.resultado === '0-1') return { etiqueta: 'Perdiste', clase: 'text-error bg-error/10 border-error/30' };
+  if (p.resultado == null) return { etiqueta: 'En curso', clase: 'text-neon-cyan bg-neon-cyan/10 border-neon-cyan/30' };
+  if (p.resultado === '1-0') return { etiqueta: 'Ganó', clase: 'text-neon-lime bg-neon-lime/10 border-neon-lime/30' };
+  if (p.resultado === '0-1') return { etiqueta: 'Perdió', clase: 'text-error bg-error/10 border-error/30' };
   if (p.resultado === '1/2-1/2') return { etiqueta: 'Empate', clase: 'text-on-surface-variant bg-surface-container-high border-outline-variant/30' };
   return { etiqueta: 'Terminada', clase: 'text-on-surface-variant bg-surface-container-high border-outline-variant/30' };
 }
@@ -135,8 +139,15 @@ export default function RazonamientoNeuronal() {
   const { ultimaInferencia, estaAnalizando, dispararInferencia } = useRazonamiento() ?? {};
 
   const [partidaId, setPartidaId] = useState(null);
-  const [historial, setHistorial] = useState([]);
-  const [cargandoHistorial, setCargandoHistorial] = useState(false);
+  // Selector en dos pasos: primero de qué estudiante (jugador) se quiere ver una
+  // partida, después cuál de sus partidas — antes se listaban TODAS las partidas
+  // del sistema mezcladas sin filtro (`GET /partida`), sin forma de saber de quién
+  // era cada una.
+  const [estudiantes, setEstudiantes] = useState([]);
+  const [cargandoEstudiantes, setCargandoEstudiantes] = useState(false);
+  const [estudianteElegido, setEstudianteElegido] = useState(null);
+  const [historialEstudiante, setHistorialEstudiante] = useState(null);
+  const [cargandoHistorialEstudiante, setCargandoHistorialEstudiante] = useState(false);
   const [partida, setPartida] = useState(null);
   const [cargandoPartida, setCargandoPartida] = useState(false);
   const [fenActual, setFenActual] = useState(() => ultimaInferencia?.fen ?? POSICION_INICIAL_FEN);
@@ -197,15 +208,74 @@ export default function RazonamientoNeuronal() {
       .finally(() => setCargandoPartida(false));
   }, [partidaId]);
 
+  // Sondeo en vivo de la partida de un estudiante que se está observando. Todo
+  // `partidaId` en esta pantalla viene del selector de estudiante de más abajo —
+  // nunca de la propia partida del facilitador en Sala de Control (esa sincronización
+  // en vivo ya la resuelve `ultimaInferencia`/`dispararInferencia` vía
+  // `sincronizarConPartidaViva`, sin pasar por `partidaId`). Acá es al revés: se está
+  // mirando a distancia la partida de otra persona, así que hace falta ir a
+  // preguntarle al servidor si hizo una jugada nueva.
+  //
+  // Solo actualiza `setFenActual` cuando detecta un FEN distinto — NO llama a
+  // `dispararInferencia` directamente acá: ya existe más abajo un efecto separado
+  // (`[fenActual, estadoModeloData?.disponible]`) que dispara la inferencia real
+  // automáticamente cada vez que cambia `fenActual` y todavía no hay una
+  // `ultimaInferencia` cacheada para ese FEN — llamarlo también desde acá
+  // duplicaría la inferencia (dos requests por cada jugada nueva). Este efecto
+  // se apoya en ese mecanismo en vez de repetirlo.
+  //
+  // Se implementa con `setTimeout` (no `setInterval`) encadenado a través de la
+  // propia dependencia de `partida`: cada poll llama a `setPartida` con el objeto
+  // recién traído (aunque no haya cambiado el FEN, para que el efecto se vuelva a
+  // ejecutar y agende el siguiente poll 3s después). Si en el medio cambia
+  // `partidaId` (se eligió otra partida/estudiante, o se volvió al selector), la
+  // partida detectada terminó (`terminada: true`), o el componente se desmonta,
+  // el cleanup cancela el timeout pendiente y la cadena se corta sola.
   useEffect(() => {
-    if (!partidaId) {
-      setCargandoHistorial(true);
-      listarPartidas()
-        .then(setHistorial)
-        .catch((err) => setError(err.message))
-        .finally(() => setCargandoHistorial(false));
-    }
-  }, [partidaId]);
+    if (!partidaId || !partida || partida.terminada) return;
+
+    const temporizador = setTimeout(() => {
+      obtenerPartida(partidaId)
+        .then((actualizada) => {
+          setPartida(actualizada);
+          if (actualizada.fen && actualizada.fen !== partida.fen) {
+            setFenActual(actualizada.fen);
+            agregarLog(
+              `Jugada nueva del estudiante (${actualizada.jugadas.at(-1) ?? '?'}) — actualizando inferencia en vivo.`,
+              'SYNC'
+            );
+          }
+        })
+        .catch(() => {
+          // Un fallo puntual de red no debería ensuciar el error de carga inicial
+          // ni cortar el sondeo — se reintenta solo en el próximo tick, cuando este
+          // mismo efecto se vuelva a agendar.
+        });
+    }, 3000);
+
+    return () => clearTimeout(temporizador);
+  }, [partidaId, partida, agregarLog]);
+
+  // Paso 1: lista de estudiantes (rol jugador) para elegir de quién ver una partida.
+  useEffect(() => {
+    if (partidaId || estudianteElegido) return;
+    setCargandoEstudiantes(true);
+    listarUsuarios()
+      .then((usuarios) => setEstudiantes(usuarios.filter((u) => u.rol === 'jugador')))
+      .catch((err) => setError(err.message))
+      .finally(() => setCargandoEstudiantes(false));
+  }, [partidaId, estudianteElegido]);
+
+  // Paso 2: historial de partidas del estudiante ya elegido.
+  useEffect(() => {
+    if (partidaId || !estudianteElegido) return;
+    setCargandoHistorialEstudiante(true);
+    setError(null);
+    historialPartidasUsuario(estudianteElegido.id, 20, 0)
+      .then(setHistorialEstudiante)
+      .catch((err) => setError(err.message))
+      .finally(() => setCargandoHistorialEstudiante(false));
+  }, [partidaId, estudianteElegido]);
 
   // Dispara inferencia real solo si todavía no tenemos el dato para esta posición exacta
   // (evita refetch innecesario cuando `fenActual` arrancó con el valor de la última
@@ -236,6 +306,18 @@ export default function RazonamientoNeuronal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ultimaInferencia]);
 
+  function elegirEstudiante(estudiante) {
+    setError(null);
+    setEstudianteElegido(estudiante);
+    setHistorialEstudiante(null);
+  }
+
+  function volverAEstudiantes() {
+    setError(null);
+    setEstudianteElegido(null);
+    setHistorialEstudiante(null);
+  }
+
   function elegirPartida(id) {
     setError(null);
     setPartidaId(id);
@@ -248,6 +330,8 @@ export default function RazonamientoNeuronal() {
     setFenActual(POSICION_INICIAL_FEN);
     setError(null);
     setMostrarSelector(true);
+    setEstudianteElegido(null);
+    setHistorialEstudiante(null);
   }
 
   function usarPosicionInicial() {
@@ -321,18 +405,28 @@ export default function RazonamientoNeuronal() {
     : null;
   // Partidas sin ninguna jugada son restos de partidas creadas por error (nunca
   // llegaron a jugarse) — no aportan nada para analizar, así que no ensucian la lista.
-  const historialConJugadas = historial.filter((p) => p.cantidad_jugadas > 0);
-  const partidasVaciasOcultas = historial.length - historialConJugadas.length;
+  const partidasDelEstudiante = historialEstudiante?.partidas ?? [];
+  const partidasConJugadas = partidasDelEstudiante.filter((p) => p.cantidad_jugadas > 0);
+  const partidasVaciasOcultas = partidasDelEstudiante.length - partidasConJugadas.length;
 
   return (
     <div className="relative w-full min-h-[calc(100vh-4rem)] p-3 lg:p-4 flex flex-col gap-3 max-w-[1920px] mx-auto animate-in fade-in duration-500">
-      <div className="relative z-30 flex items-center gap-space-xs px-space-md py-space-xs rounded-lg bg-neon-lime/10 border border-neon-lime/30 text-neon-lime font-mono-micro text-mono-micro">
-        <span className="material-symbols-outlined text-[16px]">verified</span>
-        <span>
-          MÓDULO 5 · HU6 AMPLIADA — panel conectado en vivo al modelo propio (candidatas, saliencia, atención por
-          bloque, comparación Stockfish y el cerebro de partículas son datos reales de /aprendizaje/inferencia).
-        </span>
-      </div>
+      {/* Siempre visible y accesible sin importar el estado (viendo la propia partida
+          en vivo desde Sala de Control, ya observando la de un estudiante, o explorando
+          un FEN suelto) — es la única puerta de entrada para que el facilitador decida
+          "quiero dejar esto y mirar la partida de un estudiante". Antes esta acción
+          vivía metida como un ícono chico dentro de la fila de KPIs y solo aparecía en
+          algunas combinaciones de estado; ahora es un botón propio, con texto, en el
+          encabezado de la pantalla. */}
+      <button
+        type="button"
+        onClick={cambiarPartida}
+        title="Ver la partida de un estudiante"
+        className="self-start flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface border border-outline-variant/40 font-mono-micro text-[11px] uppercase tracking-wider transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+      >
+        <span className="material-symbols-outlined text-[16px] text-neon-cyan">group</span>
+        Ver partida de un estudiante
+      </button>
 
       {error && (
         <div className="px-space-md py-space-xs rounded-lg bg-error-container text-on-error-container font-body-sm text-body-sm animate-in slide-in-from-top-2 duration-300">
@@ -354,13 +448,25 @@ export default function RazonamientoNeuronal() {
         </button>
       )}
 
-      {/* Selector de posición real (historial de partidas jugadas) */}
+      {/* Selector de posición real, en dos pasos: primero el estudiante, después su partida */}
       {mostrarSelector && !partidaId && !cargandoPartida && (
         <section className="bg-surface-container/70 border border-outline-variant/30 rounded-xl p-3 shadow-md flex flex-col gap-2">
           <div className="flex items-center justify-between border-b border-outline-variant/20 pb-2">
             <div className="flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-neon-cyan text-[18px]">history</span>
-              <h2 className="font-headline-sm text-[13px] font-semibold text-on-surface uppercase tracking-wide">Seleccionar posición</h2>
+              {estudianteElegido && (
+                <button
+                  type="button"
+                  onClick={volverAEstudiantes}
+                  title="Elegir otro estudiante"
+                  className="p-1 -ml-1 rounded hover:bg-surface-container-high text-on-surface-variant hover:text-primary transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                >
+                  <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+                </button>
+              )}
+              <span className="material-symbols-outlined text-neon-cyan text-[18px]">{estudianteElegido ? 'history' : 'group'}</span>
+              <h2 className="font-headline-sm text-[13px] font-semibold text-on-surface uppercase tracking-wide">
+                {estudianteElegido ? `Partidas de ${estudianteElegido.nombre}` : 'Elegir estudiante'}
+              </h2>
             </div>
             <div className="flex items-center gap-1.5">
               <button
@@ -380,48 +486,80 @@ export default function RazonamientoNeuronal() {
               </button>
             </div>
           </div>
-          {cargandoHistorial && <span className="font-mono-micro text-[10px] text-outline px-1">Cargando partidas…</span>}
-          {!cargandoHistorial && historialConJugadas.length === 0 && !error && (
-            <p className="font-body-sm text-[12px] text-on-surface-variant px-1">
-              Todavía no hay partidas jugadas. Usá la posición inicial, un preset, o jugá una en Sala de Control.
-            </p>
+
+          {!estudianteElegido ? (
+            <>
+              {cargandoEstudiantes && <span className="font-mono-micro text-[10px] text-outline px-1">Cargando estudiantes…</span>}
+              {!cargandoEstudiantes && estudiantes.length === 0 && !error && (
+                <p className="font-body-sm text-[12px] text-on-surface-variant px-1">
+                  Todavía no hay jugadores registrados.
+                </p>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-1.5">
+                {estudiantes.map((u) => (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => elegirEstudiante(u)}
+                    className="text-left rounded-lg p-2 bg-surface-container-lowest hover:bg-surface-container-low transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary flex items-center gap-2"
+                  >
+                    <span className="w-7 h-7 rounded-full bg-surface-bright flex items-center justify-center text-primary shrink-0">
+                      <span className="material-symbols-outlined text-[16px]">person</span>
+                    </span>
+                    <span className="flex flex-col min-w-0">
+                      <span className="font-mono-micro text-[11px] text-on-surface font-semibold truncate">{u.nombre}</span>
+                      <span className="font-mono-micro text-[9px] text-on-surface-variant truncate">{u.email}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              {cargandoHistorialEstudiante && <span className="font-mono-micro text-[10px] text-outline px-1">Cargando partidas…</span>}
+              {!cargandoHistorialEstudiante && partidasConJugadas.length === 0 && !error && (
+                <p className="font-body-sm text-[12px] text-on-surface-variant px-1">
+                  {estudianteElegido.nombre} todavía no jugó ninguna partida.
+                </p>
+              )}
+              {partidasVaciasOcultas > 0 && (
+                <p className="font-mono-micro text-[9px] text-outline px-1">
+                  {partidasVaciasOcultas} partida{partidasVaciasOcultas === 1 ? '' : 's'} sin jugadas (creada{partidasVaciasOcultas === 1 ? '' : 's'} y nunca jugada{partidasVaciasOcultas === 1 ? '' : 's'}) no se muestra{partidasVaciasOcultas === 1 ? '' : 'n'} acá.
+                </p>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-1.5">
+                {partidasConJugadas.map((p) => {
+                  const resultado = resultadoPartida(p);
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => elegirPartida(p.id)}
+                      className="text-left rounded-lg p-2 bg-surface-container-lowest hover:bg-surface-container-low transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary flex flex-col gap-1"
+                    >
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="font-mono-micro text-[10px] text-on-surface font-semibold flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[13px] text-primary">
+                            {p.tipo_oponente === 'modelo' ? 'psychology' : 'smart_toy'}
+                          </span>
+                          {p.tipo_oponente === 'modelo' ? 'Turing' : 'Stockfish'} · Nv.{p.nivel}
+                        </span>
+                        <span className={`font-mono-micro text-[8.5px] font-bold uppercase px-1.5 py-0.5 rounded border ${resultado.clase}`}>
+                          {resultado.etiqueta}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono-micro text-[9px] text-on-surface-variant">
+                          {p.cantidad_jugadas} jugada{p.cantidad_jugadas === 1 ? '' : 's'}
+                        </span>
+                        <span className="font-mono-micro text-[9px] text-outline">{formatearFechaBolivia(p.fecha)}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
           )}
-          {partidasVaciasOcultas > 0 && (
-            <p className="font-mono-micro text-[9px] text-outline px-1">
-              {partidasVaciasOcultas} partida{partidasVaciasOcultas === 1 ? '' : 's'} sin jugadas (creada{partidasVaciasOcultas === 1 ? '' : 's'} y nunca jugada{partidasVaciasOcultas === 1 ? '' : 's'}) no se muestra{partidasVaciasOcultas === 1 ? '' : 'n'} acá.
-            </p>
-          )}
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-1.5">
-            {historialConJugadas.map((p) => {
-              const resultado = resultadoPartida(p);
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => elegirPartida(p.id)}
-                  className="text-left rounded-lg p-2 bg-surface-container-lowest hover:bg-surface-container-low transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary flex flex-col gap-1"
-                >
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="font-mono-micro text-[10px] text-on-surface font-semibold flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[13px] text-primary">
-                        {p.tipo_oponente === 'modelo' ? 'psychology' : 'smart_toy'}
-                      </span>
-                      {p.tipo_oponente === 'modelo' ? 'Turing' : 'Stockfish'} · Nv.{p.nivel}
-                    </span>
-                    <span className={`font-mono-micro text-[8.5px] font-bold uppercase px-1.5 py-0.5 rounded border ${resultado.clase}`}>
-                      {resultado.etiqueta}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono-micro text-[9px] text-on-surface-variant">
-                      {p.cantidad_jugadas} jugada{p.cantidad_jugadas === 1 ? '' : 's'}
-                    </span>
-                    <span className="font-mono-micro text-[9px] text-outline">{formatearFechaBolivia(p.creada_en)}</span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
         </section>
       )}
 
@@ -491,24 +629,14 @@ export default function RazonamientoNeuronal() {
                   <span className="material-symbols-outlined text-[16px]">swap_horiz</span>
                 </button>
               ) : (
-                <>
-                  <button
-                    type="button"
-                    onClick={usarPosicionInicial}
-                    title="Posición inicial"
-                    className="h-full min-h-[38px] px-2.5 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface transition-all border border-outline-variant/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                  >
-                    <span className="material-symbols-outlined text-[16px]">home</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMostrarSelector(true)}
-                    title="Elegir partida jugada"
-                    className="h-full min-h-[38px] px-2.5 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface transition-all border border-outline-variant/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                  >
-                    <span className="material-symbols-outlined text-[16px]">history</span>
-                  </button>
-                </>
+                <button
+                  type="button"
+                  onClick={usarPosicionInicial}
+                  title="Posición inicial"
+                  className="h-full min-h-[38px] px-2.5 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface transition-all border border-outline-variant/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                >
+                  <span className="material-symbols-outlined text-[16px]">home</span>
+                </button>
               )}
             </div>
           </section>
@@ -523,14 +651,31 @@ export default function RazonamientoNeuronal() {
           <section className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-stretch">
             {/* Columna izquierda: entrada posicional FEN */}
             <div className="lg:col-span-3 flex flex-col gap-2.5 bg-surface-container/70 p-3 rounded-xl border border-outline-variant/30 shadow-md justify-between">
-              <div className="flex items-center justify-between border-b border-outline-variant/20 pb-2">
-                <div className="flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-neon-cyan text-[18px]">grid_view</span>
-                  <h2 className="font-headline-sm text-[13px] font-semibold text-on-surface uppercase tracking-wide">Entrada Posicional FEN</h2>
+              <div className="flex flex-col gap-1 border-b border-outline-variant/20 pb-2">
+                {/* Persistente mientras se está observando la partida de un estudiante — a
+                    diferencia de `estudianteElegido` (que solo importa dentro del selector,
+                    antes de elegir la partida), `partida.usuario_nombre` viene del propio
+                    `obtenerPartida(partidaId)` así que sigue disponible acá aunque el
+                    selector ya esté cerrado. En este flujo (pantalla solo-facilitador, el
+                    selector solo lista jugadores) si existe siempre es un estudiante, nunca
+                    el propio facilitador. */}
+                {partida?.usuario_nombre && (
+                  <div className="flex items-center gap-1.5 px-0.5">
+                    <span className="material-symbols-outlined text-secondary text-[14px]">person_search</span>
+                    <span className="font-mono-micro text-[10px] text-secondary uppercase tracking-wide truncate">
+                      Analizando partida de: <strong className="text-on-surface">{partida.usuario_nombre}</strong>
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-neon-cyan text-[18px]">grid_view</span>
+                    <h2 className="font-headline-sm text-[13px] font-semibold text-on-surface uppercase tracking-wide">Entrada Posicional FEN</h2>
+                  </div>
+                  <span className="font-mono-micro text-[10px] text-neon-cyan bg-primary/10 px-1.5 py-0.5 rounded">
+                    {turno} (T{numeroJugada})
+                  </span>
                 </div>
-                <span className="font-mono-micro text-[10px] text-neon-cyan bg-primary/10 px-1.5 py-0.5 rounded">
-                  {turno} (T{numeroJugada})
-                </span>
               </div>
 
               <div className="flex flex-col items-center">

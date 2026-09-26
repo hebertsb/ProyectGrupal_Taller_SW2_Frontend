@@ -70,3 +70,57 @@ export function extraerCasillaDestino(san) {
   const coincidencia = san.replace(/[+#]/g, "").match(/[a-h][1-8](?:=[QRBN])?$/);
   return coincidencia ? coincidencia[0].slice(0, 2) : null;
 }
+
+/**
+ * Casillas de movimiento ILUSTRATIVAS para una pieza parada sola en un
+ * mini-tablero vacío (Panel de Aprendizaje, "Aprendé cada pieza") — reglas
+ * simplificadas por tipo de pieza, sin capturas ni jaques ni reglas
+ * especiales (enroque, al paso). No es el motor real: solo sirve para
+ * mostrar de un vistazo hacia dónde se mueve cada pieza. `fila`/`columna`
+ * van de 0 a 7 (igual que las filas de `fenAMatriz`, fila 0 = octava fila).
+ */
+export function casillasIlustrativas(tipoPieza, fila, columna) {
+  const dentroDelTablero = (f, c) => f >= 0 && f < 8 && c >= 0 && c < 8;
+  const resultado = [];
+  const agregar = (f, c) => {
+    if (dentroDelTablero(f, c)) resultado.push([f, c]);
+  };
+
+  switch (tipoPieza) {
+    case "peon":
+      // Ilustrativo: un paso "hacia adelante" (hacia fila 0, como las blancas en `fenAMatriz`).
+      agregar(fila - 1, columna);
+      break;
+    case "caballo":
+      [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]].forEach(([df, dc]) =>
+        agregar(fila + df, columna + dc)
+      );
+      break;
+    case "alfil":
+      for (let d = 1; d < 8; d++) {
+        agregar(fila - d, columna - d);
+        agregar(fila - d, columna + d);
+        agregar(fila + d, columna - d);
+        agregar(fila + d, columna + d);
+      }
+      break;
+    case "torre":
+      for (let d = 0; d < 8; d++) {
+        if (d !== fila) agregar(d, columna);
+        if (d !== columna) agregar(fila, d);
+      }
+      break;
+    case "dama":
+      return [...casillasIlustrativas("torre", fila, columna), ...casillasIlustrativas("alfil", fila, columna)];
+    case "rey":
+      for (let df = -1; df <= 1; df++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          if (df !== 0 || dc !== 0) agregar(fila + df, columna + dc);
+        }
+      }
+      break;
+    default:
+      break;
+  }
+  return resultado;
+}

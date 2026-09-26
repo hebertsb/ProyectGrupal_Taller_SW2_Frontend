@@ -4,6 +4,7 @@ import AvatarAgente3D from '../../componentes/AvatarAgente3D';
 import { useRazonamiento } from '../../contexto/ContextoRazonamiento';
 import {
   abrirSimulacion3D,
+  actualizarPermisosPartida,
   analizarPosicion,
   backendEnLinea,
   crearPartida,
@@ -35,7 +36,15 @@ const NIVELES_POR_CATEGORIA = [
   { etiqueta: 'Avanzado', desde: 14, hasta: NIVEL_MAX },
 ];
 
-export default function SalaControl({ partidaIdInicial, onPartidaActivaChange }) {
+// Cuando el facilitador está mirando la partida de OTRA persona (no la propia,
+// no la de un jugador viendo la suya), nadie mueve piezas desde esta pantalla
+// — así que si no se sondea el backend, el tablero/análisis queda congelado
+// en la foto de cuando se cargó. Mismo espíritu que el polling de
+// DemostracionEnVivo/Monitoreo, un poco menos agresivo porque acá conviven con
+// el heartbeat de "backend conectado" y el resto de la UI de Sala de Control.
+const INTERVALO_SONDEO_PARTIDA_AJENA_MS = 2500;
+
+export default function SalaControl({ partidaIdInicial, onPartidaActivaChange, esFacilitador = false, usuarioIdPropio = null }) {
   const { dispararInferencia } = useRazonamiento() ?? {};
   const [partidaId, setPartidaId] = useState(null);
   const [fen, setFen] = useState(null);
@@ -54,12 +63,35 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange })
   const [cargando, setCargando] = useState(null);
   const [error, setError] = useState(null);
   const [avisoSimulacion3D, setAvisoSimulacion3D] = useState(null);
+  // Permisos de esta partida puntual (no del usuario) — el facilitador decide,
+  // partida por partida, si el jugador puede ver la simulación 3D y/o usar la
+  // cámara del tablero físico. Default false hasta que se cargue/cree la partida.
+  const [permiteSimulacion3D, setPermiteSimulacion3D] = useState(false);
+  const [permiteCamara, setPermiteCamara] = useState(false);
+  const [esDemostracion, setEsDemostracion] = useState(false);
+  const [cambiandoPermiso, setCambiandoPermiso] = useState(null); // 'permite_simulacion_3d' | 'permite_camara' | 'es_demostracion' | null
+  // De quién es la partida cargada — solo tiene sentido mostrarlo al facilitador
+  // (que puede estar viendo la partida de cualquiera); `null` si la partida no
+  // tiene usuario asociado (ej. una de prueba creada por el propio facilitador).
+  const [usuarioIdPartida, setUsuarioIdPartida] = useState(null);
+  const [usuarioNombrePartida, setUsuarioNombrePartida] = useState(null);
+  // El facilitador puede VER la partida de un estudiante (tablero, evaluación,
+  // historial de jugadas) pero no intervenir en ella — ni seleccionar pieza ni
+  // mover. `usuarioIdPartida != null` descarta las partidas sin usuario
+  // asociado (ej. una de prueba del propio facilitador), que no deben tratarse
+  // como "ajenas" aunque tampoco coincidan con `usuarioIdPropio`.
+  const viendoPartidaAjena =
+    esFacilitador && usuarioIdPartida != null && usuarioIdPartida !== usuarioIdPropio;
   // Guarda contra el doble-montaje de StrictMode en desarrollo: React invoca este
   // efecto dos veces seguidas al montar (monta → limpia → monta), y como los estados
   // no se actualizan sincrónicamente entre esas dos pasadas, `!partidaId` daba true
   // las dos veces y se creaban DOS partidas reales (dos POST /partida) por cada
   // primer montaje sin partida activa. Un ref sí es sincrónico entre pasadas.
   const partidaInicialSolicitada = useRef(false);
+  // Espejo sincrónico del estado `fen`, para que el intervalo de sondeo de más
+  // abajo siempre compare contra el valor más reciente sin tener que recrear
+  // el `setInterval` en cada jugada (ver ese efecto para el porqué).
+  const fenActualRef = useRef(null);
 
   useEffect(() => {
     // `partidaIdInicial` viene de App.tsx y sobrevive a que este componente se
@@ -81,6 +113,57 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange })
     return () => clearInterval(intervalo);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partidaIdInicial]);
+
+  useEffect(() => {
+    fenActualRef.current = fen;
+  }, [fen]);
+
+  // Sondeo en vivo de una partida AJENA — el facilitador puede abrir Sala de
+  // Control con la partida de un estudiante (desde "Ver en Sala de Control" en
+  // Registro de Partidas, o cargando un `partidaId` que no es el suyo) y, sin
+  // esto, el tablero/análisis queda congelado en la foto de cuando se cargó:
+  // nadie mueve piezas desde esta pantalla en ese caso, así que nada más
+  // dispara un refetch. No se activa para la partida propia del facilitador ni
+  // para un jugador viendo la suya — ahí las jugadas ya se hacen localmente en
+  // esta misma pantalla, y pisar ese estado a mitad de una jugada sería
+  // contraproducente.
+  useEffect(() => {
+    if (!partidaId || !viendoPartidaAjena || terminada) return;
+
+    const intervalo = setInterval(async () => {
+      try {
+        const datos = await obtenerPartida(partidaId);
+        if (datos.fen !== fenActualRef.current) {
+          setFen(datos.fen);
+          setTerminada(datos.terminada);
+          setResultado(datos.resultado);
+          setJugadas(datos.jugadas);
+          setCasillaOrigen(null);
+          setDestinosValidos([]);
+          if (!datos.terminada) {
+            await actualizarAnalisis(datos.fen);
+          }
+        }
+      } catch {
+        // Sondeo silencioso — si un tick falla (blip de red) no hace falta
+        // interrumpir con un error, se reintenta solo en el próximo.
+      }
+    }, INTERVALO_SONDEO_PARTIDA_AJENA_MS);
+
+    return () => clearInterval(intervalo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [partidaId, viendoPartidaAjena, terminada, nivel]);
+
+  // Si la selección de casilla queda "colgada" justo cuando se pasa a mirar
+  // una partida ajena (ej. el facilitador tenía una pieza propia seleccionada
+  // y cambia a ver la de otro estudiante), se limpia — no tiene sentido dejar
+  // un resaltado de una jugada que ya no se puede completar.
+  useEffect(() => {
+    if (viendoPartidaAjena) {
+      setCasillaOrigen(null);
+      setDestinosValidos([]);
+    }
+  }, [viendoPartidaAjena]);
 
   async function actualizarAnalisis(fenActual) {
     try {
@@ -112,6 +195,11 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange })
       setCasillaOrigen(null);
       setDestinosValidos([]);
       setEvaluacionesHistorial([]);
+      setPermiteSimulacion3D(partida.permite_simulacion_3d ?? false);
+      setPermiteCamara(partida.permite_camara ?? false);
+      setEsDemostracion(partida.es_demostracion ?? false);
+      setUsuarioIdPartida(partida.usuario_id ?? null);
+      setUsuarioNombrePartida(partida.usuario_nombre ?? null);
       if (!partida.terminada) {
         await actualizarAnalisis(partida.fen);
       }
@@ -138,6 +226,11 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange })
       setCasillaOrigen(null);
       setDestinosValidos([]);
       setEvaluacionesHistorial([]);
+      setPermiteSimulacion3D(partida.permite_simulacion_3d ?? false);
+      setPermiteCamara(partida.permite_camara ?? false);
+      setEsDemostracion(partida.es_demostracion ?? false);
+      setUsuarioIdPartida(partida.usuario_id ?? null);
+      setUsuarioNombrePartida(partida.usuario_nombre ?? null);
       dispararInferencia?.(partida.fen); // posición nueva disponible — no bloquea la UI de la partida
       await actualizarAnalisis(partida.fen);
     } catch (err) {
@@ -166,7 +259,7 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange })
   }
 
   async function manejarClicCasilla(casilla) {
-    if (!partidaId || terminada) return;
+    if (!partidaId || terminada || viendoPartidaAjena) return;
 
     if (!casillaOrigen) {
       if (esPiezaDelTurno(casilla)) {
@@ -259,6 +352,11 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange })
       setDestinosValidos([]);
       setEvaluacionesHistorial([]);
       setFenReconocido(null);
+      setPermiteSimulacion3D(partida.permite_simulacion_3d ?? false);
+      setPermiteCamara(partida.permite_camara ?? false);
+      setEsDemostracion(partida.es_demostracion ?? false);
+      setUsuarioIdPartida(partida.usuario_id ?? null);
+      setUsuarioNombrePartida(partida.usuario_nombre ?? null);
       dispararInferencia?.(partida.fen); // posición escaneada nueva — no bloquea la UI de la partida
       await actualizarAnalisis(partida.fen);
     } catch (err) {
@@ -313,6 +411,33 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange })
     }
   }
 
+  /**
+   * Prende/apaga, para esta partida puntual, si el jugador puede ver la
+   * simulación 3D, usar la cámara, o si la partida se transmite en vivo
+   * (`campo` es 'permite_simulacion_3d', 'permite_camara' o 'es_demostracion').
+   * Solo lo llama el facilitador — ver gate en el JSX.
+   */
+  async function manejarTogglePermiso(campo, valorActual) {
+    if (!partidaId) return;
+    setError(null);
+    setCambiandoPermiso(campo);
+    try {
+      const datos = await actualizarPermisosPartida(partidaId, { [campo]: !valorActual });
+      setPermiteSimulacion3D(datos.permite_simulacion_3d ?? permiteSimulacion3D);
+      setPermiteCamara(datos.permite_camara ?? permiteCamara);
+      setEsDemostracion(datos.es_demostracion ?? esDemostracion);
+    } catch (err) {
+      // El backend solo deja transmitir partidas propias del facilitador.
+      if (campo === 'es_demostracion' && err.status === 400) {
+        setError('Solo podés transmitir tus propias partidas.');
+      } else {
+        setError(err.message);
+      }
+    } finally {
+      setCambiandoPermiso(null);
+    }
+  }
+
   function actualizarFoto() {
     setFotoKey((valor) => valor + 1);
   }
@@ -336,6 +461,15 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange })
           <span className="font-mono-label text-mono-label text-on-surface-variant">
             {tipoOponente === 'motor' ? `STOCKFISH · NIVEL ${nivel}` : 'TURING · SE-RESNET-8'}
           </span>
+          {esFacilitador && usuarioNombrePartida && usuarioIdPartida !== usuarioIdPropio && (
+            <>
+              <div className="h-3 w-[1px] bg-surface-variant"></div>
+              <span className="font-mono-label text-mono-label text-on-surface-variant flex items-center gap-1">
+                <span className="material-symbols-outlined text-[14px] text-primary">visibility</span>
+                VIENDO PARTIDA DE: <span className="text-primary font-medium">{usuarioNombrePartida}</span>
+              </span>
+            </>
+          )}
         </div>
         <div className="flex items-center gap-space-lg">
           {terminada ? (
@@ -425,120 +559,186 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange })
             </div>
           </div>
 
-          <div className="bg-surface-container-low rounded-xl p-space-md shadow-xl flex flex-col gap-space-sm relative overflow-hidden">
-            <div className="flex items-center justify-between">
-              <span className="font-mono-micro text-mono-micro uppercase tracking-wider text-on-surface-variant flex items-center gap-1">
-                <span className="material-symbols-outlined text-[13px] text-primary">videocam</span> CÁMARA FIJA
-              </span>
-              <button
-                onClick={actualizarFoto}
-                className="font-mono-micro text-mono-micro text-primary-fixed-dim px-1.5 py-0.5 rounded bg-primary/10 hover:bg-primary/20 transition-colors"
-              >
-                ACTUALIZAR
-              </button>
-            </div>
-            <div className="relative w-full aspect-[4/3] rounded-lg overflow-hidden bg-surface-container-lowest flex items-center justify-center">
-              {fotoKey === 0 ? (
-                <span className="font-mono-micro text-mono-micro text-on-surface-variant px-space-sm text-center">
-                  Sin captura todavía — tocá ACTUALIZAR
+          {/* TRANSMISIÓN EN VIVO — el facilitador juega esta partida para mostrarle
+              a la clase cómo jugar; con esto prende que cualquier jugador la vea en
+              modo solo lectura (pantalla "Demostración en vivo"), sin compartir nada
+              a mano. Solo facilitador; solo funciona en una partida propia (el
+              backend devuelve 400 si no lo es). */}
+          {esFacilitador && (
+            <div className="bg-surface-container-low rounded-xl p-space-md shadow-xl flex flex-col gap-space-sm">
+              <div className="flex items-center justify-between">
+                <span className="font-mono-micro text-mono-micro uppercase tracking-wider text-on-surface-variant flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[13px] text-primary">sensors</span> TRANSMISIÓN EN VIVO
                 </span>
-              ) : (
-                <img
-                  className="absolute inset-0 w-full h-full object-cover"
-                  alt="Foto de la cámara fija sobre el tablero"
-                  src={urlFotoCamara()}
-                  onError={() => setError('No se pudo obtener la foto de la cámara — ¿está conectada?')}
-                />
+              </div>
+              <InterruptorPermiso
+                id="permiso-demostracion"
+                etiqueta="Transmitir esta partida en vivo a los jugadores"
+                activo={esDemostracion}
+                cargando={cambiandoPermiso === 'es_demostracion'}
+                onCambiar={() => manejarTogglePermiso('es_demostracion', esDemostracion)}
+              />
+              {esDemostracion && (
+                <div className="bg-primary/10 text-primary font-mono-micro text-mono-micro px-2 py-1.5 rounded-lg text-center flex items-center justify-center gap-1.5">
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary"></span>
+                  </span>
+                  Los jugadores ya pueden ver esta partida en vivo
+                </div>
               )}
             </div>
-            <button
-              onClick={() => manejarReconocerTablero()}
-              disabled={cargando === 'reconocer'}
-              className="w-full py-2 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface transition-colors font-mono-label text-mono-label flex items-center justify-center gap-1.5 disabled:opacity-50"
-            >
-              <span className="material-symbols-outlined text-[16px]">grid_view</span>
-              {cargando === 'reconocer' ? 'RECONOCIENDO…' : 'RECONOCER TABLERO (HU1)'}
-            </button>
-            <label
-              className={`w-full py-2 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface transition-colors font-mono-label text-mono-label flex items-center justify-center gap-1.5 cursor-pointer ${cargando === 'reconocer' ? 'opacity-50 pointer-events-none' : ''}`}
-              title="Subí una foto ya sacada (ej. de la galería del celular) en vez de usar la cámara en vivo"
-            >
-              <span className="material-symbols-outlined text-[16px]">upload</span>
-              SUBIR FOTO DEL TABLERO
-              <input type="file" accept="image/*" className="hidden" onChange={manejarSeleccionarFoto} />
-            </label>
-            {partidaId && !terminada && (
-              <button
-                onClick={manejarMoverDesdeFoto}
-                disabled={cargando === 'mover-foto'}
-                title="Mové una pieza en el tablero físico y tocá esto — detecta la jugada comparando la foto con la posición actual"
-                className="w-full py-2 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface transition-colors font-mono-label text-mono-label flex items-center justify-center gap-1.5 disabled:opacity-50"
-              >
-                <span className="material-symbols-outlined text-[16px]">back_hand</span>
-                {cargando === 'mover-foto' ? 'DETECTANDO…' : 'DETECTÉ UN MOVIMIENTO FÍSICO'}
-              </button>
-            )}
-            {fenReconocido && (
-              <div className="bg-surface-container-lowest p-2 rounded-lg flex flex-col gap-1.5">
-                <span className="font-mono-micro text-mono-micro text-primary-fixed-dim break-all">
-                  FEN reconocido: {fenReconocido}
+          )}
+
+          {/* CÁMARA FIJA / TABLERO FÍSICO — operación de hardware. El facilitador
+              siempre la ve; para el jugador depende del permiso de esta partida
+              (`permite_camara`), que el facilitador prende/apaga con el switch
+              de abajo — un jugador practicando desde el navegador por defecto no
+              tiene tablero físico ni cámara al lado. */}
+          {(esFacilitador || permiteCamara) && (
+            <div className="bg-surface-container-low rounded-xl p-space-md shadow-xl flex flex-col gap-space-sm relative overflow-hidden">
+              <div className="flex items-center justify-between">
+                <span className="font-mono-micro text-mono-micro uppercase tracking-wider text-on-surface-variant flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[13px] text-primary">videocam</span> CÁMARA FIJA
                 </span>
                 <button
-                  onClick={manejarUsarPosicionEscaneada}
-                  disabled={cargando === 'nueva'}
-                  className="w-full py-1.5 rounded-lg bg-primary text-on-primary font-mono-label text-mono-label flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  onClick={actualizarFoto}
+                  className="font-mono-micro text-mono-micro text-primary-fixed-dim px-1.5 py-0.5 rounded bg-primary/10 hover:bg-primary/20 transition-colors"
                 >
-                  <span className="material-symbols-outlined text-[16px]">play_arrow</span>
-                  USAR ESTA POSICIÓN
+                  ACTUALIZAR
                 </button>
               </div>
-            )}
-          </div>
-
-          {/* ESTADO DEL BRAZO — honesto: no hay hardware real conectado todavía */}
-          <div className="bg-surface-container-low rounded-xl p-space-md shadow-xl flex flex-col gap-space-sm">
-            <div className="flex items-center justify-between">
-              <span className="font-mono-micro text-mono-micro uppercase tracking-wider text-on-surface-variant flex items-center gap-1">
-                <span className="material-symbols-outlined text-[13px] text-primary">precision_manufacturing</span> BRAZO ROBÓTICO
-              </span>
-            </div>
-            <div className="bg-surface-container-lowest p-3 rounded-lg flex items-center justify-between">
-              <span className="font-mono-micro text-mono-micro text-outline uppercase">Estado</span>
-              <span className="font-mono-micro text-mono-micro px-2 py-0.5 rounded bg-primary/10 text-primary uppercase font-medium">
-                SIN HARDWARE — SOLO SIMULADO
-              </span>
-            </div>
-            <div className="bg-surface-container-lowest p-1.5 rounded-lg flex items-center">
-              <button
-                disabled
-                title="El kit físico todavía no llegó — ver CLAUDE.md"
-                className="flex-1 py-1 text-center font-mono-micro text-mono-micro rounded text-outline cursor-not-allowed"
-              >
-                FÍSICO (ROBOT)
-              </button>
-              <button className="flex-1 py-1 text-center font-mono-micro text-mono-micro rounded bg-primary text-on-primary font-medium shadow-sm">
-                SIMULADOR
-              </button>
-            </div>
-
-            {/* Ventana 3D en vivo (PyBullet), aparte del toggle de arriba: no es
-                un ejecutor de movimientos, es solo una vista del tablero. */}
-            <div className="h-px bg-surface-variant/40"></div>
-            <button
-              onClick={manejarAbrirSimulacion3D}
-              disabled={!partidaId || cargando === 'simulacion3d'}
-              title={!partidaId ? 'Iniciá una partida primero' : 'Abre una ventana de escritorio aparte con el tablero 3D en vivo'}
-              className="w-full py-2 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface transition-colors font-mono-label text-mono-label flex items-center justify-center gap-1.5 disabled:opacity-50"
-            >
-              <span className="material-symbols-outlined text-[16px]">view_in_ar</span>
-              {cargando === 'simulacion3d' ? 'ABRIENDO…' : 'ABRIR SIMULACIÓN 3D'}
-            </button>
-            {avisoSimulacion3D && (
-              <div className="bg-primary/10 text-primary font-mono-micro text-mono-micro px-2 py-1.5 rounded-lg text-center">
-                {avisoSimulacion3D}
+              {esFacilitador && (
+                <InterruptorPermiso
+                  id="permiso-camara"
+                  etiqueta="Permitir cámara al jugador"
+                  activo={permiteCamara}
+                  cargando={cambiandoPermiso === 'permite_camara'}
+                  onCambiar={() => manejarTogglePermiso('permite_camara', permiteCamara)}
+                />
+              )}
+              <div className="relative w-full aspect-[4/3] rounded-lg overflow-hidden bg-surface-container-lowest flex items-center justify-center">
+                {fotoKey === 0 ? (
+                  <span className="font-mono-micro text-mono-micro text-on-surface-variant px-space-sm text-center">
+                    Sin captura todavía — tocá ACTUALIZAR
+                  </span>
+                ) : (
+                  <img
+                    className="absolute inset-0 w-full h-full object-cover"
+                    alt="Foto de la cámara fija sobre el tablero"
+                    src={urlFotoCamara()}
+                    onError={() => setError('No se pudo obtener la foto de la cámara — ¿está conectada?')}
+                  />
+                )}
               </div>
-            )}
-          </div>
+              <button
+                onClick={() => manejarReconocerTablero()}
+                disabled={cargando === 'reconocer'}
+                className="w-full py-2 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface transition-colors font-mono-label text-mono-label flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                <span className="material-symbols-outlined text-[16px]">grid_view</span>
+                {cargando === 'reconocer' ? 'RECONOCIENDO…' : 'RECONOCER TABLERO (HU1)'}
+              </button>
+              <label
+                className={`w-full py-2 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface transition-colors font-mono-label text-mono-label flex items-center justify-center gap-1.5 cursor-pointer ${cargando === 'reconocer' ? 'opacity-50 pointer-events-none' : ''}`}
+                title="Subí una foto ya sacada (ej. de la galería del celular) en vez de usar la cámara en vivo"
+              >
+                <span className="material-symbols-outlined text-[16px]">upload</span>
+                SUBIR FOTO DEL TABLERO
+                <input type="file" accept="image/*" className="hidden" onChange={manejarSeleccionarFoto} />
+              </label>
+              {partidaId && !terminada && (
+                <button
+                  onClick={manejarMoverDesdeFoto}
+                  disabled={cargando === 'mover-foto'}
+                  title="Mové una pieza en el tablero físico y tocá esto — detecta la jugada comparando la foto con la posición actual"
+                  className="w-full py-2 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface transition-colors font-mono-label text-mono-label flex items-center justify-center gap-1.5 disabled:opacity-50"
+                >
+                  <span className="material-symbols-outlined text-[16px]">back_hand</span>
+                  {cargando === 'mover-foto' ? 'DETECTANDO…' : 'DETECTÉ UN MOVIMIENTO FÍSICO'}
+                </button>
+              )}
+              {fenReconocido && (
+                <div className="bg-surface-container-lowest p-2 rounded-lg flex flex-col gap-1.5">
+                  <span className="font-mono-micro text-mono-micro text-primary-fixed-dim break-all">
+                    FEN reconocido: {fenReconocido}
+                  </span>
+                  <button
+                    onClick={manejarUsarPosicionEscaneada}
+                    disabled={cargando === 'nueva'}
+                    className="w-full py-1.5 rounded-lg bg-primary text-on-primary font-mono-label text-mono-label flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">play_arrow</span>
+                    USAR ESTA POSICIÓN
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ESTADO DEL BRAZO — honesto: no hay hardware real conectado todavía.
+              Panel de operador del brazo robótico, solo facilitador — no depende
+              de ningún permiso por partida, no es algo que se le pueda "regalar"
+              a un jugador. */}
+          {esFacilitador && (
+            <div className="bg-surface-container-low rounded-xl p-space-md shadow-xl flex flex-col gap-space-sm">
+              <div className="flex items-center justify-between">
+                <span className="font-mono-micro text-mono-micro uppercase tracking-wider text-on-surface-variant flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[13px] text-primary">precision_manufacturing</span> BRAZO ROBÓTICO
+                </span>
+              </div>
+              <div className="bg-surface-container-lowest p-3 rounded-lg flex items-center justify-between">
+                <span className="font-mono-micro text-mono-micro text-outline uppercase">Estado</span>
+                <span className="font-mono-micro text-mono-micro px-2 py-0.5 rounded bg-primary/10 text-primary uppercase font-medium">
+                  SIN HARDWARE — SOLO SIMULADO
+                </span>
+              </div>
+              <div className="bg-surface-container-lowest p-1.5 rounded-lg flex items-center">
+                <button
+                  disabled
+                  title="El kit físico todavía no llegó — ver CLAUDE.md"
+                  className="flex-1 py-1 text-center font-mono-micro text-mono-micro rounded text-outline cursor-not-allowed"
+                >
+                  FÍSICO (ROBOT)
+                </button>
+                <button className="flex-1 py-1 text-center font-mono-micro text-mono-micro rounded bg-primary text-on-primary font-medium shadow-sm">
+                  SIMULADOR
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Ventana 3D en vivo (PyBullet) — aparte del panel de arriba: no es un
+              ejecutor de movimientos, es solo una vista del tablero, así que el
+              facilitador la puede habilitar para el jugador partida por partida
+              (`permite_simulacion_3d`). El facilitador siempre puede abrirla. */}
+          {(esFacilitador || permiteSimulacion3D) && (
+            <div className="bg-surface-container-low rounded-xl p-space-md shadow-xl flex flex-col gap-space-sm">
+              {esFacilitador && (
+                <InterruptorPermiso
+                  id="permiso-simulacion3d"
+                  etiqueta="Permitir simulación 3D al jugador"
+                  activo={permiteSimulacion3D}
+                  cargando={cambiandoPermiso === 'permite_simulacion_3d'}
+                  onCambiar={() => manejarTogglePermiso('permite_simulacion_3d', permiteSimulacion3D)}
+                />
+              )}
+              <button
+                onClick={manejarAbrirSimulacion3D}
+                disabled={!partidaId || cargando === 'simulacion3d'}
+                title={!partidaId ? 'Iniciá una partida primero' : 'Abre una ventana de escritorio aparte con el tablero 3D en vivo'}
+                className="w-full py-2 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface transition-colors font-mono-label text-mono-label flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                <span className="material-symbols-outlined text-[16px]">view_in_ar</span>
+                {cargando === 'simulacion3d' ? 'ABRIENDO…' : 'ABRIR SIMULACIÓN 3D'}
+              </button>
+              {avisoSimulacion3D && (
+                <div className="bg-primary/10 text-primary font-mono-micro text-mono-micro px-2 py-1.5 rounded-lg text-center">
+                  {avisoSimulacion3D}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* COLUMNA CENTRAL: TABLERO REAL */}
@@ -580,8 +780,9 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange })
                             key={casilla}
                             type="button"
                             onClick={() => manejarClicCasilla(casilla)}
-                            aria-label={`Casilla ${casilla}${pieza ? ', pieza ' + pieza : ', vacía'}${esDestinoValido ? ', jugada válida' : ''}`}
-                            className={`relative flex items-center justify-center ${clara ? 'bg-[#b89772]' : 'bg-[#543423]'} ${seleccionada ? 'ring-2 ring-inset ring-primary' : ''}`}
+                            disabled={viendoPartidaAjena}
+                            aria-label={`Casilla ${casilla}${pieza ? ', pieza ' + pieza : ', vacía'}${esDestinoValido ? ', jugada válida' : ''}${viendoPartidaAjena ? ', solo lectura' : ''}`}
+                            className={`relative flex items-center justify-center ${clara ? 'bg-[#b89772]' : 'bg-[#543423]'} ${seleccionada ? 'ring-2 ring-inset ring-primary' : ''} ${viendoPartidaAjena ? 'cursor-default' : ''}`}
                           >
                             {pieza && (
                               <div className={claseDePieza(pieza)}>
@@ -617,6 +818,13 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange })
               </div>
             </div>
           </div>
+
+          {viendoPartidaAjena && (
+            <div className="flex items-center gap-1 mt-space-xs font-mono-micro text-[10px] text-outline uppercase tracking-wide">
+              <span className="material-symbols-outlined text-[14px]">visibility</span>
+              Solo lectura — es la partida de un estudiante, no podés jugarla desde acá
+            </div>
+          )}
 
           <div className="w-full max-w-[660px] mt-space-md flex flex-col gap-space-sm">
             <div className="flex items-center justify-between gap-space-md p-space-sm rounded-xl bg-surface-container-low shadow-xl flex-wrap">
@@ -772,6 +980,39 @@ function agruparJugadasPorRonda(jugadas) {
     rondas.push({ numero: i / 2 + 1, blancas: jugadas[i], negras: jugadas[i + 1] });
   }
   return rondas.reverse();
+}
+
+/**
+ * Switch chico para que el facilitador prenda/apague, partida por partida, un
+ * permiso del jugador (cámara, simulación 3D). El estado se ve tanto por color
+ * como por posición de la perilla — no depende solo del color.
+ */
+function InterruptorPermiso({ id, etiqueta, activo, cargando, onCambiar }) {
+  return (
+    <div className="flex items-center justify-between gap-2 bg-surface-container-lowest px-2.5 py-2 rounded-lg">
+      <label htmlFor={id} className="font-mono-micro text-[10px] text-on-surface-variant uppercase tracking-wide cursor-pointer">
+        {etiqueta}
+      </label>
+      <button
+        id={id}
+        type="button"
+        role="switch"
+        aria-checked={activo}
+        disabled={cargando}
+        onClick={onCambiar}
+        title={activo ? 'Tocá para apagar' : 'Tocá para prender'}
+        className={`relative w-9 h-5 rounded-full shrink-0 transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
+          activo ? 'bg-primary' : 'bg-surface-container-high'
+        }`}
+      >
+        <span
+          className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-surface-container-lowest shadow transition-transform ${
+            activo ? 'translate-x-4' : 'translate-x-0'
+          }`}
+        />
+      </button>
+    </div>
+  );
 }
 
 function calcularPorcentajeBarra(analisis) {
