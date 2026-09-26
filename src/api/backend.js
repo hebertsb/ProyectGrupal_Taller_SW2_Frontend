@@ -18,7 +18,9 @@ async function solicitar(endpoint, opciones = {}) {
   });
   if (!respuesta.ok) {
     const detalle = await respuesta.json().catch(() => null);
-    throw new Error(detalle?.detail ?? `Error ${respuesta.status}`);
+    const error = new Error(detalle?.detail ?? `Error ${respuesta.status}`);
+    error.status = respuesta.status; // permite a la UI distinguir 404 de 503, etc.
+    throw error;
   }
   return respuesta.json();
 }
@@ -63,6 +65,17 @@ export function obtenerJugadasLegales(partidaId, casilla) {
 export function analisisCompletoPartida(partidaId) {
   return solicitar(`/partida/${partidaId}/analisis-completo`, {
     method: "GET",
+  });
+}
+
+/**
+ * Lanza la ventana nativa de PyBullet en la máquina del backend, sincronizada
+ * en vivo con la partida indicada — evita tener que correr `ver_partida_en_vivo.py`
+ * a mano con un token copiado del navegador.
+ */
+export function abrirSimulacion3D(partidaId) {
+  return solicitar("/simulacion/abrir-ventana-3d", {
+    body: JSON.stringify({ partida_id: partidaId }),
   });
 }
 

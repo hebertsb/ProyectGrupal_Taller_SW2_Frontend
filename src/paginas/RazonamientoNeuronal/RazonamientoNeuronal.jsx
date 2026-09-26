@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { listarPartidas, obtenerPartida, estadoModelo, inferenciaModelo } from '../../api/backend';
+import { listarPartidas, obtenerPartida, estadoModelo } from '../../api/backend';
 import { fenAMatriz, rutaImagenPieza, POSICION_INICIAL_FEN } from '../../ajedrez';
 import { clasificarJugada, caidaDeJugada, comoMejorarPorCategoria, ESTILO_CATEGORIA } from '../../aprendizaje';
-import AvisoVistaPrevia from '../../componentes/AvisoVistaPrevia';
-import CerebroHolografico from './CerebroHolografico';
+import { useRazonamiento } from '../../contexto/ContextoRazonamiento';
+import CerebroNeuronal from './CerebroNeuronal';
+import CerebroRed from './CerebroRed';
 
 const PRESETS_FEN = [
   { etiqueta: 'Siciliana', fen: 'r1bqk2r/pp2bppp/2n1p3/3p4/3P4/2PB1N2/P4PPP/RNBQ1RK1 w kq - 1 14' },
@@ -11,10 +12,105 @@ const PRESETS_FEN = [
   { etiqueta: 'Final Torres', fen: '4r1k1/5ppp/8/8/8/8/4RPPP/6K1 w - - 0 1' },
 ];
 
+/** Leyenda del cerebro — cada color mapea a un dato REAL, nada conceptual. */
+const LEYENDA_CEREBRO = [
+  {
+    color: 'bg-neon-cyan',
+    texto: 'text-neon-cyan',
+    titulo: 'Saliencia',
+    detalle: 'Qué casillas del tablero importaron para la decisión (gradiente real por casilla).',
+  },
+  {
+    color: 'bg-neon-purple',
+    texto: 'text-neon-purple',
+    titulo: 'Atención por bloque',
+    detalle: 'Fuerza de activación de cada bloque residual SE, de más superficial a más profundo.',
+  },
+  {
+    color: 'bg-neon-lime',
+    texto: 'text-neon-lime',
+    titulo: 'Jugada elegida',
+    detalle: 'Corteza motora — pulsa más fuerte cuanto mayor la confianza de la jugada top-1.',
+  },
+  {
+    color: 'bg-neon-orange',
+    texto: 'text-neon-orange',
+    titulo: 'Comparación Stockfish',
+    detalle: 'Halo de referencia de calidad — Stockfish nunca decide la jugada, solo compara.',
+  },
+  {
+    color: 'bg-on-surface-variant',
+    texto: 'text-on-surface-variant',
+    titulo: 'Analizando',
+    detalle: 'Inferencia en curso — las partículas se ven pálidas y a la deriva mientras el modelo calcula.',
+  },
+];
+
 function formatearCp(cp) {
   if (cp == null) return '—';
   const valor = (cp / 100).toFixed(2);
   return cp > 0 ? `+${valor}` : valor;
+}
+
+/**
+ * A diferencia de `formatearCp` (donde `null` = "sin dato" → "—"), en
+ * `candidatas_detalladas` el backend devuelve `evaluacion_stockfish_cp: null`
+ * específicamente cuando esa línea es mate forzado según Stockfish — se
+ * muestra explícito en vez de confundirlo con "no hay dato".
+ */
+function formatearEvalCandidata(cp) {
+  if (cp === null || cp === undefined) return 'Mate';
+  return formatearCp(cp);
+}
+
+/**
+ * Etiqueta de qué tan de acuerdo está Stockfish con una candidata puntual, a partir de
+ * `diferencia_cp` (cuánto peor es esa candidata respecto de la mejor jugada de Stockfish
+ * en la posición). El backend no define un corte oficial, así que se usa un criterio
+ * simple en centipeones: diferencias chicas se tratan como ruido de evaluación (Stockfish
+ * también la aprueba), diferencias moderadas como "sigue siendo sólida", y diferencias
+ * grandes en una candidata con bandera de riesgo táctico confirman que Turing hizo bien en
+ * no jugarla.
+ */
+function etiquetaRelacionStockfish(diferenciaCp, tieneRiesgoTactico) {
+  const magnitud = Math.abs(diferenciaCp ?? 0);
+  if (magnitud <= 20) return { texto: 'Coincide con Stockfish', clase: 'text-neon-lime' };
+  if (magnitud <= 75) return { texto: 'También sólida', clase: 'text-neon-cyan' };
+  if (tieneRiesgoTactico) return { texto: 'Confirma el riesgo', clase: 'text-error' };
+  return { texto: 'Stockfish prefiere otra', clase: 'text-neon-orange' };
+}
+
+/**
+ * El backend genera `creada_en` en UTC, pero en algunos entornos el string
+ * llega sin sufijo de zona horaria (ej. "2026-09-26T00:11:56.174" en vez de
+ * "...174+00:00") — sin el sufijo, `new Date(...)` lo interpreta como hora
+ * LOCAL del navegador en vez de UTC, mostrando una hora varias horas
+ * adelantada. Si no trae offset explícito, se asume UTC (agregando "Z") y se
+ * formatea siempre en huso horario de Bolivia, sin depender de cómo esté
+ * configurado el reloj del sistema del navegador.
+ */
+function formatearFechaBolivia(iso) {
+  const tieneOffset = /Z$|[+-]\d{2}:?\d{2}$/.test(iso);
+  const fecha = new Date(tieneOffset ? iso : `${iso}Z`);
+  return fecha.toLocaleString('es-BO', {
+    timeZone: 'America/La_Paz',
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+/**
+ * El humano siempre juega blancas (ver `Partida`, backend). `resultado` viene
+ * en notación PGN ("1-0", "0-1", "1/2-1/2") — se traduce a algo legible.
+ */
+function resultadoPartida(p) {
+  if (!p.terminada) return { etiqueta: 'En curso', clase: 'text-neon-cyan bg-neon-cyan/10 border-neon-cyan/30' };
+  if (p.resultado === '1-0') return { etiqueta: 'Ganaste', clase: 'text-neon-lime bg-neon-lime/10 border-neon-lime/30' };
+  if (p.resultado === '0-1') return { etiqueta: 'Perdiste', clase: 'text-error bg-error/10 border-error/30' };
+  if (p.resultado === '1/2-1/2') return { etiqueta: 'Empate', clase: 'text-on-surface-variant bg-surface-container-high border-outline-variant/30' };
+  return { etiqueta: 'Terminada', clase: 'text-on-surface-variant bg-surface-container-high border-outline-variant/30' };
 }
 
 function colorSaliencia(valor, alfa = 1) {
@@ -36,22 +132,31 @@ function casillasCalientes(saliencia, cantidad = 3) {
 let logIdSeq = 0;
 
 export default function RazonamientoNeuronal() {
+  const { ultimaInferencia, estaAnalizando, dispararInferencia } = useRazonamiento() ?? {};
+
   const [partidaId, setPartidaId] = useState(null);
   const [historial, setHistorial] = useState([]);
   const [cargandoHistorial, setCargandoHistorial] = useState(false);
   const [partida, setPartida] = useState(null);
   const [cargandoPartida, setCargandoPartida] = useState(false);
-  const [fenActual, setFenActual] = useState(POSICION_INICIAL_FEN);
-  const [inferencia, setInferencia] = useState(null);
-  const [cargandoInferencia, setCargandoInferencia] = useState(false);
-  const [latenciaMs, setLatenciaMs] = useState(null);
+  const [fenActual, setFenActual] = useState(() => ultimaInferencia?.fen ?? POSICION_INICIAL_FEN);
   const [estadoModeloData, setEstadoModeloData] = useState(null);
   const [cargandoEstado, setCargandoEstado] = useState(true);
   const [error, setError] = useState(null);
   const [logs, setLogs] = useState([]);
-  const [mostrarSelector, setMostrarSelector] = useState(true);
+  // Arranca cerrado siempre — mostrarlo automáticamente cada vez que no hay una
+  // inferencia todavía en memoria (ej. recién recargada la página) tapaba la pantalla
+  // con la lista completa de partidas jugadas en cada reload. El botón "Elegir partida
+  // jugada" (icono history, más abajo) lo vuelve a abrir cuando el usuario lo pide.
+  const [mostrarSelector, setMostrarSelector] = useState(false);
+  // Panel "Candidatas de Turing" — arranca expandido para que la defensa lo vea completo
+  // de entrada; el usuario lo puede colapsar a la barra resumen para no alargar la pantalla.
+  const [candidatasAbiertas, setCandidatasAbiertas] = useState(true);
+  // Selector de vista del "Mapa de Activación Neuronal" — dos lentes sobre el mismo dato
+  // real (mismas props a ambas), 'organico' (partículas) es el default histórico.
+  const [vistaCerebro, setVistaCerebro] = useState('organico');
 
-  const cerebroRef = useRef(null);
+  const analizandoPrevRef = useRef(false);
 
   const agregarLog = useCallback((mensaje, tipo = 'INFO') => {
     const entrada = { id: ++logIdSeq, hora: new Date().toLocaleTimeString('es-BO', { hour12: false }), mensaje, tipo };
@@ -102,32 +207,34 @@ export default function RazonamientoNeuronal() {
     }
   }, [partidaId]);
 
-  const ejecutarInferencia = useCallback(async (fen) => {
-    setCargandoInferencia(true);
-    setError(null);
-    agregarLog(`Inferencia solicitada — FEN ${fen.split(' ')[0]}…`, 'FORWARD');
-    try {
-      const data = await inferenciaModelo(fen);
-      setInferencia(data);
-      setLatenciaMs(data.latencia_ms);
-      cerebroRef.current?.dispararPulso();
-      agregarLog(`Respuesta recibida en ${data.latencia_ms.toFixed(1)}ms — jugada elegida ${data.jugada_elegida}.`, 'BEST');
-    } catch (err) {
-      setError(err.message);
-      setInferencia(null);
-      setLatenciaMs(null);
-      agregarLog(`Error de inferencia: ${err.message}`, 'ERROR');
-    } finally {
-      setCargandoInferencia(false);
-    }
-  }, [agregarLog]);
-
+  // Dispara inferencia real solo si todavía no tenemos el dato para esta posición exacta
+  // (evita refetch innecesario cuando `fenActual` arrancó con el valor de la última
+  // inferencia en vivo, ver useState de arriba).
   useEffect(() => {
-    if (fenActual && estadoModeloData?.disponible) {
-      ejecutarInferencia(fenActual);
-    }
+    if (!fenActual || !estadoModeloData?.disponible || !dispararInferencia) return;
+    if (ultimaInferencia?.fen === fenActual) return;
+    dispararInferencia(fenActual);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fenActual, estadoModeloData?.disponible]);
+
+  // Logs de eventos reales — se derivan de los cambios del contexto compartido en vez de
+  // envolver el fetch acá (la inferencia puede venir de Sala de Control, no solo de este panel).
+  useEffect(() => {
+    if (estaAnalizando && !analizandoPrevRef.current) {
+      agregarLog('Inferencia solicitada al modelo propio…', 'FORWARD');
+    }
+    analizandoPrevRef.current = estaAnalizando;
+  }, [estaAnalizando, agregarLog]);
+
+  useEffect(() => {
+    if (!ultimaInferencia) return;
+    agregarLog(
+      `Respuesta recibida en ${ultimaInferencia.latencia_ms.toFixed(1)}ms — jugada elegida ${ultimaInferencia.jugada_elegida}.`,
+      'BEST'
+    );
+    // Solo cuando cambia la referencia (nueva respuesta real), no en cada render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ultimaInferencia]);
 
   function elegirPartida(id) {
     setError(null);
@@ -139,8 +246,6 @@ export default function RazonamientoNeuronal() {
     setPartidaId(null);
     setPartida(null);
     setFenActual(POSICION_INICIAL_FEN);
-    setInferencia(null);
-    setLatenciaMs(null);
     setError(null);
     setMostrarSelector(true);
   }
@@ -160,6 +265,15 @@ export default function RazonamientoNeuronal() {
     agregarLog(`Preset cargado: ${etiqueta}.`, 'FEN');
   }
 
+  function sincronizarConPartidaViva() {
+    if (!ultimaInferencia) return;
+    setFenActual(ultimaInferencia.fen);
+    setPartidaId(null);
+    setPartida(null);
+    setMostrarSelector(false);
+    agregarLog('Sincronizado con la última inferencia en vivo de Sala de Control.', 'SYNC');
+  }
+
   function copiarFen() {
     navigator.clipboard?.writeText(fenActual).then(() => agregarLog('FEN copiado al portapapeles.', 'CLIPBOARD'));
   }
@@ -168,8 +282,15 @@ export default function RazonamientoNeuronal() {
     setLogs([]);
   }
 
-  const candidatas = inferencia?.candidatas ?? [];
-  const saliencia = inferencia?.saliencia ?? Array(64).fill(0);
+  // Solo se muestran datos que corresponden EXACTAMENTE a `fenActual` — si la última
+  // inferencia real fue disparada para otra posición (ej. una jugada en Sala de Control
+  // mientras acá se estaba explorando otro FEN), no se mezcla con la vista actual.
+  const inferenciaVigente = ultimaInferencia && ultimaInferencia.fen === fenActual ? ultimaInferencia : null;
+  const hayInferenciaVivaDistinta = Boolean(ultimaInferencia) && ultimaInferencia.fen !== fenActual;
+
+  const candidatas = inferenciaVigente?.candidatas ?? [];
+  const saliencia = inferenciaVigente?.saliencia ?? Array(64).fill(0);
+  const atencionPorBloque = inferenciaVigente?.atencion_por_bloque ?? [];
   const matriz = fenAMatriz(fenActual);
   const campos = fenActual.split(' ');
   const turno = campos[1] === 'b' ? 'Negras' : 'Blancas';
@@ -177,26 +298,60 @@ export default function RazonamientoNeuronal() {
   const dispositivo = estadoModeloData?.dispositivo ?? '—';
   const versionModelo = estadoModeloData?.disponible ? `v${estadoModeloData.version}` : '—';
   const fechaEntrenamiento = estadoModeloData?.disponible ? estadoModeloData.fecha_entrenamiento : '—';
-  const latenciaFormateada = latenciaMs !== null ? `${latenciaMs.toFixed(1)} ms` : cargandoInferencia ? '…' : '—';
+  const latenciaMs = inferenciaVigente?.latencia_ms ?? null;
+  const latenciaFormateada = latenciaMs !== null ? `${latenciaMs.toFixed(1)} ms` : estaAnalizando ? '…' : '—';
   const top1 = candidatas[0] ?? null;
   const sumaProbabilidades = candidatas.reduce((acc, c) => acc + (c.probabilidad ?? 0), 0);
   const calientes = casillasCalientes(saliencia, 3);
-  const cmp = inferencia?.comparacion_stockfish ?? null;
+  const cmp = inferenciaVigente?.comparacion_stockfish ?? null;
   // Eval del modelo derivada de la comparación con Stockfish (misma cuenta que en el
   // diagnóstico pedagógico): eval_stockfish - diferencia = eval de la jugada del modelo.
   const evalModelo = cmp ? cmp.evaluacion_cp - cmp.diferencia_cp : null;
+  // Detalle táctico de las 3 candidatas reales de la red (verificado por Turing) + la
+  // evaluación puntual de Stockfish para cada una — ver panel "Candidatas de Turing".
+  const candidatasDetalladas = inferenciaVigente?.candidatas_detalladas ?? [];
+  // `elegida: true` no siempre cae en la posición 0 del array (Turing descarta la mejor
+  // puntuada si el rival queda con mate en 1) — nunca se asume la primera.
+  const candidataElegidaDetalle = candidatasDetalladas.find((c) => c.elegida) ?? null;
+  const relacionResumen = cmp
+    ? etiquetaRelacionStockfish(
+        cmp.diferencia_cp,
+        Boolean(candidataElegidaDetalle?.rival_tiene_mate_en_1 || candidataElegidaDetalle?.pieza_colgada)
+      )
+    : null;
+  // Partidas sin ninguna jugada son restos de partidas creadas por error (nunca
+  // llegaron a jugarse) — no aportan nada para analizar, así que no ensucian la lista.
+  const historialConJugadas = historial.filter((p) => p.cantidad_jugadas > 0);
+  const partidasVaciasOcultas = historial.length - historialConJugadas.length;
 
   return (
     <div className="relative w-full min-h-[calc(100vh-4rem)] p-3 lg:p-4 flex flex-col gap-3 max-w-[1920px] mx-auto animate-in fade-in duration-500">
-      <AvisoVistaPrevia
-        hu="Módulo 5 · HU6 ampliada"
-        descripcionCorta="Candidatas, saliencia, comparación Stockfish, KPIs y estado del modelo son reales; el cerebro 3D, la atención multi-cabezal, el histograma de gradientes y la terminal son ilustrativos"
-      />
+      <div className="relative z-30 flex items-center gap-space-xs px-space-md py-space-xs rounded-lg bg-neon-lime/10 border border-neon-lime/30 text-neon-lime font-mono-micro text-mono-micro">
+        <span className="material-symbols-outlined text-[16px]">verified</span>
+        <span>
+          MÓDULO 5 · HU6 AMPLIADA — panel conectado en vivo al modelo propio (candidatas, saliencia, atención por
+          bloque, comparación Stockfish y el cerebro de partículas son datos reales de /aprendizaje/inferencia).
+        </span>
+      </div>
 
       {error && (
         <div className="px-space-md py-space-xs rounded-lg bg-error-container text-on-error-container font-body-sm text-body-sm animate-in slide-in-from-top-2 duration-300">
           {error}
         </div>
+      )}
+
+      {hayInferenciaVivaDistinta && (
+        <button
+          type="button"
+          onClick={sincronizarConPartidaViva}
+          className="flex items-center justify-between gap-2 px-space-md py-space-xs rounded-lg bg-primary/10 border border-primary/30 text-primary font-mono-micro text-[11px] text-left hover:bg-primary/15 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+        >
+          <span className="flex items-center gap-1.5">
+            <span className="material-symbols-outlined text-[15px]">sync_alt</span>
+            Hay una inferencia en vivo más reciente (jugada {ultimaInferencia.jugada_elegida} en Sala de Control) para otra posición.
+          </span>
+          <span className="underline shrink-0">Sincronizar</span>
+        </button>
       )}
 
       {/* Selector de posición real (historial de partidas jugadas) */}
@@ -226,28 +381,46 @@ export default function RazonamientoNeuronal() {
             </div>
           </div>
           {cargandoHistorial && <span className="font-mono-micro text-[10px] text-outline px-1">Cargando partidas…</span>}
-          {!cargandoHistorial && historial.length === 0 && !error && (
+          {!cargandoHistorial && historialConJugadas.length === 0 && !error && (
             <p className="font-body-sm text-[12px] text-on-surface-variant px-1">
               Todavía no hay partidas jugadas. Usá la posición inicial, un preset, o jugá una en Sala de Control.
             </p>
           )}
+          {partidasVaciasOcultas > 0 && (
+            <p className="font-mono-micro text-[9px] text-outline px-1">
+              {partidasVaciasOcultas} partida{partidasVaciasOcultas === 1 ? '' : 's'} sin jugadas (creada{partidasVaciasOcultas === 1 ? '' : 's'} y nunca jugada{partidasVaciasOcultas === 1 ? '' : 's'}) no se muestra{partidasVaciasOcultas === 1 ? '' : 'n'} acá.
+            </p>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-1.5">
-            {historial.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => elegirPartida(p.id)}
-                className="text-left rounded-lg p-2 bg-surface-container-lowest hover:bg-surface-container-low transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-mono-metric text-[12px] text-primary font-medium">#{p.id.slice(0, 6)}</span>
-                  <span className="font-mono-micro text-[9px] text-on-surface-variant">{p.cantidad_jugadas} jugadas</span>
-                </div>
-                <div className="font-mono-micro text-[9px] text-outline mt-0.5">
-                  {new Date(p.creada_en).toLocaleString('es-BO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                </div>
-              </button>
-            ))}
+            {historialConJugadas.map((p) => {
+              const resultado = resultadoPartida(p);
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => elegirPartida(p.id)}
+                  className="text-left rounded-lg p-2 bg-surface-container-lowest hover:bg-surface-container-low transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary flex flex-col gap-1"
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="font-mono-micro text-[10px] text-on-surface font-semibold flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[13px] text-primary">
+                        {p.tipo_oponente === 'modelo' ? 'psychology' : 'smart_toy'}
+                      </span>
+                      {p.tipo_oponente === 'modelo' ? 'Turing' : 'Stockfish'} · Nv.{p.nivel}
+                    </span>
+                    <span className={`font-mono-micro text-[8.5px] font-bold uppercase px-1.5 py-0.5 rounded border ${resultado.clase}`}>
+                      {resultado.etiqueta}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono-micro text-[9px] text-on-surface-variant">
+                      {p.cantidad_jugadas} jugada{p.cantidad_jugadas === 1 ? '' : 's'}
+                    </span>
+                    <span className="font-mono-micro text-[9px] text-outline">{formatearFechaBolivia(p.creada_en)}</span>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </section>
       )}
@@ -264,7 +437,7 @@ export default function RazonamientoNeuronal() {
           <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 bg-surface-container/80 p-2.5 rounded-xl border border-outline-variant/30 shadow-lg">
             <div className="flex flex-col justify-center px-3 py-1.5 rounded-lg bg-surface-container-lowest border border-outline-variant/20">
               <div className="flex items-center justify-between">
-                <span className="font-mono-micro text-[9px] text-on-surface-variant uppercase">Estado modelo</span>
+                <span className="font-mono-micro text-[9px] text-on-surface-variant uppercase">Turing</span>
                 <span className={`w-2 h-2 rounded-full ${estadoModeloData?.disponible ? 'bg-neon-cyan animate-ping' : 'bg-error'}`} />
               </div>
               <span className={`font-mono-metric text-[13px] font-bold truncate ${estadoModeloData?.disponible ? 'text-neon-cyan' : 'text-error'}`}>
@@ -300,13 +473,13 @@ export default function RazonamientoNeuronal() {
             <div className="flex items-center gap-1.5 justify-end col-span-2 sm:col-span-1 lg:col-span-1">
               <button
                 type="button"
-                onClick={() => fenActual && ejecutarInferencia(fenActual)}
-                disabled={cargandoInferencia || !estadoModeloData?.disponible}
+                onClick={() => fenActual && dispararInferencia?.(fenActual)}
+                disabled={estaAnalizando || !estadoModeloData?.disponible}
                 title="Ejecutar inferencia real del modelo sobre la posición actual"
                 className="flex-1 h-full min-h-[38px] px-2 rounded-lg bg-neon-cyan text-on-primary font-headline-sm text-[12px] font-bold flex items-center justify-center gap-1 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-all shadow-[0_0_12px_rgba(0,229,255,0.4)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
               >
-                <span className="material-symbols-outlined text-[16px]">{cargandoInferencia ? 'sync' : 'bolt'}</span>
-                {cargandoInferencia ? 'Infiriendo…' : 'Inferencia'}
+                <span className="material-symbols-outlined text-[16px]">{estaAnalizando ? 'sync' : 'bolt'}</span>
+                {estaAnalizando ? 'Infiriendo…' : 'Inferencia'}
               </button>
               {partidaId ? (
                 <button
@@ -318,14 +491,24 @@ export default function RazonamientoNeuronal() {
                   <span className="material-symbols-outlined text-[16px]">swap_horiz</span>
                 </button>
               ) : (
-                <button
-                  type="button"
-                  onClick={usarPosicionInicial}
-                  title="Posición inicial"
-                  className="h-full min-h-[38px] px-2.5 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface transition-all border border-outline-variant/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                >
-                  <span className="material-symbols-outlined text-[16px]">home</span>
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={usarPosicionInicial}
+                    title="Posición inicial"
+                    className="h-full min-h-[38px] px-2.5 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface transition-all border border-outline-variant/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">home</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMostrarSelector(true)}
+                    title="Elegir partida jugada"
+                    className="h-full min-h-[38px] px-2.5 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface transition-all border border-outline-variant/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">history</span>
+                  </button>
+                </>
               )}
             </div>
           </section>
@@ -429,8 +612,8 @@ export default function RazonamientoNeuronal() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => fenActual && ejecutarInferencia(fenActual)}
-                  disabled={cargandoInferencia || !estadoModeloData?.disponible}
+                  onClick={() => fenActual && dispararInferencia?.(fenActual)}
+                  disabled={estaAnalizando || !estadoModeloData?.disponible}
                   className="w-full py-2 rounded-lg bg-neon-cyan text-on-primary font-headline-sm text-[12px] font-bold flex items-center justify-center gap-1.5 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-all shadow-[0_0_12px_rgba(0,229,255,0.35)] mt-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                 >
                   <span className="material-symbols-outlined text-[16px]">psychology</span>
@@ -439,7 +622,7 @@ export default function RazonamientoNeuronal() {
               </div>
             </div>
 
-            {/* Columna central: cerebro holográfico (decorativo) */}
+            {/* Columna central: cerebro de partículas — 100% real */}
             <div className="lg:col-span-7 flex flex-col gap-2 bg-surface-container/90 p-3.5 rounded-xl border border-neon-cyan/40 shadow-[0_0_35px_rgba(0,229,255,0.15)] relative overflow-hidden">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-outline-variant/30 pb-2">
                 <div className="flex items-center gap-2">
@@ -447,57 +630,82 @@ export default function RazonamientoNeuronal() {
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-neon-cyan opacity-80" />
                     <span className="relative inline-flex rounded-full h-3 w-3 bg-neon-cyan" />
                   </div>
-                  <h1 className="font-headline-sm text-[15px] lg:text-[16px] font-bold text-on-surface tracking-wider uppercase flex items-center gap-2">
+                  <h1 className="font-headline-sm text-[15px] lg:text-[16px] font-bold text-on-surface tracking-wider uppercase">
                     Mapa de Activación Neuronal
-                    <span className="text-neon-cyan font-mono text-[12px]">— visualización conceptual</span>
                   </h1>
                 </div>
-                <span className="font-mono-micro text-[10px] text-tertiary-container bg-tertiary-container/15 px-2 py-0.5 rounded border border-tertiary-container/30 shrink-0">
-                  Visualización ilustrativa
-                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  {/* Selector de vista — 'organico' (partículas) vs 'red' (nodos y aristas).
+                      Ambas reciben exactamente las mismas props/datos reales, solo cambia
+                      cuál se dibuja; ver CerebroNeuronal.jsx / CerebroRed.jsx. */}
+                  <div
+                    className="flex items-center gap-0.5 p-0.5 rounded-lg bg-surface-container-lowest border border-outline-variant/30"
+                    role="group"
+                    aria-label="Vista del mapa de activación neuronal"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setVistaCerebro('organico')}
+                      title="Vista orgánica — nube de partículas"
+                      aria-label="Vista orgánica (nube de partículas)"
+                      aria-pressed={vistaCerebro === 'organico'}
+                      className={`p-1 rounded flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
+                        vistaCerebro === 'organico'
+                          ? 'bg-neon-cyan text-on-primary'
+                          : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[14px]">blur_on</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVistaCerebro('red')}
+                      title="Vista de red — nodos y conexiones"
+                      aria-label="Vista de red (nodos y conexiones)"
+                      aria-pressed={vistaCerebro === 'red'}
+                      className={`p-1 rounded flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
+                        vistaCerebro === 'red'
+                          ? 'bg-neon-cyan text-on-primary'
+                          : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[14px]">hub</span>
+                    </button>
+                  </div>
+                  <span className="font-mono-micro text-[10px] text-neon-lime bg-neon-lime/10 px-2 py-0.5 rounded border border-neon-lime/30 shrink-0">
+                    100% datos reales
+                  </span>
+                </div>
               </div>
 
-              <div className="relative flex-1">
-                <CerebroHolografico ref={cerebroRef} />
+              <div className="relative flex-1 min-h-[360px]">
+                {vistaCerebro === 'organico' ? (
+                  <CerebroNeuronal
+                    saliencia={saliencia}
+                    atencionPorBloque={atencionPorBloque}
+                    jugadaElegida={inferenciaVigente?.jugada_elegida ?? null}
+                    probabilidadTop1={top1?.probabilidad ?? 0}
+                    diferenciaCp={cmp?.diferencia_cp ?? 0}
+                    analizando={estaAnalizando}
+                  />
+                ) : (
+                  <CerebroRed
+                    saliencia={saliencia}
+                    atencionPorBloque={atencionPorBloque}
+                    jugadaElegida={inferenciaVigente?.jugada_elegida ?? null}
+                    probabilidadTop1={top1?.probabilidad ?? 0}
+                    diferenciaCp={cmp?.diferencia_cp ?? 0}
+                    analizando={estaAnalizando}
+                  />
+                )}
 
-                {/* Callouts perimetrales — decorativos, la arquitectura real no tiene lóbulos ni cabezales */}
-                <div className="hidden xl:flex absolute bottom-16 left-4 z-20 items-start gap-2 bg-surface-container-lowest/90 backdrop-blur-md px-2.5 py-1.5 rounded-lg border border-neon-blue/60 shadow-[0_0_15px_rgba(0,112,243,0.35)] max-w-[220px]">
-                  <div className="w-2 h-2 rounded-full bg-neon-blue mt-1 animate-pulse shrink-0" />
-                  <div className="flex flex-col text-left">
-                    <span className="font-mono-micro text-[10px] uppercase text-neon-blue font-bold tracking-wider">Entrada FEN</span>
-                    <span className="font-mono-micro text-[10px] text-on-surface">Lóbulo Occipital · Tokenización</span>
-                  </div>
-                </div>
-                <div className="hidden xl:flex absolute bottom-16 right-4 z-20 items-start gap-2 bg-surface-container-lowest/90 backdrop-blur-md px-2.5 py-1.5 rounded-lg border border-neon-cyan/60 shadow-[0_0_15px_rgba(0,229,255,0.35)] max-w-[220px]">
-                  <div className="w-2 h-2 rounded-full bg-neon-cyan mt-1 animate-pulse shrink-0" />
-                  <div className="flex flex-col text-left">
-                    <span className="font-mono-micro text-[10px] uppercase text-neon-cyan font-bold tracking-wider">Extracción de Características</span>
-                    <span className="font-mono-micro text-[10px] text-on-surface">Corteza Parietal · CNN</span>
-                  </div>
-                </div>
-                <div className="hidden xl:flex absolute top-2 left-4 z-20 items-start gap-2 bg-surface-container-lowest/90 backdrop-blur-md px-2.5 py-1.5 rounded-lg border border-neon-purple/60 shadow-[0_0_15px_rgba(124,77,255,0.4)] max-w-[220px]">
-                  <div className="w-2 h-2 rounded-full bg-neon-purple mt-1 animate-ping shrink-0" />
-                  <div className="flex flex-col text-left">
-                    <span className="font-mono-micro text-[10px] uppercase text-neon-purple font-bold tracking-wider">Atención Multicabezal</span>
-                    <span className="font-mono-micro text-[10px] text-on-surface">Corteza Prefrontal · conceptual</span>
-                  </div>
-                </div>
-                <div className="hidden xl:flex absolute top-2 right-4 z-20 items-start gap-2 bg-surface-container-lowest/90 backdrop-blur-md px-2.5 py-1.5 rounded-lg border border-neon-orange/60 shadow-[0_0_15px_rgba(255,145,0,0.4)] max-w-[220px]">
-                  <div className="w-2 h-2 rounded-full bg-neon-orange mt-1 animate-pulse shrink-0" />
-                  <div className="flex flex-col text-left">
-                    <span className="font-mono-micro text-[10px] uppercase text-neon-orange font-bold tracking-wider">Evaluación de Posición</span>
-                    <span className="font-mono-micro text-[10px] text-on-surface">Lóbulo Temporal · conceptual</span>
-                  </div>
-                </div>
-
-                {/* Callout inferior — este sí con datos reales de la última inferencia */}
-                {inferencia?.jugada_elegida && (
-                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 bg-surface-container-lowest/95 backdrop-blur-md px-3 py-1.5 rounded-lg border border-neon-lime/60 shadow-[0_0_18px_rgba(118,255,3,0.35)] max-w-[90%]">
+                {inferenciaVigente?.jugada_elegida && (
+                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 bg-surface-container-lowest/95 backdrop-blur-md px-3 py-1.5 rounded-lg border border-neon-lime/60 shadow-[0_0_18px_rgba(118,255,3,0.35)] max-w-[90%] pointer-events-none">
                     <div className="w-2 h-2 rounded-full bg-neon-lime shrink-0" />
                     <div className="flex flex-col text-center">
                       <span className="font-mono-micro text-[10px] uppercase text-neon-lime font-bold tracking-wider">Selección Motora (real)</span>
                       <span className="font-mono-micro text-[11px] text-on-surface font-semibold">
-                        {inferencia.jugada_elegida}
+                        {inferenciaVigente.jugada_elegida}
                         {top1 ? ` (${(top1.probabilidad * 100).toFixed(0)}% conf.)` : ''}
                         {evalModelo != null ? ` · ${formatearCp(evalModelo)}` : ''}
                       </span>
@@ -505,29 +713,58 @@ export default function RazonamientoNeuronal() {
                   </div>
                 )}
               </div>
+
+              {/* Leyenda obligatoria — qué representa cada color, todo real */}
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 pt-1 border-t border-outline-variant/20">
+                {LEYENDA_CEREBRO.map((item) => (
+                  <div key={item.titulo} className="flex items-start gap-1.5 p-1.5 rounded-lg bg-surface-container-lowest/60">
+                    <span className={`w-2.5 h-2.5 rounded-full mt-0.5 shrink-0 ${item.color}`} />
+                    <div className="flex flex-col">
+                      <span className={`font-mono-micro text-[9px] font-bold uppercase ${item.texto}`}>{item.titulo}</span>
+                      <span className="font-mono-micro text-[8px] text-on-surface-variant leading-snug">{item.detalle}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            {/* Columna derecha: Atención (mayormente decorativa, heatmap real) */}
+            {/* Columna derecha: atención por bloque (real) + saliencia (real) */}
             <div className="lg:col-span-2 flex flex-col gap-2.5 bg-surface-container/70 p-3 rounded-xl border border-outline-variant/30 shadow-md justify-between">
               <div className="flex items-center justify-between border-b border-outline-variant/20 pb-2">
                 <div className="flex items-center gap-1.5">
                   <span className="material-symbols-outlined text-neon-purple text-[18px]">blur_on</span>
                   <h2 className="font-headline-sm text-[13px] font-semibold text-on-surface uppercase tracking-wide">Atención</h2>
                 </div>
-                <span className="font-mono-micro text-[10px] text-secondary font-semibold bg-secondary-container/40 px-1.5 py-0.5 rounded">conceptual</span>
+                <span className="font-mono-micro text-[10px] text-neon-lime font-semibold bg-neon-lime/10 px-1.5 py-0.5 rounded">real</span>
               </div>
 
-              <div className="grid grid-cols-2 gap-1.5">
-                <div className="flex flex-col bg-surface-container-lowest p-1.5 rounded-lg border border-outline-variant/20">
-                  <span className="font-mono-micro text-[9px] text-outline uppercase">Activación</span>
-                  <span className="font-mono-metric text-[13px] font-bold text-neon-cyan">—</span>
-                  <span className="font-mono-micro text-[8px] text-outline-variant">Sin dato real</span>
+              {/* Atención por bloque real (SE-ResNet) — hasta 8 bloques; se oculta con gracia si el checkpoint no los tiene */}
+              <div className="flex flex-col gap-1 bg-surface-container-lowest p-2 rounded-lg border border-outline-variant/20">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono-micro text-[9px] text-on-surface-variant uppercase font-medium">Bloques SE</span>
+                  <span className="font-mono-micro text-[9px] text-neon-purple font-bold">
+                    {atencionPorBloque.length ? `${atencionPorBloque.length} bloques` : 'N/D'}
+                  </span>
                 </div>
-                <div className="flex flex-col bg-surface-container-lowest p-1.5 rounded-lg border border-outline-variant/20">
-                  <span className="font-mono-micro text-[9px] text-outline uppercase">Sinapsis</span>
-                  <span className="font-mono-metric text-[13px] font-bold text-secondary-fixed">—</span>
-                  <span className="font-mono-micro text-[8px] text-secondary">Sin dato real</span>
-                </div>
+                {atencionPorBloque.length > 0 ? (
+                  <div className="flex items-end justify-between gap-1 h-14 pt-1" aria-label="Activación real por bloque residual">
+                    {atencionPorBloque.map((valor, indice) => (
+                      <div key={indice} className="flex-1 flex flex-col items-center gap-0.5" title={`Bloque ${indice + 1}: ${(valor * 100).toFixed(0)}%`}>
+                        <div className="w-full bg-surface-container-low rounded-t h-10 flex items-end overflow-hidden">
+                          <div
+                            className="w-full bg-neon-purple rounded-t"
+                            style={{ height: `${Math.max(4, valor * 100)}%` }}
+                          />
+                        </div>
+                        <span className="font-mono-micro text-[7px] text-outline">{indice + 1}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="font-mono-micro text-[9px] text-outline py-2 text-center">
+                    Checkpoint sin bloques SE (v1-v3) — sin dato para esta capa.
+                  </span>
+                )}
               </div>
 
               {/* Mini-heatmap real: top casillas por saliencia */}
@@ -561,35 +798,161 @@ export default function RazonamientoNeuronal() {
                 </div>
                 <div className="w-full h-1.5 rounded-full bg-gradient-to-r from-surface-container-high via-neon-purple to-neon-cyan" />
               </div>
-
-              <div className="flex flex-col gap-1 bg-surface-container-lowest p-2 rounded-lg border border-outline-variant/20">
-                <div className="flex items-center justify-between font-mono-micro text-[10px]">
-                  <span className="text-outline uppercase">Gradientes</span>
-                  <span className="text-neon-lime font-bold">conceptual</span>
-                </div>
-                <div className="h-12 w-full flex items-end justify-between gap-1 pt-1" aria-hidden="true">
-                  {[28, 45, 62, 85, 100, 72, 52, 38, 48].map((alto, i) => (
-                    <div key={i} className="w-full bg-neon-cyan/40 rounded-t" style={{ height: `${alto}%` }} />
-                  ))}
-                </div>
-                <div className="flex items-center justify-between font-mono-micro text-[8px] text-outline">
-                  <span>L1</span>
-                  <span>L7</span>
-                  <span>L12</span>
-                </div>
-              </div>
-
-              <div className="p-2 rounded bg-surface-container-lowest border border-outline-variant/20 text-on-surface-variant font-mono-micro text-[10px] flex items-start gap-1.5">
-                <span className="material-symbols-outlined text-neon-cyan text-[15px] shrink-0 mt-0.5">info</span>
-                <span>Panel ilustrativo — la red real (CNN simple) no tiene cabezales de atención multicapa.</span>
-              </div>
             </div>
           </section>
 
-          {/* ===== Fila inferior: diagnóstico + candidatas + terminal ===== */}
+          {/* ===== Candidatas de Turing: detalle táctico de las 3 candidatas reales de la red
+              + evaluación puntual de Stockfish para cada una — colapsable, real ===== */}
+          <section className="bg-surface-container/70 border border-outline-variant/30 rounded-xl shadow-md overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setCandidatasAbiertas((v) => !v)}
+              aria-expanded={candidatasAbiertas}
+              aria-controls="panel-candidatas-turing"
+              className="w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-surface-container-high/40 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+            >
+              <span className="flex items-center gap-2 min-w-0">
+                <span className="material-symbols-outlined text-neon-cyan text-[18px] shrink-0">compare_arrows</span>
+                <span className="flex flex-col min-w-0 text-left">
+                  <span className="font-headline-sm text-[13px] font-semibold text-on-surface uppercase tracking-wide">
+                    Candidatas de Turing
+                  </span>
+                  <span className="font-mono-label text-[11px] text-on-surface-variant truncate">
+                    {inferenciaVigente ? (
+                      <>
+                        Turing jugó <span className="text-neon-cyan font-semibold">{inferenciaVigente.jugada_elegida}</span>
+                        {top1 ? ` (${(top1.probabilidad * 100).toFixed(1)}%)` : ''}
+                        {cmp && (
+                          <>
+                            {' · '}Stockfish <span className="text-tertiary-container font-semibold">{cmp.jugada_motor}</span>{' '}
+                            {formatearCp(cmp.evaluacion_cp)}
+                            {relacionResumen && (
+                              <>
+                                {' · '}
+                                <span className={relacionResumen.clase}>{relacionResumen.texto}</span>
+                              </>
+                            )}
+                          </>
+                        )}
+                      </>
+                    ) : estaAnalizando ? (
+                      'Analizando…'
+                    ) : (
+                      'Ejecutá una inferencia para ver las candidatas de Turing'
+                    )}
+                  </span>
+                </span>
+              </span>
+              <span className="flex items-center gap-2 shrink-0">
+                <span className="font-mono-micro text-[10px] text-neon-lime bg-neon-lime/10 px-1.5 py-0.5 rounded border border-neon-lime/30 hidden sm:inline">
+                  real
+                </span>
+                <span
+                  className="material-symbols-outlined text-on-surface-variant text-[20px] transition-transform duration-200"
+                  style={{ transform: candidatasAbiertas ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                >
+                  expand_more
+                </span>
+              </span>
+            </button>
+
+            {candidatasAbiertas && (
+              <div id="panel-candidatas-turing" className="px-3 pb-3 pt-2 border-t border-outline-variant/20">
+                {candidatasDetalladas.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                    {candidatasDetalladas.map((c, indice) => {
+                      const tieneRiesgoTactico = c.rival_tiene_mate_en_1 || c.pieza_colgada;
+                      const relacion = etiquetaRelacionStockfish(c.diferencia_cp, tieneRiesgoTactico);
+                      return (
+                        <div
+                          key={c.jugada ?? indice}
+                          className={`flex flex-col gap-2 p-2.5 rounded-lg border ${
+                            c.elegida
+                              ? 'bg-neon-cyan/10 border-neon-cyan/50 shadow-[0_0_14px_rgba(0,229,255,0.2)]'
+                              : 'bg-surface-container-lowest border-outline-variant/20'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-mono-micro text-[9px] text-outline uppercase font-semibold">
+                              {indice + 1}º de la red
+                            </span>
+                            {c.elegida && (
+                              <span className="px-1.5 py-0.5 rounded font-mono-micro text-[9px] font-bold uppercase text-neon-cyan bg-neon-cyan/15 border border-neon-cyan/40">
+                                Elegida
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-end justify-between">
+                            <span className={`font-headline-sm text-[19px] font-bold ${c.elegida ? 'text-neon-cyan' : 'text-on-surface'}`}>
+                              {c.jugada}
+                            </span>
+                            <span className="font-mono-metric text-[12px] font-semibold text-secondary-fixed">
+                              {(c.probabilidad * 100).toFixed(1)}%
+                            </span>
+                          </div>
+
+                          <ul className="flex flex-col gap-1">
+                            {/* Solo se muestra cuando es true — con false en cada candidata (el caso
+                                normal, casi siempre) la lista se llenaba de una X neutra sin aportar
+                                nada; acá si aparece es porque de verdad da mate, vale la pena resaltarlo. */}
+                            {c.da_jaque_mate && (
+                              <li className="flex items-center gap-1.5 font-mono-label text-[10px] text-neon-lime font-bold">
+                                <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                                Da jaque mate
+                              </li>
+                            )}
+                            {/* Texto dinámico (no solo el ícono/color) — con el mismo texto fijo en
+                                los dos estados, un ✓ verde al lado de "Rival con mate en 1" se leía
+                                como "sí, hay mate del rival" en vez de "no, se verificó que no lo hay". */}
+                            <li
+                              className={`flex items-center gap-1.5 font-mono-label text-[10px] ${
+                                c.rival_tiene_mate_en_1 ? 'text-error font-bold' : 'text-neon-lime'
+                              }`}
+                            >
+                              <span className="material-symbols-outlined text-[14px]">
+                                {c.rival_tiene_mate_en_1 ? 'cancel' : 'check_circle'}
+                              </span>
+                              {c.rival_tiene_mate_en_1 ? '¡Mate del rival en 1!' : 'Sin mate del rival'}
+                            </li>
+                            <li
+                              className={`flex items-center gap-1.5 font-mono-label text-[10px] ${
+                                c.pieza_colgada ? 'text-error font-bold' : 'text-neon-lime'
+                              }`}
+                            >
+                              <span className="material-symbols-outlined text-[14px]">
+                                {c.pieza_colgada ? 'cancel' : 'check_circle'}
+                              </span>
+                              {c.pieza_colgada ? 'Pieza colgada' : 'Pieza defendida'}
+                            </li>
+                          </ul>
+
+                          <div className="flex items-center justify-between pt-1.5 border-t border-outline-variant/20">
+                            <span className="font-mono-micro text-[9px] text-outline uppercase">Stockfish tras esta jugada</span>
+                            <span className="font-mono-micro text-[10px] font-semibold text-tertiary-container">
+                              {formatearEvalCandidata(c.evaluacion_stockfish_cp)}
+                            </span>
+                          </div>
+                          <span className={`font-mono-micro text-[9px] font-semibold uppercase self-end ${relacion.clase}`}>
+                            {relacion.texto}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center text-on-surface-variant font-body-sm text-[12px] py-4">
+                    {estaAnalizando ? 'Calculando candidatas…' : 'Ejecutá una inferencia para ver el detalle de las candidatas'}
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+
+          {/* ===== Fila inferior: diagnóstico + terminal ===== */}
           <section className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-stretch">
             {/* Diagnóstico Pedagógico — real */}
-            <div className="lg:col-span-5 flex flex-col justify-between p-3 rounded-xl bg-surface-container/70 border border-outline-variant/30 shadow-md">
+            <div className="lg:col-span-7 flex flex-col justify-between p-3 rounded-xl bg-surface-container/70 border border-outline-variant/30 shadow-md">
               <div className="flex items-center justify-between border-b border-outline-variant/20 pb-2">
                 <div className="flex items-center gap-1.5">
                   <span className="material-symbols-outlined text-secondary text-[20px]">psychology</span>
@@ -599,7 +962,7 @@ export default function RazonamientoNeuronal() {
               {cmp ? (
                 (() => {
                   const jugadaSintetica = {
-                    jugada_san: inferencia.jugada_elegida,
+                    jugada_san: inferenciaVigente.jugada_elegida,
                     mejor_jugada_motor: cmp.jugada_motor,
                     evaluacion_cp: evalModelo,
                     evaluacion_mejor_cp: cmp.evaluacion_cp,
@@ -624,7 +987,7 @@ export default function RazonamientoNeuronal() {
                         <div className="p-2 rounded bg-surface-container-lowest border border-outline-variant/20">
                           <span className="font-mono-micro text-[9px] text-outline uppercase">Modelo eligió</span>
                           <p className="font-body-sm text-[11px] text-on-surface mt-1 leading-relaxed">
-                            <strong>{inferencia.jugada_elegida}</strong>
+                            <strong>{inferenciaVigente.jugada_elegida}</strong>
                             {top1 ? ` con ${(top1.probabilidad * 100).toFixed(1)}% de confianza.` : '.'}
                           </p>
                         </div>
@@ -644,73 +1007,13 @@ export default function RazonamientoNeuronal() {
                 })()
               ) : (
                 <div className="flex-1 flex items-center justify-center text-on-surface-variant font-body-sm text-[12px] py-4">
-                  {cargandoInferencia ? 'Analizando…' : 'Ejecutá una inferencia para ver el diagnóstico'}
+                  {estaAnalizando ? 'Analizando…' : 'Ejecutá una inferencia para ver el diagnóstico'}
                 </div>
               )}
             </div>
 
-            {/* Jugadas Candidatas — real */}
-            <div className="lg:col-span-4 flex flex-col justify-between p-3 rounded-xl bg-surface-container/70 border border-outline-variant/30 shadow-md">
-              <div className="flex items-center justify-between border-b border-outline-variant/20 pb-2">
-                <div className="flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-neon-cyan text-[18px]">compare_arrows</span>
-                  <h3 className="font-headline-sm text-[13px] font-semibold text-on-surface">Jugadas Candidatas</h3>
-                </div>
-                <span className="font-mono-micro text-[10px] text-outline">Modelo vs Stockfish</span>
-              </div>
-              {candidatas.length > 0 ? (
-                <div className="overflow-x-auto my-1">
-                  <table className="w-full text-left font-mono-label text-[11px] border-collapse">
-                    <thead>
-                      <tr className="text-on-surface-variant font-mono-micro text-[9px] uppercase border-b border-outline-variant/20">
-                        <th className="py-1">Jugada</th>
-                        <th className="py-1">Eval</th>
-                        <th className="py-1">Confianza</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-outline-variant/10">
-                      {candidatas.map((c, i) => (
-                        <tr key={c.jugada ?? i} className="hover:bg-surface-container-low transition-colors">
-                          <td className={`py-1.5 flex items-center gap-1 ${i === 0 ? 'font-bold text-neon-cyan' : 'text-on-surface-variant'}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${i === 0 ? 'bg-neon-cyan animate-pulse' : 'bg-outline'}`} />
-                            {i + 1}. {c.jugada} {i === 0 ? '(IA)' : ''}
-                          </td>
-                          <td className={`py-1.5 ${i === 0 ? 'text-neon-cyan font-bold' : 'text-outline'}`}>
-                            {i === 0 && evalModelo != null ? formatearCp(evalModelo) : '—'}
-                          </td>
-                          <td className="py-1.5">
-                            <div className="w-16 bg-surface-container-lowest h-1.5 rounded-full overflow-hidden">
-                              <div className={`h-full rounded-full ${i === 0 ? 'bg-neon-cyan' : 'bg-outline'}`} style={{ width: `${(c.probabilidad * 100).toFixed(1)}%` }} />
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                      {cmp && (
-                        <tr className="hover:bg-surface-container-low transition-colors">
-                          <td className="py-1.5 font-semibold text-tertiary-container flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-tertiary-container" />
-                            {cmp.jugada_motor} (SF)
-                          </td>
-                          <td className="py-1.5 text-tertiary-container font-semibold">{formatearCp(cmp.evaluacion_cp)}</td>
-                          <td className="py-1.5 text-outline">—</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="flex-1 flex items-center justify-center text-on-surface-variant font-body-sm text-[12px] py-4">
-                  {cargandoInferencia ? 'Calculando candidatas…' : 'Sin candidatas disponibles'}
-                </div>
-              )}
-              <div className="flex items-center justify-between pt-1 border-t border-outline-variant/20 font-mono-micro text-[9px] text-outline">
-                <span>{candidatas.length ? `Top-${candidatas.length} candidatas reales` : ''}</span>
-                <span>{latenciaFormateada}</span>
-              </div>
-            </div>
-
-            {/* Terminal & Logs — eventos reales del componente */}
-            <div className="lg:col-span-3 flex flex-col justify-between p-3 rounded-xl bg-surface-container/70 border border-outline-variant/30 shadow-md">
+            {/* Terminal & Logs — eventos reales del componente y del contexto compartido */}
+            <div className="lg:col-span-5 flex flex-col justify-between p-3 rounded-xl bg-surface-container/70 border border-outline-variant/30 shadow-md">
               <div className="flex items-center justify-between border-b border-outline-variant/20 pb-2">
                 <div className="flex items-center gap-1.5">
                   <span className="material-symbols-outlined text-outline text-[18px]">terminal</span>

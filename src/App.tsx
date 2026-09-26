@@ -11,6 +11,7 @@ import RegistroPartidas from './paginas/RegistroPartidas/RegistroPartidas';
 import Aprendizaje from './paginas/Aprendizaje/Aprendizaje';
 import Login from './paginas/Login/Login';
 import { backendEnLinea } from './api/backend';
+import { ProveedorRazonamiento } from './contexto/ContextoRazonamiento';
 
 const GestionUsuarios = lazy(() => import('./paginas/Administracion/GestionUsuarios.jsx'));
 
@@ -27,7 +28,11 @@ export default function App() {
   const [pantallaActiva, setPantallaActiva] = useState('control');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [backendConectado, setBackendConectado] = useState<boolean | null>(null);
-  const [partidaParaCargar, setPartidaParaCargar] = useState<string | null>(null);
+  // Partida activa de Sala de Control — vive acá (no en el estado local de <SalaControl>)
+  // para que sobreviva al desmontaje cuando se cambia de pantalla. Nunca se limpia sola:
+  // <SalaControl> la actualiza cada vez que crea/carga una partida (ver `onPartidaActivaChange`),
+  // así que al volver a montarse recupera la MISMA partida en vez de arrancar una nueva.
+  const [partidaActivaId, setPartidaActivaId] = useState<string | null>(null);
   const [partidaParaAprender, setPartidaParaAprender] = useState<string | null>(null);
   const [usuario, setUsuario] = useState(() => obtenerUsuarioGuardado());
 
@@ -52,7 +57,10 @@ export default function App() {
   const esFacilitador = usuario?.rol === 'facilitador';
 
   function irASalaControl(partidaId?: string) {
-    setPartidaParaCargar(partidaId ?? null);
+    // Sin id explícito (ej. click genérico en "Sala de Control" del nav) simplemente
+    // se muestra la pantalla — no se toca `partidaActivaId`, para no perder la partida
+    // en curso. Con id explícito (ej. desde Registro de Partidas) sí se fuerza esa carga.
+    if (partidaId) setPartidaActivaId(partidaId);
     setPantallaActiva('control');
   }
 
@@ -90,11 +98,14 @@ export default function App() {
   // Si no hay usuario, mostrar login
   if (!usuario) {
     return (
-      <Login onLoginSuccess={manejarLogin} />
+      <ProveedorRazonamiento>
+        <Login onLoginSuccess={manejarLogin} />
+      </ProveedorRazonamiento>
     );
   }
 
   return (
+    <ProveedorRazonamiento>
     <div className="bg-surface-container-lowest font-body-lg text-on-surface antialiased selection:bg-primary-container selection:text-on-primary-container min-h-screen">
       <aside className={`fixed left-0 top-0 h-full w-64 bg-surface-container-low/80 backdrop-blur-xl z-50 flex flex-col justify-between py-space-lg px-space-md transition-transform duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="flex flex-col gap-space-lg">
@@ -221,7 +232,7 @@ export default function App() {
 
         <main className="w-full pt-16 bg-surface-container-lowest min-h-screen">
           {pantallaActiva === 'control' && (
-            <SalaControl partidaIdInicial={partidaParaCargar} alCargarPartida={() => setPartidaParaCargar(null)} />
+            <SalaControl partidaIdInicial={partidaActivaId} onPartidaActivaChange={setPartidaActivaId} />
           )}
           {pantallaActiva === 'neuronal' && <RazonamientoNeuronal />}
           {pantallaActiva === 'admin' && <Administracion />}
@@ -263,5 +274,6 @@ export default function App() {
         </main>
       </div>
     </div>
+    </ProveedorRazonamiento>
   );
 }

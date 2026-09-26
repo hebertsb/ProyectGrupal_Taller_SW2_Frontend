@@ -21,6 +21,7 @@ export default defineConfig({
       '/health': BACKEND_URL,
       '/aprendizaje': BACKEND_URL,
       '/auth': BACKEND_URL,
+      '/simulacion': BACKEND_URL,
     },
   },
 });

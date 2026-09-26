@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import './SalaControl.css';
 import AvatarAgente3D from '../../componentes/AvatarAgente3D';
+import { useRazonamiento } from '../../contexto/ContextoRazonamiento';
 import {
+  abrirSimulacion3D,
   analizarPosicion,
   backendEnLinea,
   crearPartida,
@@ -33,7 +35,8 @@ const NIVELES_POR_CATEGORIA = [
   { etiqueta: 'Avanzado', desde: 14, hasta: NIVEL_MAX },
 ];
 
-export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
+export default function SalaControl({ partidaIdInicial, onPartidaActivaChange }) {
+  const { dispararInferencia } = useRazonamiento() ?? {};
   const [partidaId, setPartidaId] = useState(null);
   const [fen, setFen] = useState(null);
   const [tipoOponente, setTipoOponente] = useState('modelo'); // 'modelo' (Red Neuronal v5) o 'motor' (Stockfish)
@@ -50,12 +53,25 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
   const [fenReconocido, setFenReconocido] = useState(null);
   const [cargando, setCargando] = useState(null);
   const [error, setError] = useState(null);
+  const [avisoSimulacion3D, setAvisoSimulacion3D] = useState(null);
+  // Guarda contra el doble-montaje de StrictMode en desarrollo: React invoca este
+  // efecto dos veces seguidas al montar (monta → limpia → monta), y como los estados
+  // no se actualizan sincrónicamente entre esas dos pasadas, `!partidaId` daba true
+  // las dos veces y se creaban DOS partidas reales (dos POST /partida) por cada
+  // primer montaje sin partida activa. Un ref sí es sincrónico entre pasadas.
+  const partidaInicialSolicitada = useRef(false);
 
   useEffect(() => {
+    // `partidaIdInicial` viene de App.tsx y sobrevive a que este componente se
+    // desmonte (cambio de pantalla) — por eso, al remontar, si ya coincide con la
+    // partida que ya tenemos cargada localmente no hay que volver a pedirla (evita un
+    // refetch redundante justo después de crear/cargar una partida desde acá mismo).
     if (partidaIdInicial) {
-      cargarPartidaExistente(partidaIdInicial);
-      alCargarPartida?.();
-    } else {
+      if (partidaIdInicial !== partidaId) {
+        cargarPartidaExistente(partidaIdInicial);
+      }
+    } else if (!partidaId && !partidaInicialSolicitada.current) {
+      partidaInicialSolicitada.current = true;
       manejarNuevaPartida();
     }
     const intervalo = setInterval(async () => {
@@ -84,6 +100,7 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
     try {
       const partida = await obtenerPartida(id);
       setPartidaId(partida.id);
+      onPartidaActivaChange?.(partida.id);
       setFen(partida.fen);
       setNivel(partida.nivel);
       if (partida.tipo_oponente) {
@@ -112,6 +129,7 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
       const op = oponenteDeseado !== undefined ? oponenteDeseado : tipoOponente;
       const partida = await crearPartida(nivel, null, op);
       setPartidaId(partida.id);
+      onPartidaActivaChange?.(partida.id);
       setFen(partida.fen);
       setTipoOponente(partida.tipo_oponente || op);
       setTerminada(false);
@@ -120,6 +138,7 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
       setCasillaOrigen(null);
       setDestinosValidos([]);
       setEvaluacionesHistorial([]);
+      dispararInferencia?.(partida.fen); // posición nueva disponible — no bloquea la UI de la partida
       await actualizarAnalisis(partida.fen);
     } catch (err) {
       setError(err.message);
@@ -181,6 +200,7 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
       setTerminada(datos.terminada);
       setResultado(datos.resultado);
       setJugadas(datos.jugadas);
+      dispararInferencia?.(datos.fen); // jugada real aplicada — dispara la inferencia del modelo propio sin bloquear
       if (!datos.terminada) {
         await actualizarAnalisis(datos.fen);
       }
@@ -230,6 +250,7 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
     try {
       const partida = await crearPartida(nivel, fenReconocido, tipoOponente);
       setPartidaId(partida.id);
+      onPartidaActivaChange?.(partida.id);
       setFen(partida.fen);
       setTerminada(false);
       setResultado(null);
@@ -238,6 +259,7 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
       setDestinosValidos([]);
       setEvaluacionesHistorial([]);
       setFenReconocido(null);
+      dispararInferencia?.(partida.fen); // posición escaneada nueva — no bloquea la UI de la partida
       await actualizarAnalisis(partida.fen);
     } catch (err) {
       setError(err.message);
@@ -258,11 +280,34 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
       setJugadas(datos.jugadas);
       setCasillaOrigen(null);
       setDestinosValidos([]);
+      dispararInferencia?.(datos.fen); // jugada real detectada por cámara — misma inferencia que un movimiento manual
       if (!datos.terminada) {
         await actualizarAnalisis(datos.fen);
       }
     } catch (err) {
       setError(err.message);
+    } finally {
+      setCargando(null);
+    }
+  }
+
+  async function manejarAbrirSimulacion3D() {
+    if (!partidaId) return;
+    setError(null);
+    setAvisoSimulacion3D(null);
+    setCargando('simulacion3d');
+    try {
+      await abrirSimulacion3D(partidaId);
+      setAvisoSimulacion3D('Ventana 3D abierta — buscala en la barra de tareas');
+      setTimeout(() => setAvisoSimulacion3D(null), 6000);
+    } catch (err) {
+      if (err.status === 404) {
+        setError('No se encontró la partida — iniciá una nueva.');
+      } else {
+        // 503 (falta el entorno conda con PyBullet) trae en `detail` justo lo
+        // que hay que instalar — se muestra tal cual, es información útil.
+        setError(err.message);
+      }
     } finally {
       setCargando(null);
     }
@@ -288,7 +333,9 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
             </span>
           </div>
           <div className="h-3 w-[1px] bg-surface-variant"></div>
-          <span className="font-mono-label text-mono-label text-on-surface-variant">STOCKFISH · NIVEL {nivel}</span>
+          <span className="font-mono-label text-mono-label text-on-surface-variant">
+            {tipoOponente === 'motor' ? `STOCKFISH · NIVEL ${nivel}` : 'TURING · SE-RESNET-8'}
+          </span>
         </div>
         <div className="flex items-center gap-space-lg">
           {terminada ? (
@@ -331,7 +378,7 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
                 RIVAL DIGITAL
               </span>
               <span className="text-[10px] text-primary font-mono font-bold">
-                {tipoOponente === 'modelo' ? 'IA v5 AUTÓNOMA' : 'STOCKFISH 16'}
+                {tipoOponente === 'modelo' ? 'TURING · IA v5 AUTÓNOMA' : 'STOCKFISH 16'}
               </span>
             </div>
 
@@ -351,9 +398,9 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
               >
                 <div className="flex items-center gap-1">
                   <span className="material-symbols-outlined text-[15px]">psychology</span>
-                  <span>MODELO IA v5</span>
+                  <span>TURING</span>
                 </div>
-                <span className="text-[9px] opacity-80 font-normal">SE-ResNet-8 FIDE</span>
+                <span className="text-[9px] opacity-80 font-normal">IA v5 · SE-ResNet-8 FIDE</span>
               </button>
 
               <button
@@ -473,6 +520,24 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
                 SIMULADOR
               </button>
             </div>
+
+            {/* Ventana 3D en vivo (PyBullet), aparte del toggle de arriba: no es
+                un ejecutor de movimientos, es solo una vista del tablero. */}
+            <div className="h-px bg-surface-variant/40"></div>
+            <button
+              onClick={manejarAbrirSimulacion3D}
+              disabled={!partidaId || cargando === 'simulacion3d'}
+              title={!partidaId ? 'Iniciá una partida primero' : 'Abre una ventana de escritorio aparte con el tablero 3D en vivo'}
+              className="w-full py-2 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface transition-colors font-mono-label text-mono-label flex items-center justify-center gap-1.5 disabled:opacity-50"
+            >
+              <span className="material-symbols-outlined text-[16px]">view_in_ar</span>
+              {cargando === 'simulacion3d' ? 'ABRIENDO…' : 'ABRIR SIMULACIÓN 3D'}
+            </button>
+            {avisoSimulacion3D && (
+              <div className="bg-primary/10 text-primary font-mono-micro text-mono-micro px-2 py-1.5 rounded-lg text-center">
+                {avisoSimulacion3D}
+              </div>
+            )}
           </div>
         </div>
 
@@ -626,6 +691,9 @@ export default function SalaControl({ partidaIdInicial, alCargarPartida }) {
                 {backendConectado === null ? 'VERIFICANDO…' : backendConectado ? 'BACKEND CONECTADO' : 'BACKEND SIN CONEXIÓN'}
               </span>
             </div>
+            <p className="font-mono-micro text-[9px] text-outline leading-relaxed -mt-1">
+              Oráculo de comparación: analiza la posición de forma independiente aunque juegues contra Turing — nunca decide la jugada del rival.
+            </p>
 
             <div className="grid grid-cols-3 gap-2 pt-1">
               <div className="bg-surface-container-lowest p-2.5 rounded-lg flex flex-col">
