@@ -25,7 +25,7 @@ export default function Login({ onLoginSuccess }) {
     // Si la librería de Google está cargada en el cliente
     if (window.google?.accounts?.id) {
       window.google.accounts.id.initialize({
-        client_id: '840567566478-qopmqu3qk27hcp0d60vkil2urcsb0l3i.apps.googleusercontent.com',
+        client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
         callback: manejarRespuestaGoogle,
       });
     }
