@@ -130,3 +130,59 @@
   --text-mono-micro--letter-spacing: 0.08em;
   --text-mono-micro--font-weight: 500;
 }
+
+/* Giro tipo "moneda" al cambiar de pieza — banner "Aprendé cada pieza"
+   (PanelAprendizaje.jsx). Se retriggerea a mano sacando/reponiendo esta
+   clase (ver BannerPiezas) porque una animación CSS no se reinicia sola si
+   la clase ya estaba puesta. */
+@keyframes moneda-flip {
+  0% {
+    transform: rotateY(0deg) scale(1);
+  }
+  50% {
+    transform: rotateY(180deg) scale(0.82);
+  }
+  100% {
+    transform: rotateY(360deg) scale(1);
+  }
+}
+
+.moneda-flip {
+  animation: moneda-flip 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Manchas de luz de fondo, a la deriva — banner "Aprendé cada pieza"
+   (PanelAprendizaje.jsx). Le dan vida al panel sin competir con el
+   contenido (van detrás, bien difuminadas). */
+@keyframes fondo-banner-deriva-1 {
+  0%, 100% {
+    transform: translate(-8%, -8%) scale(1);
+  }
+  50% {
+    transform: translate(10%, 6%) scale(1.15);
+  }
+}
+
+@keyframes fondo-banner-deriva-2 {
+  0%, 100% {
+    transform: translate(8%, 10%) scale(1);
+  }
+  50% {
+    transform: translate(-10%, -8%) scale(1.1);
+  }
+}
+
+.fondo-banner-blob-1 {
+  animation: fondo-banner-deriva-1 16s ease-in-out infinite;
+}
+
+.fondo-banner-blob-2 {
+  animation: fondo-banner-deriva-2 20s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fondo-banner-blob-1,
+  .fondo-banner-blob-2 {
+    animation: none;
+  }
+}

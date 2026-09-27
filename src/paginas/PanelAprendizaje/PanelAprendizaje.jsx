@@ -1,17 +1,67 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { analisisCompletoPartida, historialPartidasPropio } from '../../api/backend';
 import { casillasIlustrativas, rutaImagenPieza } from '../../ajedrez';
+import PiezaModelo3D from '../../componentes/PiezaModelo3D';
+import FondoCapasScroll from '../../componentes/FondoCapasScroll';
+import ChatTuring from './ChatTuring';
 
 const NIVELES = ['Principiante', 'Intermedio', 'Avanzado'];
 
-/** 6 piezas — letra en mayúscula para `rutaImagenPieza` (siempre el set blanco, ilustrativo). */
+/**
+ * 6 piezas — letra en mayúscula para `rutaImagenPieza` (siempre el set blanco,
+ * ilustrativo). `apodo` y `reglaEspecial` son contenido educativo fijo, redactado
+ * a mano (no viene de ningún endpoint) — se muestran en el panel de detalle de
+ * cada pieza, no en la tarjeta chica del selector, para no recargarla.
+ */
 const PIEZAS = [
-  { tipo: 'rey', nombre: 'Rey', articulo: 'el', letra: 'K' },
-  { tipo: 'dama', nombre: 'Dama', articulo: 'la', letra: 'Q' },
-  { tipo: 'torre', nombre: 'Torre', articulo: 'la', letra: 'R' },
-  { tipo: 'alfil', nombre: 'Alfil', articulo: 'el', letra: 'B' },
-  { tipo: 'caballo', nombre: 'Caballo', articulo: 'el', letra: 'N' },
-  { tipo: 'peon', nombre: 'Peón', articulo: 'el', letra: 'P' },
+  {
+    tipo: 'rey',
+    nombre: 'Rey',
+    articulo: 'el',
+    letra: 'K',
+    apodo: 'El Monarca',
+    reglaEspecial: 'Se enroca una vez por partida: se pone a resguardo y de paso activa una torre.',
+  },
+  {
+    tipo: 'dama',
+    nombre: 'Dama',
+    articulo: 'la',
+    letra: 'Q',
+    apodo: 'La Soberana',
+    reglaEspecial: 'Es la pieza de mayor valor del tablero: se mueve como la torre y el alfil combinados.',
+  },
+  {
+    tipo: 'torre',
+    nombre: 'Torre',
+    articulo: 'la',
+    letra: 'R',
+    apodo: 'El Bastión',
+    reglaEspecial: 'Es la pieza que participa junto al rey en el enroque.',
+  },
+  {
+    tipo: 'alfil',
+    nombre: 'Alfil',
+    articulo: 'el',
+    letra: 'B',
+    apodo: 'El Francotirador',
+    reglaEspecial: 'Se queda toda la partida en casillas de un mismo color — nunca cambia de color de casilla.',
+  },
+  {
+    tipo: 'caballo',
+    nombre: 'Caballo',
+    articulo: 'el',
+    letra: 'N',
+    apodo: 'El Infiltrador',
+    reglaEspecial: 'Es la única pieza que puede saltar por encima de otras piezas.',
+  },
+  {
+    tipo: 'peon',
+    nombre: 'Peón',
+    articulo: 'el',
+    letra: 'P',
+    apodo: 'La Vanguardia',
+    reglaEspecial: 'Puede capturar "al paso" y se convierte en otra pieza (corona) al llegar a la última fila.',
+  },
 ];
 
 /**
@@ -54,11 +104,58 @@ const TERMINOS_GENERALES = [
   { termino: 'motor de ajedrez', definicion: 'Un programa (como Stockfish) que calcula millones de jugadas para decir cuál es la mejor en una posición.' },
 ];
 
+/** Términos de una jugada puntual: el propio del principio + los generales, siempre 3 en total. */
+function terminosDeJugada(jugada) {
+  const principal = TERMINOS[jugada.principio_ajedrecistico] ?? TERMINOS.general;
+  return [principal, ...TERMINOS_GENERALES];
+}
+
+/** Nombre legible en español de cada clave interna de `principio_ajedrecistico` (ver servicio_retroalimentacion.py). */
+const NOMBRE_PRINCIPIO = {
+  jaque_mate: 'Jaque mate',
+  seguridad_del_rey: 'Seguridad del rey',
+  pieza_indefensa: 'Pieza indefensa',
+  oportunidad_tactica: 'Oportunidad táctica',
+  control_del_centro: 'Control del centro',
+  desarrollo_piezas: 'Desarrollo de piezas',
+  iniciativa_tactica: 'Iniciativa táctica',
+  maestria_tactica: 'Maestría táctica',
+  posicion_solida: 'Posición sólida',
+  imprecision_posicional: 'Imprecisión posicional',
+  error_tactico: 'Error táctico',
+  colgada_grave: 'Blunder (colgada grave)',
+  general: 'Jugada general',
+};
+
+/**
+ * "Peor" y "mejor" jugada de la partida para la sección "Repaso de tu partida"
+ * (hasta 2 tarjetas, ver más abajo). Se rankea por severidad real de la
+ * `calidad` que ya calculó el backend — no por orden de aparición — y en caso
+ * de empate se prefiere la más reciente (más fácil de recordar para quien
+ * recién jugó la partida).
+ */
+const RANGO_PEOR = { blunder: 3, error: 2, imprecision: 1 };
+const RANGO_MEJOR = { brillante: 3, mejor: 2, excelente: 1 };
+
+function jugadaMasNotable(jugadas, rangoPorCalidad) {
+  let elegida = null;
+  let mejorRango = 0;
+  for (const jugada of jugadas) {
+    const rango = rangoPorCalidad[jugada.calidad] ?? 0;
+    if (rango > 0 && rango >= mejorRango) {
+      mejorRango = rango;
+      elegida = jugada;
+    }
+  }
+  return elegida;
+}
+
 const SECCIONES = [
   { id: 'nivel', titulo: 'Tu nivel', icono: 'military_tech' },
   { id: 'repaso', titulo: 'Repaso de tu partida', icono: 'history_edu' },
   { id: 'piezas', titulo: 'Aprendé cada pieza', icono: 'extension' },
   { id: 'resumen', titulo: 'Resumen del tutor', icono: 'menu_book' },
+  { id: 'turing', titulo: 'Preguntale a Turing', icono: 'forum' },
   { id: 'logros', titulo: 'Tus logros', icono: 'emoji_events' },
   { id: 'proximamente', titulo: 'Próximamente', icono: 'lock' },
 ];
@@ -90,6 +187,86 @@ function guardarPiezasVistas(usuarioId, piezas) {
   }
 }
 
+function claveLecturaFacil(usuarioId) {
+  return `panel_aprendizaje_lectura_facil_${usuarioId ?? 'anon'}`;
+}
+
+/** Preferencia de accesibilidad (texto más grande) — no un dato que dependa del backend. */
+function cargarLecturaFacil(usuarioId) {
+  try {
+    return localStorage.getItem(claveLecturaFacil(usuarioId)) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function guardarLecturaFacil(usuarioId, activo) {
+  try {
+    localStorage.setItem(claveLecturaFacil(usuarioId), activo ? '1' : '0');
+  } catch {
+    // localStorage puede fallar (modo privado, cuota) — no es crítico.
+  }
+}
+
+function claveSidebarColapsado(usuarioId) {
+  return `panel_aprendizaje_sidebar_colapsado_${usuarioId ?? 'anon'}`;
+}
+
+/** Preferencia de layout (sub-índice angosto, solo íconos) — no depende del backend. */
+function cargarSidebarColapsado(usuarioId) {
+  try {
+    return localStorage.getItem(claveSidebarColapsado(usuarioId)) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function guardarSidebarColapsado(usuarioId, activo) {
+  try {
+    localStorage.setItem(claveSidebarColapsado(usuarioId), activo ? '1' : '0');
+  } catch {
+    // localStorage puede fallar (modo privado, cuota) — no es crítico.
+  }
+}
+
+/**
+ * Limpia el texto de formato Markdown y símbolos para que la síntesis de voz
+ * (Web Speech API) no pronuncie palabras como "asterisco", "almohadilla",
+ * "comilla invertida", etc.
+ */
+export function limpiarTextoParaVoz(texto) {
+  if (!texto) return '';
+
+  return texto
+    // 1. Quitar bloques de código completos
+    .replace(/```[\s\S]*?```/g, '')
+    // 2. Quitar encabezados (# Título -> Título)
+    .replace(/^#{1,6}\s+/gm, '')
+    // 3. Quitar negrita y cursiva (**palabra** o *palabra* -> palabra)
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/_([^_]+)_/g, '$1')
+    // 4. Quitar enlaces markdown [texto](url) -> texto
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    // 5. Quitar viñetas de listas (- item o * item -> item)
+    .replace(/^\s*[-*+]\s+/gm, '')
+    // 6. Quitar enumeraciones de listas (1. item -> item)
+    .replace(/^\s*\d+\.\s+/gm, '')
+    // 7. Quitar citas (> cita -> cita)
+    .replace(/^\s*>\s+/gm, '')
+    // 8. Quitar código en línea (`código` -> código)
+    .replace(/`([^`]+)`/g, '$1')
+    // 9. Quitar cualquier asterisco, guión bajo o virgulilla remanente
+    .replace(/[*_~`#|]/g, '')
+    // 10. Normalizar pausas de puntuación y saltos de línea
+    .replace(/([.!?;:])\s*\n+/g, '$1 ')
+    .replace(/\n+/g, '. ')
+    .replace(/\.{2,}/g, '.')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 /**
  * Narración por voz con la Web Speech API nativa (`window.speechSynthesis`) —
  * sin dependencias nuevas. `narrando` refleja el estado real del motor de
@@ -103,7 +280,9 @@ function useNarracion() {
     (texto) => {
       if (!disponible || !texto) return;
       window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(texto);
+      const textoLimpio = limpiarTextoParaVoz(texto);
+      if (!textoLimpio) return;
+      const utterance = new SpeechSynthesisUtterance(textoLimpio);
       utterance.lang = 'es-ES';
       utterance.onstart = () => setNarrando(true);
       utterance.onend = () => setNarrando(false);
@@ -131,6 +310,100 @@ function useNarracion() {
 function textoNarrableDeJugada(jugada) {
   if (!jugada) return '';
   return `Jugada ${jugada.numero_ply}, ${jugada.jugada_san}. ${jugada.explicacion}`;
+}
+
+/**
+ * Una jugada destacada dentro de "Repaso de tu partida" — hasta 2 en la misma
+ * sección (la peor y la mejor de la partida, ver `jugadaMasNotable`), cada una
+ * con su propio glosario de términos tocables y su propio control de voz.
+ * Maneja su propio `terminoAbierto` (no se comparte entre tarjetas) porque
+ * puede haber dos tarjetas visibles a la vez.
+ */
+function TarjetaJugada({ jugada, claseTextoContenido, narrar, detener, narrando, vozDisponible }) {
+  const [terminoAbierto, setTerminoAbierto] = useState(null);
+  const estilo = ESTILO_CALIDAD[jugada.calidad] ?? ESTILO_CALIDAD.buena;
+  const terminos = terminosDeJugada(jugada);
+
+  function narrarEsta() {
+    if (narrando) {
+      detener();
+      return;
+    }
+    narrar(textoNarrableDeJugada(jugada));
+  }
+
+  return (
+    <div className="flex flex-col gap-space-xs p-space-sm rounded-lg bg-surface-container-lowest/60 border border-outline-variant/10">
+      <div className="flex items-center gap-space-xs flex-wrap">
+        <span
+          className={`flex items-center gap-1 px-space-xs py-space-2xs rounded-lg font-mono-micro text-mono-micro uppercase tracking-wide ${estilo.texto} ${estilo.fondo}`}
+        >
+          <span className="material-symbols-outlined text-[14px]">{estilo.icono}</span>
+          {estilo.etiqueta}
+        </span>
+        <span className="font-mono-label text-mono-label text-on-surface-variant">
+          Jugada {jugada.numero_ply} · {jugada.jugada_san}
+        </span>
+      </div>
+
+      {/* Principio ajedrecístico como título, la explicación completa como desarrollo debajo — separados visualmente. */}
+      <div className="p-space-sm rounded-lg bg-surface-container-lowest border border-outline-variant/20 flex flex-col gap-space-2xs">
+        <span className="font-mono-micro text-mono-micro text-primary uppercase tracking-wider font-semibold">
+          {NOMBRE_PRINCIPIO[jugada.principio_ajedrecistico] ?? NOMBRE_PRINCIPIO.general}
+        </span>
+        <p className={`${claseTextoContenido} text-on-surface leading-relaxed`}>{jugada.explicacion}</p>
+      </div>
+
+      <div className="flex flex-col gap-space-2xs">
+        <span className="font-mono-micro text-mono-micro text-outline uppercase tracking-wider">
+          Términos de esta jugada (tocá para ver qué significan)
+        </span>
+        <div className="flex flex-wrap gap-space-2xs">
+          {terminos.map((t) => (
+            <button
+              key={t.termino}
+              type="button"
+              onClick={() => setTerminoAbierto((actual) => (actual === t.termino ? null : t.termino))}
+              aria-expanded={terminoAbierto === t.termino}
+              className="px-space-xs py-space-2xs rounded-full bg-surface-container-lowest hover:bg-surface-container-high border border-outline-variant/30 font-mono-label text-[11px] text-primary transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+            >
+              {t.termino}
+            </button>
+          ))}
+        </div>
+        {terminoAbierto && (
+          <div className="p-space-sm rounded-lg bg-primary/10 border border-primary/30 text-on-surface font-body-sm text-body-sm flex items-start gap-space-xs">
+            <span className="material-symbols-outlined text-primary text-[16px] shrink-0 mt-0.5">info</span>
+            <span>
+              <strong className="text-primary">{terminoAbierto}:</strong>{' '}
+              {(terminos.find((t) => t.termino === terminoAbierto) ?? {}).definicion}
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-space-xs pt-space-2xs">
+        <button
+          type="button"
+          onClick={narrarEsta}
+          disabled={!vozDisponible}
+          className="flex items-center gap-space-2xs px-space-sm py-space-xs rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface disabled:opacity-50 disabled:cursor-not-allowed font-mono-label text-mono-label transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+        >
+          <span className="material-symbols-outlined text-[16px]">{narrando ? 'stop_circle' : 'volume_up'}</span>
+          {narrando ? 'Detener' : 'Escuchar'}
+        </button>
+        <button
+          type="button"
+          onClick={narrarEsta}
+          disabled={!vozDisponible}
+          className="flex items-center gap-space-2xs px-space-sm py-space-xs rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface disabled:opacity-50 disabled:cursor-not-allowed font-mono-label text-mono-label transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+        >
+          <span className="material-symbols-outlined text-[16px]">replay</span>
+          Explicámelo de nuevo
+        </button>
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -198,7 +471,7 @@ function MiniTableroPieza({ pieza }) {
 
   return (
     <div
-      className="grid grid-cols-8 grid-rows-8 w-full aspect-square rounded-lg overflow-hidden border border-outline-variant/30"
+      className="grid grid-cols-8 grid-rows-8 w-full aspect-square rounded-lg overflow-hidden ring-1 ring-primary/25 shadow-[inset_0_2px_10px_rgba(0,0,0,0.55)]"
       role="img"
       aria-label={`Tablero vacío mostrando hacia dónde se mueve ${pieza.articulo} ${pieza.nombre.toLowerCase()} desde el centro (ilustrativo, no es una posición real)`}
     >
@@ -211,10 +484,14 @@ function MiniTableroPieza({ pieza }) {
         return (
           <div
             key={indice}
-            className={`relative flex items-center justify-center ${esClara ? 'bg-surface-container-high' : 'bg-surface-container'}`}
+            className={`relative flex items-center justify-center ${esClara ? 'bg-surface-container-highest' : 'bg-surface-container-lowest'} ${
+              esCentro ? 'bg-primary/15' : ''
+            }`}
           >
-            {esCentro && <img src={rutaImagenPieza(pieza.letra)} alt="" className="w-6 h-6" draggable="false" />}
-            {esDestino && <span className="w-2 h-2 rounded-full bg-primary" aria-hidden="true" />}
+            {esCentro && <img src={rutaImagenPieza(pieza.letra)} alt="" className="w-6 h-6 drop-shadow" draggable="false" />}
+            {esDestino && (
+              <span className="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_8px_rgba(195,245,255,0.9)]" aria-hidden="true" />
+            )}
           </div>
         );
       })}
@@ -222,9 +499,215 @@ function MiniTableroPieza({ pieza }) {
   );
 }
 
+/**
+ * Banner tipo "cartilla" — una pieza a la vez, con apodo + regla especial
+ * (mismo contenido de `PIEZAS`, ver arriba), rotando sola cada 5s. Inspirado
+ * en la tabla de piezas de la app móvil (`pieces_screen.dart`) y en la
+ * estética "consola" del resto de la app (Razonamiento Neuronal / Sala de
+ * Control): contador + barra de progreso segmentada arriba, la pieza en 3D
+ * real (mismo set OBJ que usa el simulador PyBullet, ver `PiezaModelo3D.jsx`)
+ * flotando sobre un recuadro con grilla punteada, y una grilla de selección
+ * rápida abajo para saltar directo a cualquier pieza. Pausa al pasar el
+ * mouse o tocar, y respeta `prefers-reduced-motion` desactivando el
+ * auto-avance (las flechas manuales siguen funcionando igual).
+ */
+function BannerPiezas({ piezas, claseTextoContenido, onCambiarPieza }) {
+  const [indice, setIndice] = useState(0);
+  const [pausado, setPausado] = useState(false);
+  const cajaRef = useRef(null);
+  const prefiereMovimientoReducido = useMemo(
+    () => typeof window !== 'undefined' && Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches),
+    []
+  );
+
+  useEffect(() => {
+    if (pausado || prefiereMovimientoReducido) return;
+    const temporizador = setTimeout(() => {
+      setIndice((actual) => (actual + 1) % piezas.length);
+    }, 5000);
+    return () => clearTimeout(temporizador);
+  }, [indice, pausado, prefiereMovimientoReducido, piezas.length]);
+
+  const pieza = piezas[indice];
+  const totalPiezas = piezas.length;
+
+  // Avisa al padre qué pieza quedó activa (arranque, auto-avance o flechas) —
+  // así la ficha de detalle de abajo (mini-tablero + "dato clave") y el
+  // registro de piezas vistas siguen al banner solos, sin necesitar una
+  // grilla aparte para elegir a mano.
+  useEffect(() => {
+    onCambiarPieza?.(pieza.tipo);
+  }, [pieza.tipo, onCambiarPieza]);
+
+  // Giro tipo "moneda" al cambiar de pieza — se dispara de nuevo en cada
+  // cambio de `indice` sacando y reponiendo la clase (con un reflow forzado
+  // en el medio), sin desmontar `PiezaModelo3D` — si lo desmontáramos acá
+  // (ej. con un `key`), se perdería el canvas de WebGL ya armado y tocaría
+  // recargar el modelo de nuevo en cada pieza.
+  useEffect(() => {
+    const el = cajaRef.current;
+    if (!el || prefiereMovimientoReducido) return;
+    el.classList.remove('moneda-flip');
+    void el.offsetWidth;
+    el.classList.add('moneda-flip');
+  }, [indice, prefiereMovimientoReducido]);
+
+  function anterior() {
+    setIndice((actual) => (actual - 1 + piezas.length) % piezas.length);
+  }
+
+  function siguiente() {
+    setIndice((actual) => (actual + 1) % piezas.length);
+  }
+
+  return (
+    <div
+      role="region"
+      aria-label="Presentación rotativa de las 6 piezas de ajedrez"
+      onMouseEnter={() => setPausado(true)}
+      onMouseLeave={() => setPausado(false)}
+      onTouchStart={() => setPausado(true)}
+      onTouchEnd={() => setPausado(false)}
+      onTouchCancel={() => setPausado(false)}
+      className="relative flex flex-col gap-space-md rounded-xl bg-surface-container border border-outline-variant/20 overflow-hidden"
+    >
+      {/* Manchas de luz a la deriva — le dan vida al fondo sin competir con
+          el contenido (bien difuminadas, van detrás de todo). */}
+      <div
+        aria-hidden="true"
+        className="absolute -top-16 -left-12 w-64 h-64 rounded-full bg-primary-container/25 blur-3xl pointer-events-none fondo-banner-blob-1"
+      />
+      <div
+        aria-hidden="true"
+        className="absolute -bottom-20 -right-10 w-72 h-72 rounded-full bg-secondary-container/30 blur-3xl pointer-events-none fondo-banner-blob-2"
+      />
+
+      {/* Barra superior — navegación, contador y progreso del recorrido (posición
+          en el carrusel, no "dominio": no medimos eso todavía). */}
+      <div className="relative z-10 flex items-center justify-between gap-space-sm px-space-md sm:px-space-lg pt-space-md flex-wrap">
+        <div className="flex items-center gap-space-xs">
+          <div className="flex items-center gap-1 bg-surface-container-high/60 p-1 rounded-lg">
+            <button
+              type="button"
+              onClick={anterior}
+              title="Pieza anterior"
+              className="w-7 h-7 rounded flex items-center justify-center text-on-surface hover:bg-surface-bright transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+            >
+              <span className="material-symbols-outlined text-[18px]">chevron_left</span>
+            </button>
+            <button
+              type="button"
+              onClick={siguiente}
+              title="Pieza siguiente"
+              className="w-7 h-7 rounded flex items-center justify-center text-on-surface hover:bg-surface-bright transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+            >
+              <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+            </button>
+          </div>
+          <span className="font-mono-metric text-mono-metric text-primary font-medium whitespace-nowrap">
+            PIEZA {String(indice + 1).padStart(2, '0')} DE {String(totalPiezas).padStart(2, '0')}
+          </span>
+          <span className="text-outline-variant font-mono-label text-mono-label hidden sm:inline">/</span>
+          <span className="hidden sm:inline font-mono-label text-mono-label text-on-surface-variant uppercase tracking-wide">
+            {pieza.apodo}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-space-xs">
+          <div
+            className="grid gap-1 h-1.5 w-32 sm:w-36"
+            style={{ gridTemplateColumns: `repeat(${totalPiezas}, minmax(0, 1fr))` }}
+            aria-hidden="true"
+          >
+            {piezas.map((p, i) => (
+              <div
+                key={p.tipo}
+                className={`h-full rounded-full transition-all ${
+                  i <= indice ? 'bg-primary shadow-[0_0_6px_rgba(0,229,255,0.7)]' : 'bg-surface-container-highest'
+                }`}
+              />
+            ))}
+          </div>
+          <span className="font-mono-micro text-mono-micro text-primary-fixed-dim whitespace-nowrap">
+            {indice + 1}/{totalPiezas}
+          </span>
+        </div>
+      </div>
+
+      {/* Tarjeta central — pieza en 3D real sobre un recuadro con grilla
+          punteada y brillo ambiente (nada de círculo/marco que la recorte). */}
+      <div className="relative z-10 flex flex-col items-center text-center gap-space-sm px-space-lg py-space-md">
+        {/* `perspective` va en este contenedor (no en la caja que gira) — es
+            así como CSS 3D funciona: el `perspective` de un elemento afecta
+            cómo se ven los `transform` de sus HIJOS, no el propio. */}
+        <div className="shrink-0" style={{ perspective: '800px' }}>
+          <div
+            ref={cajaRef}
+            className="relative w-40 h-40 sm:w-52 sm:h-52 rounded-2xl bg-gradient-to-t from-primary/10 to-transparent flex items-center justify-center overflow-hidden"
+          >
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 opacity-15"
+              style={{ backgroundImage: 'radial-gradient(rgba(0,229,255,0.5) 1px, transparent 1px)', backgroundSize: '16px 16px' }}
+            />
+            <div
+              aria-hidden="true"
+              className="absolute inset-[-15%] rounded-full bg-gradient-to-br from-primary/25 via-secondary/15 to-transparent blur-2xl"
+            />
+            <PiezaModelo3D tipo={pieza.tipo} pausado={pausado} className="relative w-full h-full" />
+          </div>
+        </div>
+
+        <div className="flex flex-col items-center gap-space-2xs max-w-md">
+          <span className="font-headline-md text-headline-md text-on-surface">
+            {pieza.nombre} — {pieza.apodo}
+          </span>
+          <p className={`${claseTextoContenido} text-on-surface-variant leading-relaxed`}>{pieza.reglaEspecial}</p>
+        </div>
+      </div>
+
+      {/* Selección rápida — salta directo a cualquier pieza, con las mismas
+          imágenes ilustrativas que ya usa el resto de la pantalla. */}
+      <div className="relative z-10 flex flex-col gap-space-xs px-space-md sm:px-space-lg pb-space-md">
+        <span className="font-mono-micro text-mono-micro text-outline uppercase tracking-wider">
+          Selección rápida de pieza
+        </span>
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-space-2xs">
+          {piezas.map((p, i) => {
+            const activa = i === indice;
+            return (
+              <button
+                key={p.tipo}
+                type="button"
+                onClick={() => setIndice(i)}
+                aria-current={activa || undefined}
+                title={p.nombre}
+                className={`flex flex-col items-center gap-space-2xs py-space-xs rounded-lg transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
+                  activa ? 'bg-surface-container-high shadow-[0_0_16px_rgba(0,229,255,0.2)]' : 'bg-surface-container hover:bg-surface-container-high'
+                }`}
+              >
+                <img src={rutaImagenPieza(p.letra)} alt="" draggable="false" className="w-7 h-7 object-contain" />
+                <span className={`font-body-sm text-[12px] leading-tight font-medium ${activa ? 'text-primary' : 'text-on-surface-variant'}`}>
+                  {p.nombre}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function fechaLegible(iso) {
   try {
-    return new Date(iso).toLocaleDateString('es-BO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    return new Date(iso).toLocaleString('es-BO', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   } catch {
     return iso;
   }
@@ -237,9 +720,53 @@ function fechaLegible(iso) {
  * alguien que recién está aprendiendo: oraciones cortas, narración por voz,
  * y todo detrás de un acordeón para no abrumar con todo junto.
  */
-export default function PanelAprendizaje({ usuario }) {
-  const [seccionAbierta, setSeccionAbierta] = useState('nivel');
+export default function PanelAprendizaje({ usuario, seccionInicial = null, onSeccionConsumida = null }) {
+  const [seccionAbierta, setSeccionAbierta] = useState(() => seccionInicial || 'nivel');
   const refsSeccion = useRef({});
+  const [sidebarColapsado, setSidebarColapsado] = useState(() => cargarSidebarColapsado(usuario?.id));
+
+  useEffect(() => {
+    if (seccionInicial) {
+      setSeccionAbierta(seccionInicial);
+      const timer = setTimeout(() => {
+        refsSeccion.current[seccionInicial]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 150);
+      onSeccionConsumida?.();
+      return () => clearTimeout(timer);
+    }
+  }, [seccionInicial, onSeccionConsumida]);
+
+  function alternarSidebar() {
+    setSidebarColapsado((actual) => {
+      const nuevo = !actual;
+      guardarSidebarColapsado(usuario?.id, nuevo);
+      return nuevo;
+    });
+  }
+
+  // Pantalla completa para el recuadro de video de "Aprendé cada pieza" —
+  // Fullscreen API nativa del navegador, sin librería nueva. Colapsar el
+  // sub-índice ya le da más ancho a este recuadro (efecto "modo cine"); esto
+  // suma la opción de taparlo todo, útil incluso en el placeholder de hoy y
+  // listo para cuando el video real del facilitador esté conectado acá.
+  const videoBoxRef = useRef(null);
+  const [enPantallaCompleta, setEnPantallaCompleta] = useState(false);
+
+  useEffect(() => {
+    function alCambiar() {
+      setEnPantallaCompleta(Boolean(document.fullscreenElement) && document.fullscreenElement === videoBoxRef.current);
+    }
+    document.addEventListener('fullscreenchange', alCambiar);
+    return () => document.removeEventListener('fullscreenchange', alCambiar);
+  }, []);
+
+  function alternarPantallaCompletaVideo() {
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      videoBoxRef.current?.requestFullscreen?.();
+    }
+  }
 
   const [historial, setHistorial] = useState(null);
   const [cargandoHistorial, setCargandoHistorial] = useState(true);
@@ -251,12 +778,19 @@ export default function PanelAprendizaje({ usuario }) {
 
   const [piezaElegida, setPiezaElegida] = useState(null);
   const [piezasVistas, setPiezasVistas] = useState(() => cargarPiezasVistas(usuario?.id));
-  const [terminoAbierto, setTerminoAbierto] = useState(null);
+  // "Lectura Fácil" — preferencia de accesibilidad (agranda el texto de las
+  // explicaciones), persistida por usuario igual que `piezasVistas`. No es un
+  // dato del backend, así que vive enteramente en localStorage.
+  const [lecturaFacil, setLecturaFacilState] = useState(() => cargarLecturaFacil(usuario?.id));
 
   const { narrar, detener, narrando, disponible: vozDisponible } = useNarracion();
 
   const rango = usuario?.rango_estimado || 'Intermedio';
   const nombreCorto = usuario?.nombre?.trim().split(/\s+/)[0] || 'jugador';
+  // Escalón de tamaño de fuente para el contenido de texto de las secciones
+  // (repaso, resumen, descripciones de piezas) — no toca badges ni etiquetas
+  // mono chicas, que son UI, no contenido a leer.
+  const claseTextoContenido = lecturaFacil ? 'font-body-lg text-headline-sm' : 'font-body-sm text-body-sm';
 
   useEffect(() => {
     setCargandoHistorial(true);
@@ -285,19 +819,23 @@ export default function PanelAprendizaje({ usuario }) {
       .finally(() => setCargandoAnalisis(false));
   }, [ultimaPartidaId, rango]);
 
-  // La jugada "relevante" para repasar: la última con margen de mejora si hubo
-  // alguna, o si la partida fue impecable, directamente la última jugada.
-  const jugadaRelevante = useMemo(() => {
+  // Hasta 2 jugadas destacadas para repasar: la peor (si hubo alguna con margen
+  // de mejora real) y la mejor (si hubo alguna sobresaliente). Si la partida fue
+  // pareja y ninguna de las dos existe, se cae al criterio viejo (última jugada)
+  // para no dejar la sección vacía — pero nunca se fabrica una segunda tarjeta.
+  const tarjetasRepaso = useMemo(() => {
     const jugadas = analisis?.jugadas ?? [];
-    if (jugadas.length === 0) return null;
-    const conMargen = [...jugadas].reverse().find((j) => ['imprecision', 'error', 'blunder'].includes(j.calidad));
-    return conMargen ?? jugadas[jugadas.length - 1];
+    if (jugadas.length === 0) return [];
+    const peor = jugadaMasNotable(jugadas, RANGO_PEOR);
+    const mejor = jugadaMasNotable(jugadas, RANGO_MEJOR);
+    if (peor && mejor) return [peor, mejor];
+    if (peor || mejor) return [peor ?? mejor];
+    return [jugadas[jugadas.length - 1]];
   }, [analisis]);
 
-  const estiloJugadaRelevante = jugadaRelevante ? ESTILO_CALIDAD[jugadaRelevante.calidad] ?? ESTILO_CALIDAD.buena : null;
-  const terminoPrincipal = jugadaRelevante ? TERMINOS[jugadaRelevante.principio_ajedrecistico] ?? TERMINOS.general : null;
-  const terminosDeLaJugada = terminoPrincipal ? [terminoPrincipal, ...TERMINOS_GENERALES] : [];
-  const textoRepaso = textoNarrableDeJugada(jugadaRelevante);
+  // Texto que lee el botón de voz del encabezado — las explicaciones de las
+  // tarjetas de repaso, una tras otra (cada tarjeta también puede narrarse sola).
+  const textoRepaso = tarjetasRepaso.map((j) => textoNarrableDeJugada(j)).join(' ');
 
   function manejarClickSeccionSidebar(id) {
     setSeccionAbierta(id);
@@ -333,6 +871,14 @@ export default function PanelAprendizaje({ usuario }) {
     });
   }
 
+  function alternarLecturaFacil() {
+    setLecturaFacilState((actual) => {
+      const nuevo = !actual;
+      guardarLecturaFacil(usuario?.id, nuevo);
+      return nuevo;
+    });
+  }
+
   const piezaActual = PIEZAS.find((p) => p.tipo === piezaElegida) ?? null;
 
   // ===== Insignias (HU "Tus logros") — solo datos reales, sin progreso inventado =====
@@ -359,7 +905,9 @@ export default function PanelAprendizaje({ usuario }) {
   ];
 
   return (
-    <div className="w-full px-space-lg py-space-lg flex flex-col gap-space-lg animate-in fade-in duration-500">
+    <div className="relative w-full px-space-lg py-space-lg flex flex-col gap-space-lg animate-in fade-in duration-500">
+      <FondoCapasScroll />
+
       {/* Encabezado — identidad de Turing, siempre visible, fuera del acordeón */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-space-sm bg-surface-container-low/80 backdrop-blur-md rounded-xl p-space-md shadow-md">
         <div className="flex items-center gap-space-sm flex-1 min-w-0">
@@ -374,16 +922,32 @@ export default function PanelAprendizaje({ usuario }) {
             </h1>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={narrarRepaso}
-          disabled={!vozDisponible || (!textoRepaso && !narrando)}
-          title={!vozDisponible ? 'Tu navegador no permite leer en voz alta' : 'Escuchar el repaso de tu última jugada'}
-          className="flex items-center justify-center gap-space-xs px-space-md py-space-sm rounded-xl bg-primary text-on-primary font-body-sm text-body-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary shrink-0"
-        >
-          <span className="material-symbols-outlined text-[18px]">{narrando ? 'stop_circle' : 'volume_up'}</span>
-          {narrando ? 'Detener' : 'Escuchar saludo de Turing'}
-        </button>
+        <div className="flex items-center gap-space-xs shrink-0">
+          <button
+            type="button"
+            onClick={alternarLecturaFacil}
+            aria-pressed={lecturaFacil}
+            title="Agrandar el texto de las explicaciones para que sea más fácil de leer"
+            className={`flex items-center justify-center gap-space-xs px-space-md py-space-sm rounded-xl font-body-sm text-body-sm font-medium border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
+              lecturaFacil
+                ? 'bg-primary/15 border-primary text-primary'
+                : 'bg-surface-container-high hover:bg-surface-bright border-outline-variant/40 text-on-surface'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[18px]">format_size</span>
+            Lectura Fácil
+          </button>
+          <button
+            type="button"
+            onClick={narrarRepaso}
+            disabled={!vozDisponible || (!textoRepaso && !narrando)}
+            title={!vozDisponible ? 'Tu navegador no permite leer en voz alta' : 'Escuchar el repaso de tu última jugada'}
+            className="flex items-center justify-center gap-space-xs px-space-md py-space-sm rounded-xl bg-primary text-on-primary font-body-sm text-body-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          >
+            <span className="material-symbols-outlined text-[18px]">{narrando ? 'stop_circle' : 'volume_up'}</span>
+            {narrando ? 'Detener' : 'Escuchar saludo de Turing'}
+          </button>
+        </div>
       </div>
 
       {!vozDisponible && (
@@ -392,31 +956,51 @@ export default function PanelAprendizaje({ usuario }) {
         </p>
       )}
 
-      {/* Layout de dos columnas: sub-índice fijo + contenido en acordeón */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-space-md items-start">
+      {/* Layout de dos columnas: sub-índice fijo + contenido en acordeón.
+          El sub-índice se puede colapsar a solo íconos (botón "Colapsar/
+          Expandir menú") para agrandar el panel de contenido — útil sobre
+          todo en "Aprendé cada pieza", donde el tablero y el video ganan
+          ancho real cuando el sub-índice no ocupa 3 columnas de texto. */}
+      <div className={`grid grid-cols-1 lg:grid-cols-12 gap-space-md items-start`}>
         <nav
-          className="lg:col-span-3 lg:sticky lg:top-20 flex lg:flex-col gap-space-2xs overflow-x-auto lg:overflow-visible bg-surface-container-low/60 rounded-xl p-space-xs"
+          className={`${sidebarColapsado ? 'lg:col-span-1' : 'lg:col-span-3'} lg:sticky lg:top-20 flex lg:flex-col gap-space-2xs overflow-x-auto lg:overflow-visible bg-surface-container-low/60 rounded-xl p-space-xs transition-[grid-column] motion-reduce:transition-none`}
           aria-label="Secciones del panel de aprendizaje"
         >
+          {/* Mismo estilo que el botón que abre/cierra el menú principal
+              (ver App.tsx: ícono `menu_open`/`menu`, plano, sin caja). */}
+          <button
+            type="button"
+            onClick={alternarSidebar}
+            aria-expanded={!sidebarColapsado}
+            title={sidebarColapsado ? 'Expandir menú' : 'Colapsar menú'}
+            className="shrink-0 flex items-center gap-space-xs px-space-sm py-space-xs text-on-surface-variant hover:text-primary transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary mb-space-2xs lg:mb-0 lg:self-end"
+          >
+            <span className="material-symbols-outlined text-[20px]">{sidebarColapsado ? 'menu' : 'menu_open'}</span>
+            {!sidebarColapsado && <span className="lg:hidden font-body-sm text-body-sm">Colapsar</span>}
+          </button>
+
           {SECCIONES.map((s) => (
             <button
               key={s.id}
               type="button"
               onClick={() => manejarClickSeccionSidebar(s.id)}
               aria-current={seccionAbierta === s.id ? 'true' : undefined}
+              title={sidebarColapsado ? s.titulo : undefined}
               className={`shrink-0 flex items-center gap-space-xs px-space-sm py-space-xs rounded-lg font-body-sm text-body-sm text-left transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
+                sidebarColapsado ? 'lg:justify-center' : ''
+              } ${
                 seccionAbierta === s.id
                   ? 'bg-surface-container-high text-primary font-medium'
                   : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
               }`}
             >
               <span className="material-symbols-outlined text-[18px]">{s.icono}</span>
-              {s.titulo}
+              <span className={sidebarColapsado ? 'lg:hidden' : ''}>{s.titulo}</span>
             </button>
           ))}
         </nav>
 
-        <div className="lg:col-span-9 flex flex-col gap-space-md">
+        <div className={`${sidebarColapsado ? 'lg:col-span-11' : 'lg:col-span-9'} flex flex-col gap-space-md transition-[grid-column] motion-reduce:transition-none`}>
           {/* 1. Tu nivel */}
           <SeccionAcordeon
             id="nivel"
@@ -498,70 +1082,40 @@ export default function PanelAprendizaje({ usuario }) {
               <AvisoError mensaje={errorAnalisis.message || 'No se pudo analizar tu última partida.'} />
             )}
 
-            {ultimaPartidaId && !cargandoAnalisis && !errorAnalisis && jugadaRelevante && (
-              <>
-                <div className="flex items-center gap-space-xs flex-wrap">
-                  <span className={`flex items-center gap-1 px-space-xs py-space-2xs rounded-lg font-mono-micro text-mono-micro uppercase tracking-wide ${estiloJugadaRelevante.texto} ${estiloJugadaRelevante.fondo}`}>
-                    <span className="material-symbols-outlined text-[14px]">{estiloJugadaRelevante.icono}</span>
-                    {estiloJugadaRelevante.etiqueta}
+            {ultimaPartidaId && !cargandoAnalisis && !errorAnalisis && (
+              <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-lg bg-surface-container-high/60 border border-outline-variant/30 font-mono-micro text-mono-micro">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-bold text-primary flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[14px]">
+                      {partidasJugadas[0]?.tipo_oponente === 'modelo' ? 'psychology' : 'smart_toy'}
+                    </span>
+                    {partidasJugadas[0]?.tipo_oponente === 'modelo' ? 'Turing IA' : 'Stockfish'}
                   </span>
-                  <span className="font-mono-label text-mono-label text-on-surface-variant">
-                    Jugada {jugadaRelevante.numero_ply} · {jugadaRelevante.jugada_san}
-                  </span>
+                  <span className="text-outline">·</span>
+                  <span className="text-on-surface">Nivel {partidasJugadas[0]?.nivel ?? '—'}</span>
+                  <span className="text-outline">·</span>
+                  <span className="text-on-surface">{partidasJugadas[0]?.cantidad_jugadas ?? 0} jugadas</span>
                 </div>
+                <span className="text-on-surface-variant">
+                  {fechaLegible(partidasJugadas[0]?.fecha)}
+                </span>
+              </div>
+            )}
 
-                <div className="p-space-sm rounded-lg bg-surface-container-lowest border border-outline-variant/20 flex flex-col gap-space-2xs">
-                  <span className="font-mono-micro text-mono-micro text-outline uppercase tracking-wider">Turing te explica</span>
-                  <p className="font-body-sm text-body-sm text-on-surface leading-relaxed">{jugadaRelevante.explicacion}</p>
-                </div>
-
-                <div className="flex flex-col gap-space-2xs">
-                  <span className="font-mono-micro text-mono-micro text-outline uppercase tracking-wider">Términos de esta jugada (tocá para ver qué significan)</span>
-                  <div className="flex flex-wrap gap-space-2xs">
-                    {terminosDeLaJugada.map((t) => (
-                      <button
-                        key={t.termino}
-                        type="button"
-                        onClick={() => setTerminoAbierto((actual) => (actual === t.termino ? null : t.termino))}
-                        aria-expanded={terminoAbierto === t.termino}
-                        className="px-space-xs py-space-2xs rounded-full bg-surface-container-lowest hover:bg-surface-container-high border border-outline-variant/30 font-mono-label text-[11px] text-primary transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                      >
-                        {t.termino}
-                      </button>
-                    ))}
-                  </div>
-                  {terminoAbierto && (
-                    <div className="p-space-sm rounded-lg bg-primary/10 border border-primary/30 text-on-surface font-body-sm text-body-sm flex items-start gap-space-xs">
-                      <span className="material-symbols-outlined text-primary text-[16px] shrink-0 mt-0.5">info</span>
-                      <span>
-                        <strong className="text-primary">{terminoAbierto}:</strong>{' '}
-                        {(terminosDeLaJugada.find((t) => t.termino === terminoAbierto) ?? {}).definicion}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex flex-wrap gap-space-xs pt-space-2xs">
-                  <button
-                    type="button"
-                    onClick={narrarRepaso}
-                    disabled={!vozDisponible}
-                    className="flex items-center gap-space-2xs px-space-sm py-space-xs rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface disabled:opacity-50 disabled:cursor-not-allowed font-mono-label text-mono-label transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                  >
-                    <span className="material-symbols-outlined text-[16px]">volume_up</span>
-                    Escuchar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={narrarRepaso}
-                    disabled={!vozDisponible}
-                    className="flex items-center gap-space-2xs px-space-sm py-space-xs rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface disabled:opacity-50 disabled:cursor-not-allowed font-mono-label text-mono-label transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                  >
-                    <span className="material-symbols-outlined text-[16px]">replay</span>
-                    Explicámelo de nuevo
-                  </button>
-                </div>
-              </>
+            {ultimaPartidaId && !cargandoAnalisis && !errorAnalisis && tarjetasRepaso.length > 0 && (
+              <div className="flex flex-col gap-space-sm">
+                {tarjetasRepaso.map((jugada) => (
+                  <TarjetaJugada
+                    key={jugada.numero_ply}
+                    jugada={jugada}
+                    claseTextoContenido={claseTextoContenido}
+                    narrar={narrar}
+                    detener={detener}
+                    narrando={narrando}
+                    vozDisponible={vozDisponible}
+                  />
+                ))}
+              </div>
             )}
           </SeccionAcordeon>
 
@@ -574,48 +1128,56 @@ export default function PanelAprendizaje({ usuario }) {
             onToggle={() => alternarSeccion('piezas')}
             innerRef={(el) => { refsSeccion.current.piezas = el; }}
           >
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-space-xs">
-              {PIEZAS.map((p) => (
-                <button
-                  key={p.tipo}
-                  type="button"
-                  onClick={() => elegirPieza(p.tipo)}
-                  aria-pressed={piezaElegida === p.tipo}
-                  className={`flex flex-col items-center gap-space-2xs p-space-xs rounded-xl border transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
-                    piezaElegida === p.tipo
-                      ? 'bg-primary/10 border-primary'
-                      : 'bg-surface-container-lowest border-outline-variant/20 hover:bg-surface-container'
-                  }`}
-                >
-                  <span className="relative">
-                    <img src={rutaImagenPieza(p.letra)} alt="" className="w-8 h-8" draggable="false" />
-                    {piezasVistas.includes(p.tipo) && (
-                      <span className="material-symbols-outlined text-[13px] text-neon-lime absolute -top-1 -right-1 bg-surface-container-lowest rounded-full" aria-hidden="true">
-                        check_circle
-                      </span>
-                    )}
-                  </span>
-                  <span className="font-mono-micro text-[10px] uppercase text-on-surface-variant">{p.nombre}</span>
-                </button>
-              ))}
-            </div>
+            {/* Sin grilla manual aparte — el banner se mueve solo (auto-avance
+                o flechas) y avisa qué pieza quedó activa vía `onCambiarPieza`,
+                así la ficha de detalle de abajo y el registro de "vistas"
+                (logro "Conocé las 6 piezas") lo siguen automáticamente. */}
+            <BannerPiezas piezas={PIEZAS} claseTextoContenido={claseTextoContenido} onCambiarPieza={elegirPieza} />
 
             {piezaActual && (
-              <div className="grid sm:grid-cols-2 gap-space-sm pt-space-xs">
-                <div className="flex flex-col gap-space-2xs">
-                  <span className="font-mono-micro text-mono-micro text-outline uppercase tracking-wider">
-                    Cómo se mueve {piezaActual.articulo} {piezaActual.nombre.toLowerCase()}
-                  </span>
-                  <MiniTableroPieza pieza={piezaActual} />
+              <div className="flex flex-col gap-space-sm pt-space-xs">
+                <p className={`${claseTextoContenido} text-primary font-semibold italic`}>"{piezaActual.apodo}"</p>
+
+                <div className="grid sm:grid-cols-2 gap-space-sm">
+                  <div className="flex flex-col gap-space-2xs">
+                    <span className="font-mono-micro text-mono-micro text-outline uppercase tracking-wider">
+                      Cómo se mueve {piezaActual.articulo} {piezaActual.nombre.toLowerCase()}
+                    </span>
+                    <MiniTableroPieza pieza={piezaActual} />
+                  </div>
+                  <div
+                    ref={videoBoxRef}
+                    className="relative flex flex-col items-center justify-center gap-space-xs p-space-md rounded-xl bg-surface-container overflow-hidden border border-dashed border-primary/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] text-center min-h-[160px] [&:fullscreen]:rounded-none [&:fullscreen]:min-h-screen [&:fullscreen]:justify-center [&:fullscreen]:bg-surface"
+                  >
+                    <div
+                      aria-hidden="true"
+                      className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-secondary/10"
+                    />
+                    <button
+                      type="button"
+                      onClick={alternarPantallaCompletaVideo}
+                      title={enPantallaCompleta ? 'Salir de pantalla completa' : 'Ver en pantalla completa'}
+                      className="absolute top-space-xs right-space-xs z-10 flex items-center justify-center w-8 h-8 rounded-lg bg-surface-container-lowest/70 hover:bg-surface-container-lowest text-on-surface-variant hover:text-on-surface transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">
+                        {enPantallaCompleta ? 'fullscreen_exit' : 'fullscreen'}
+                      </span>
+                    </button>
+                    <span className="relative material-symbols-outlined text-[32px] text-primary-fixed-dim">videocam_off</span>
+                    <p className="relative font-body-sm text-body-sm text-on-surface-variant">
+                      [Video: cómo se mueve y captura {piezaActual.articulo} {piezaActual.nombre.toLowerCase()}]
+                    </p>
+                    <span className="relative font-mono-micro text-[10px] uppercase tracking-wider text-outline px-space-xs py-space-2xs rounded-full border border-outline-variant/30">
+                      Próximamente
+                    </span>
+                  </div>
                 </div>
-                <div className="flex flex-col items-center justify-center gap-space-xs p-space-md rounded-xl bg-surface-container-lowest border border-dashed border-outline-variant/40 text-center min-h-[160px]">
-                  <span className="material-symbols-outlined text-[32px] text-outline">videocam_off</span>
-                  <p className="font-body-sm text-body-sm text-on-surface-variant">
-                    [Video: cómo se mueve y captura {piezaActual.articulo} {piezaActual.nombre.toLowerCase()}]
+
+                <div className="flex items-start gap-space-xs p-space-sm rounded-lg bg-secondary-container/10 border border-secondary/20">
+                  <span className="material-symbols-outlined text-secondary text-[18px] shrink-0 mt-0.5">bolt</span>
+                  <p className={`${claseTextoContenido} text-on-surface leading-relaxed`}>
+                    <strong className="text-secondary">Dato clave:</strong> {piezaActual.reglaEspecial}
                   </p>
-                  <span className="font-mono-micro text-[10px] uppercase tracking-wider text-outline px-space-xs py-space-2xs rounded-full border border-outline-variant/30">
-                    Próximamente
-                  </span>
                 </div>
               </div>
             )}
@@ -648,15 +1210,36 @@ export default function PanelAprendizaje({ usuario }) {
                     {analisis.resumen.precision_global.toFixed(0)}% de precisión en tu última partida
                   </span>
                 </div>
-                <div className="p-space-sm rounded-lg bg-surface-container-lowest border border-outline-variant/20 flex items-start gap-space-xs">
-                  <span className="material-symbols-outlined text-primary text-[18px] shrink-0 mt-0.5">lightbulb</span>
-                  <p className="font-body-sm text-body-sm text-on-surface leading-relaxed">{analisis.resumen.consejo_tutor}</p>
+                <div className="p-space-sm rounded-lg bg-surface-container-lowest border border-outline-variant/20 flex flex-col gap-space-2xs">
+                  <span className="font-mono-micro text-mono-micro text-primary uppercase tracking-wider font-semibold flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[16px]">lightbulb</span>
+                    Consejo de Turing
+                  </span>
+                  <p className={`${claseTextoContenido} text-on-surface leading-relaxed`}>{analisis.resumen.consejo_tutor}</p>
                 </div>
               </>
             )}
           </SeccionAcordeon>
 
-          {/* 5. Tus logros */}
+          {/* 5. Preguntale a Turing */}
+          <SeccionAcordeon
+            id="turing"
+            titulo="Preguntale a Turing"
+            icono="forum"
+            abierta={seccionAbierta === 'turing'}
+            onToggle={() => alternarSeccion('turing')}
+            innerRef={(el) => { refsSeccion.current.turing = el; }}
+          >
+            <ChatTuring
+              usuario={usuario}
+              narrar={narrar}
+              detener={detener}
+              narrando={narrando}
+              vozDisponible={vozDisponible}
+            />
+          </SeccionAcordeon>
+
+          {/* 6. Tus logros */}
           <SeccionAcordeon
             id="logros"
             titulo="Tus logros"
@@ -685,7 +1268,7 @@ export default function PanelAprendizaje({ usuario }) {
             </div>
           </SeccionAcordeon>
 
-          {/* 6. Próximamente */}
+          {/* 7. Próximamente */}
           <SeccionAcordeon
             id="proximamente"
             titulo="Próximamente"

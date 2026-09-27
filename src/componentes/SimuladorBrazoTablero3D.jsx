@@ -1,17 +1,128 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { fenAMatriz, nombreCasilla } from '../ajedrez';
 
 // Constantes métricas del mundo 3D
 const TAM_CASILLA = 0.8;
 const ANCHO_TABLERO = TAM_CASILLA * 8; // 6.4
 const ALTO_BASE_TABLERO = 0.25;
-const LONG_L1 = 3.1; // Brazo Dobot
-const LONG_L2 = 2.8; // Antebrazo Dobot
+const LONG_L1 = 3.5; // Brazo Dobot
+const LONG_L2 = 3.3; // Antebrazo Dobot
+
+// Mapeo a los archivos de modelos 3D reales exportados de Blender/PyBullet
+const MAPA_TIPO_A_ARCHIVO = {
+  p: 'peon',
+  r: 'torre',
+  n: 'caballo',
+  b: 'alfil',
+  q: 'reina',
+  k: 'rey',
+};
+
+// Escala métrica para ajustar piezas Staunton reales a la cuadrícula de 0.8 unidades
+const ESCALA_PIEZAS_STAUNTON = 12.8;
+
+// Cache en memoria para plantillas de modelos 3D (6 tipos x 2 colores)
+const cacheModelosPiezas3D = new Map();
+let cargaModelosPromise = null;
 
 /**
- * Generador procedural de geometrías Staunton para ajedrez 3D (Revolución Lathe)
+ * Carga los 12 modelos .obj con sus materiales .mtl y texturas .jpg
+ */
+function cargarModelosPiezas3D() {
+  if (cacheModelosPiezas3D.size === 12) {
+    return Promise.resolve(cacheModelosPiezas3D);
+  }
+  if (cargaModelosPromise) {
+    return cargaModelosPromise;
+  }
+
+  cargaModelosPromise = (async () => {
+    const tipos = ['p', 'r', 'n', 'b', 'q', 'k'];
+    const bandos = [
+      { esBlanca: true, carpeta: 'claro' },
+      { esBlanca: false, carpeta: 'oscuro' },
+    ];
+
+    const promesas = [];
+
+    for (const bando of bandos) {
+      const mtlLoader = new MTLLoader();
+      mtlLoader.setPath(`/piezas3d/${bando.carpeta}/`);
+
+      for (const tipo of tipos) {
+        const nombreArchivo = MAPA_TIPO_A_ARCHIVO[tipo];
+        const clave = `${tipo}_${bando.esBlanca ? 'w' : 'b'}`;
+
+        const tarea = new Promise((resolve) => {
+          mtlLoader.load(
+            `${nombreArchivo}.mtl`,
+            (materials) => {
+              materials.preload();
+
+              // Asegurar que las texturas usen sRGB para colores vivos y naturales
+              for (const mat of Object.values(materials.materials)) {
+                if (mat.map) {
+                  mat.map.colorSpace = THREE.SRGBColorSpace;
+                }
+                mat.shininess = 25; // Brillo elegante de madera barnizada
+              }
+
+              const objLoader = new OBJLoader();
+              objLoader.setMaterials(materials);
+              objLoader.setPath(`/piezas3d/${bando.carpeta}/`);
+
+              objLoader.load(
+                `${nombreArchivo}.obj`,
+                (obj) => {
+                  obj.scale.set(
+                    ESCALA_PIEZAS_STAUNTON,
+                    ESCALA_PIEZAS_STAUNTON,
+                    ESCALA_PIEZAS_STAUNTON
+                  );
+
+                  obj.traverse((child) => {
+                    if (child.isMesh) {
+                      child.castShadow = true;
+                      child.receiveShadow = true;
+                    }
+                  });
+
+                  cacheModelosPiezas3D.set(clave, obj);
+                  resolve();
+                },
+                undefined,
+                (err) => {
+                  console.warn(`Error cargando modelo OBJ ${nombreArchivo}:`, err);
+                  resolve();
+                }
+              );
+            },
+            undefined,
+            (err) => {
+              console.warn(`Error cargando MTL ${nombreArchivo}:`, err);
+              resolve();
+            }
+          );
+        });
+
+        promesas.push(tarea);
+      }
+    }
+
+    await Promise.all(promesas);
+    return cacheModelosPiezas3D;
+  })();
+
+  return cargaModelosPromise;
+}
+
+/**
+ * Generador procedural de geometrías Staunton para ajedrez 3D (Fallback de respaldo)
  */
 function crearGeometriasStaunton() {
   const puntosPorTipo = {
@@ -125,6 +236,8 @@ export default function SimuladorBrazoTablero3D({
   // Referencias a los componentes de la simulación
   const piezasMeshesRef = useRef(new Map()); // casilla -> mesh
   const robotRef = useRef(null);
+  const robotGroupRef = useRef(null);
+  const robotRealGroupRef = useRef(null);
   const casillaDestacadaRef = useRef({ origen: null, destino: null });
   const casillasMapRef = useRef(new Map());
 
@@ -138,6 +251,31 @@ export default function SimuladorBrazoTablero3D({
   });
 
   const [vistaCamara, setVistaCamara] = useState('isometrica');
+  const [modelosCargados, setModelosCargados] = useState(cacheModelosPiezas3D.size === 12);
+  const [modeloRobot, setModeloRobot] = useState('real'); // 'real' (modelo escaneado FICCT) | 'cinematico' (6-DOF)
+
+  // Control de visibilidad entre el brazo real escaneado y el brazo articulado cinemático
+  useEffect(() => {
+    if (robotGroupRef.current) {
+      robotGroupRef.current.visible = modeloRobot === 'cinematico';
+    }
+    if (robotRealGroupRef.current) {
+      robotRealGroupRef.current.visible = modeloRobot === 'real';
+    }
+  }, [modeloRobot]);
+
+  // Cargar los 12 modelos OBJ Staunton con sus texturas
+  useEffect(() => {
+    let activo = true;
+    cargarModelosPiezas3D().then(() => {
+      if (activo) {
+        setModelosCargados(true);
+      }
+    });
+    return () => {
+      activo = false;
+    };
+  }, []);
 
   // Mapear piezas del FEN a una lista manejable
   const piezasTablero = useMemo(() => {
@@ -311,11 +449,11 @@ export default function SimuladorBrazoTablero3D({
 
     // 3. Brazo Robótico Dobot CR5AS (6-DOF) Cinemático
     const robotGroup = new THREE.Group();
-    robotGroup.position.set(-4.4, 0, 0); // Ubicado en el flanco izquierdo
+    robotGroup.position.set(-4.8, 0, 0); // Ubicado a un lado del tablero en el flanco izquierdo
     scene.add(robotGroup);
 
     // Pedestal de montaje industrial
-    const pedestalGeo = new THREE.CylinderGeometry(0.7, 0.85, 0.45, 32);
+    const pedestalGeo = new THREE.CylinderGeometry(0.65, 0.75, 0.45, 32);
     const pedestalMat = new THREE.MeshStandardMaterial({
       color: 0x1e293b,
       metalness: 0.8,
@@ -428,14 +566,17 @@ export default function SimuladorBrazoTablero3D({
     laser.position.y = -0.6;
     efectorGroup.add(laser);
 
-    // Pinza física twin-fingers
-    const dedoGeo = new THREE.BoxGeometry(0.05, 0.22, 0.06);
+    // Pinza física twin-fingers proporcionada para piezas Staunton
+    const dedoGeo = new THREE.BoxGeometry(0.06, 0.32, 0.06);
     const dedoIzq = new THREE.Mesh(dedoGeo, matDobotMetal);
-    dedoIzq.position.set(-0.11, -0.15, 0);
+    dedoIzq.position.set(-0.16, -0.20, 0);
     const dedoDer = new THREE.Mesh(dedoGeo, matDobotMetal);
-    dedoDer.position.set(0.11, -0.15, 0);
+    dedoDer.position.set(0.16, -0.20, 0);
     efectorGroup.add(dedoIzq);
     efectorGroup.add(dedoDer);
+
+    robotGroupRef.current = robotGroup;
+    robotGroup.visible = false; // Inicialmente visible según modeloRobot
 
     robotRef.current = {
       group: robotGroup,
@@ -450,6 +591,68 @@ export default function SimuladorBrazoTablero3D({
       targetPos: new THREE.Vector3(0, 2.5, 0),
       posActual: new THREE.Vector3(-4.4, 2.8, 0),
     };
+
+    // 3b. Modelo 3D Escaneado Real del Brazo Dobot CR5AS con Cámara (FICCT)
+    const robotRealGroup = new THREE.Group();
+    robotRealGroup.position.set(-4.8, 0, 0); // Ubicado a un lado del tablero en el flanco izquierdo
+    scene.add(robotRealGroup);
+    robotRealGroupRef.current = robotRealGroup;
+
+    // Placa de montaje industrial / pedestal cilíndrico en la mesa
+    const placaRealGeo = new THREE.CylinderGeometry(0.68, 0.76, 0.08, 32);
+    const placaRealMat = new THREE.MeshStandardMaterial({
+      color: 0x1e293b,
+      metalness: 0.85,
+      roughness: 0.25,
+    });
+    const placaReal = new THREE.Mesh(placaRealGeo, placaRealMat);
+    placaReal.position.y = 0.04;
+    placaReal.receiveShadow = true;
+    placaReal.castShadow = true;
+    robotRealGroup.add(placaReal);
+
+    // Anillo de luz cian en la base del pedestal
+    const anilloPlacaGeo = new THREE.TorusGeometry(0.69, 0.018, 16, 48);
+    const anilloPlacaMat = new THREE.MeshStandardMaterial({
+      color: 0x00e5ff,
+      emissive: 0x00e5ff,
+      emissiveIntensity: 0.7,
+    });
+    const anilloPlaca = new THREE.Mesh(anilloPlacaGeo, anilloPlacaMat);
+    anilloPlaca.rotation.x = Math.PI / 2;
+    anilloPlaca.position.y = 0.08;
+    robotRealGroup.add(anilloPlaca);
+
+    const gltfLoader = new GLTFLoader();
+    gltfLoader.load('/models/robot_arm_camera.glb', (gltf) => {
+      const model = gltf.scene;
+
+      // Centrado milimétrico de la base cilíndrica del modelo escaneado:
+      // Base real: center_x = 0.1504, min_y = -0.9522, center_z = -0.5833
+      const pivot = new THREE.Group();
+      pivot.position.set(0, 0.08, 0); // Descansa exactamente sobre la placa de montaje
+      model.position.set(-0.1504, 0.9522, 0.5833);
+      pivot.add(model);
+
+      const escala = 1.75;
+      pivot.scale.set(escala, escala, escala);
+
+      // Rotación analítica calculada (94.32° = 1.6462 rad):
+      // Hace que el brazo, la cámara y la pinza apunten directamente hacia adentro (+X),
+      // sobrevolando el tablero a la altura de juego sin colisionar con las casillas.
+      pivot.rotation.y = 1.6462;
+
+      model.traverse((child) => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+
+      robotRealGroup.add(pivot);
+    }, undefined, (err) => {
+      console.warn('Nota: Modelo robot_arm_camera.glb no disponible, usando cinemático:', err);
+    });
 
     // 4. Adaptación a Resize
     const resizeObserver = new ResizeObserver((entries) => {
@@ -511,36 +714,50 @@ export default function SimuladorBrazoTablero3D({
       metalness: 0.6,
     });
 
-    // Limpiar piezas anteriores
+    // Limpiar piezas anteriores de la escena
     piezasMeshesRef.current.forEach((mesh) => {
       scene.remove(mesh);
       if (mesh.geometry) mesh.geometry.dispose();
     });
     piezasMeshesRef.current.clear();
 
-    // Crear y posicionar piezas actuales
+    // Crear y posicionar piezas actuales usando los modelos 3D reales Staunton
     piezasTablero.forEach(({ casilla, tipo, esBlanca }) => {
-      const geo = geos[tipo];
-      if (!geo) return;
+      const clave = `${tipo}_${esBlanca ? 'w' : 'b'}`;
+      const plantilla = cacheModelosPiezas3D.get(clave);
 
-      const mat = (esBlanca ? matPiezaClara : matPiezaOscura).clone();
-      const mesh = new THREE.Mesh(geo, mat);
+      let mesh;
+      if (plantilla) {
+        mesh = plantilla.clone(true);
+      } else {
+        const geo = geos[tipo];
+        if (!geo) return;
+        const mat = (esBlanca ? matPiezaClara : matPiezaOscura).clone();
+        mesh = new THREE.Mesh(geo, mat);
+      }
+
       mesh.castShadow = true;
       mesh.receiveShadow = true;
 
       const { x, z } = casillaACoord(casilla);
-      mesh.position.set(x, ALTO_BASE_TABLERO + 0.035, z);
+      mesh.position.set(x, ALTO_BASE_TABLERO + 0.038, z);
       mesh.userData = { casilla, tipo, esBlanca };
 
-      // Si es caballo, rotar hacia el bando rival
+      // Orientación precisa en el tablero:
+      // Las piezas apuntan hacia adentro del tablero encarando el centro y al rival
       if (tipo === 'n') {
-        mesh.rotation.y = esBlanca ? Math.PI : 0;
+        const col = 'abcdefgh'.indexOf(casilla[0].toLowerCase());
+        // Sesgo elegante hacia las columnas centrales d y e (hacia adentro)
+        const sesgoCentro = col < 3.5 ? 0.32 : -0.32;
+        mesh.rotation.y = esBlanca ? sesgoCentro : (Math.PI - sesgoCentro);
+      } else {
+        mesh.rotation.y = esBlanca ? 0 : Math.PI;
       }
 
       scene.add(mesh);
       piezasMeshesRef.current.set(casilla, mesh);
     });
-  }, [piezasTablero]);
+  }, [piezasTablero, modelosCargados]);
 
   // 3. Cinemática Inversa y Animación de Pick-and-Place para el Dobot CR5AS
   useEffect(() => {
@@ -592,15 +809,15 @@ export default function SimuladorBrazoTablero3D({
       let estadoTexto = 'CALCULANDO CINEMÁTICA';
       let pinzaActiva = false;
 
-      const yHover = ALTO_BASE_TABLERO + 1.6;
-      const yGrip = ALTO_BASE_TABLERO + 0.65;
+      const yHover = ALTO_BASE_TABLERO + 2.2;
+      const yGrip = ALTO_BASE_TABLERO + 1.25;
 
       if (t < 0.22) {
         // Fase 1: Desplazarse de Home a Hover sobre el origen
         const pSub = t / 0.22;
         targetX = THREE.MathUtils.lerp(-2.0, cOrigen.x, pSub);
         targetZ = THREE.MathUtils.lerp(0.0, cOrigen.z, pSub);
-        targetY = THREE.MathUtils.lerp(3.0, yHover, pSub);
+        targetY = THREE.MathUtils.lerp(3.2, yHover, pSub);
         estadoTexto = `APROXIMACIÓN -> CASILLA ${origen.toUpperCase()}`;
       } else if (t < 0.38) {
         // Fase 2: Descender y sujetar la pieza
@@ -616,12 +833,12 @@ export default function SimuladorBrazoTablero3D({
         pinzaActiva = true;
         targetX = THREE.MathUtils.lerp(cOrigen.x, cDestino.x, pSub);
         targetZ = THREE.MathUtils.lerp(cOrigen.z, cDestino.z, pSub);
-        // Arco parabólico
-        targetY = yGrip + Math.sin(pSub * Math.PI) * 1.35;
+        // Arco parabólico suave
+        targetY = yGrip + Math.sin(pSub * Math.PI) * 1.5;
 
-        // La pieza se traslada junto al efector
+        // La pieza se traslada suspendida bajo la pinza
         if (piezaMesh) {
-          piezaMesh.position.set(targetX, targetY - 0.55, targetZ);
+          piezaMesh.position.set(targetX, targetY - 1.21, targetZ);
         }
         estadoTexto = `TRASLADANDO ${origen.toUpperCase()} -> ${destino.toUpperCase()}`;
       } else if (t < 0.85) {
@@ -630,10 +847,10 @@ export default function SimuladorBrazoTablero3D({
         pinzaActiva = pSub < 0.5;
         targetX = cDestino.x;
         targetZ = cDestino.z;
-        targetY = THREE.MathUtils.lerp(yGrip + 0.4, yGrip, pSub);
+        targetY = THREE.MathUtils.lerp(yGrip + 0.3, yGrip, pSub);
 
         if (piezaMesh) {
-          piezaMesh.position.set(cDestino.x, ALTO_BASE_TABLERO + 0.035, cDestino.z);
+          piezaMesh.position.set(cDestino.x, ALTO_BASE_TABLERO + 0.038, cDestino.z);
         }
         estadoTexto = `POSICIONANDO EN ${destino.toUpperCase()}`;
       } else {
@@ -670,8 +887,8 @@ export default function SimuladorBrazoTablero3D({
       // J4: Orientar el efector verticalmente hacia abajo perpendicular al tablero
       robot.j4.rotation.z = anguloJ2 + anguloJ3;
 
-      // Animación de los dedos de la pinza
-      const aperturaDedos = pinzaActiva ? 0.06 : 0.12;
+      // Animación de apertura/cierre de pinza
+      const aperturaDedos = pinzaActiva ? 0.08 : 0.20;
       robot.dedoIzq.position.x = -aperturaDedos;
       robot.dedoDer.position.x = aperturaDedos;
 
@@ -711,16 +928,19 @@ export default function SimuladorBrazoTablero3D({
     if (!camera || !controls) return;
 
     if (preset === 'isometrica') {
-      camera.position.set(6.2, 6.8, 6.8);
+      camera.position.set(5.8, 6.2, 5.8);
       controls.target.set(0, 0.6, 0);
     } else if (preset === 'brazo') {
-      camera.position.set(-6.5, 4.2, 3.8);
-      controls.target.set(-1.0, 1.2, 0);
+      camera.position.set(-7.0, 4.2, 0);
+      controls.target.set(-0.5, 1.0, 0);
     } else if (preset === 'cenital') {
       camera.position.set(0.01, 9.5, 0);
       controls.target.set(0, 0.4, 0);
     } else if (preset === 'blancas') {
-      camera.position.set(0, 4.6, 6.2);
+      camera.position.set(0, 4.8, -6.5);
+      controls.target.set(0, 0.6, 0);
+    } else if (preset === 'negras') {
+      camera.position.set(0, 4.8, 6.5);
       controls.target.set(0, 0.6, 0);
     }
     controls.update();
@@ -747,6 +967,37 @@ export default function SimuladorBrazoTablero3D({
               {telemetria.estadoRobot}
             </span>
           </div>
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-black/50 border border-cyan-500/20 text-[11px]">
+            <span className="text-slate-400">SET:</span>
+            <span className="text-[#00e5ff] font-semibold flex items-center gap-1">
+              <span className={`inline-block w-1.5 h-1.5 rounded-full ${modelosCargados ? 'bg-[#00e5ff]' : 'bg-amber-400 animate-ping'}`}></span>
+              {modelosCargados ? 'STAUNTON 3D REAL' : 'CARGANDO 3D...'}
+            </span>
+          </div>
+        </div>
+
+        {/* SELECTOR DE MODELO DEL BRAZO (REAL FICCT vs CINEMÁTICO ARTICULADO) */}
+        <div className="flex items-center gap-1 bg-surface-container-lowest p-0.5 rounded-lg border border-cyan-500/30 text-[10px]">
+          <button
+            type="button"
+            onClick={() => setModeloRobot('real')}
+            className={`px-2 py-1 rounded transition-all flex items-center gap-1 ${
+              modeloRobot === 'real' ? 'bg-[#00e5ff] text-black font-bold shadow-sm' : 'text-slate-400 hover:text-white'
+            }`}
+            title="Modelo 3D escaneado con cámara real de la universidad (FICCT)"
+          >
+            <span>📷</span> Brazo Real 3D (FICCT)
+          </button>
+          <button
+            type="button"
+            onClick={() => setModeloRobot('cinematico')}
+            className={`px-2 py-1 rounded transition-all flex items-center gap-1 ${
+              modeloRobot === 'cinematico' ? 'bg-[#00e5ff] text-black font-bold shadow-sm' : 'text-slate-400 hover:text-white'
+            }`}
+            title="Brazo articulado interactivo 6-DOF con cinemática inversa y pinza"
+          >
+            <span>🦾</span> Cinemática 6-DOF
+          </button>
         </div>
 
         {/* SELECTOR DE PRESETS DE CÁMARA */}
@@ -785,7 +1036,16 @@ export default function SimuladorBrazoTablero3D({
               vistaCamara === 'blancas' ? 'bg-[#00e5ff] text-black font-bold' : 'text-slate-400 hover:text-white'
             }`}
           >
-            Jugador
+            Blancas
+          </button>
+          <button
+            type="button"
+            onClick={() => cambiarPresetCamara('negras')}
+            className={`px-2 py-1 rounded transition-all ${
+              vistaCamara === 'negras' ? 'bg-[#00e5ff] text-black font-bold' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            Negras
           </button>
         </div>
       </div>

@@ -40,13 +40,26 @@ export default function App() {
   // así que al volver a montarse recupera la MISMA partida en vez de arrancar una nueva.
   const [partidaActivaId, setPartidaActivaId] = useState<string | null>(null);
   const [partidaParaAprender, setPartidaParaAprender] = useState<string | null>(null);
+  const [seccionPanelAprendizaje, setSeccionPanelAprendizaje] = useState<string | null>(null);
   // Partida que el jugador abrió desde el banner "tu facilitador está
   // transmitiendo" — ver Registro de Partidas y DemostracionEnVivo.
   const [partidaDemostracionId, setPartidaDemostracionId] = useState<string | null>(null);
   const [usuario, setUsuario] = useState(() => obtenerUsuarioGuardado());
 
+  // Limpiar partidas activas en memoria al cambiar de cuenta para que cada usuario tenga su propio tablero independiente
+  useEffect(() => {
+    setPartidaActivaId(null);
+    setPartidaParaAprender(null);
+    setPartidaDemostracionId(null);
+    setSeccionPanelAprendizaje(null);
+  }, [usuario?.id]);
+
   const manejarLogin = (usuarioData) => {
     setUsuario(usuarioData);
+    setPartidaActivaId(null);
+    setPartidaParaAprender(null);
+    setPartidaDemostracionId(null);
+    setSeccionPanelAprendizaje(null);
     // Redirigir según rol
     if (usuarioData.rol === 'facilitador') {
       setPantallaActiva('usuarios');
@@ -69,6 +82,10 @@ export default function App() {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('usuario');
+    setPartidaActivaId(null);
+    setPartidaParaAprender(null);
+    setPartidaDemostracionId(null);
+    setSeccionPanelAprendizaje(null);
     setUsuario(null);
     setPantallaActiva('control');
   };
@@ -86,6 +103,11 @@ export default function App() {
   function irAAprendizaje(partidaId?: string) {
     setPartidaParaAprender(partidaId ?? null);
     setPantallaActiva('aprendizaje');
+  }
+
+  function irAPanelAprendizaje(seccion: string = 'turing') {
+    setSeccionPanelAprendizaje(seccion);
+    setPantallaActiva('panelAprendizaje');
   }
 
   function irADemostracion(partidaId?: string) {
@@ -184,7 +206,7 @@ export default function App() {
                   <span className="material-symbols-outlined text-[16px]">history_edu</span>Registro de Partidas
                 </button>
                 <button onClick={() => irAAprendizaje()} className={navClasses('aprendizaje')}>
-                  <span className="material-symbols-outlined text-[16px]">school</span>Aprendizaje
+                  <span className="material-symbols-outlined text-[16px]">troubleshoot</span>Análisis Jugada a Jugada
                 </button>
               </div>
             </nav>
@@ -319,10 +341,19 @@ export default function App() {
         <main className="w-full pt-16 bg-surface-container-lowest min-h-screen">
           {pantallaActiva === 'control' && (
             <SalaControl
+              key={`sala-control-${usuario?.id ?? 'anon'}`}
               partidaIdInicial={partidaActivaId}
               onPartidaActivaChange={setPartidaActivaId}
               esFacilitador={esFacilitador}
               usuarioIdPropio={usuario?.id ?? null}
+              usuario={usuario}
+              alIrAAprendizaje={(id?: string) => {
+                if (esFacilitador) {
+                  irAAprendizaje(id);
+                } else {
+                  setPantallaActiva('panelAprendizaje');
+                }
+              }}
             />
           )}
           {pantallaActiva === 'neuronal' && (
@@ -378,7 +409,11 @@ export default function App() {
                 alClickBoton={() => setPantallaActiva('usuarios')}
               />
             ) : (
-              <PanelAprendizaje usuario={usuario} />
+              <PanelAprendizaje
+                usuario={usuario}
+                seccionInicial={seccionPanelAprendizaje}
+                onSeccionConsumida={() => setSeccionPanelAprendizaje(null)}
+              />
             )
           )}
           {pantallaActiva === 'admin' && <Administracion />}
@@ -400,12 +435,20 @@ export default function App() {
               alIrASalaControl={irASalaControl}
               alIrARazonamiento={() => setPantallaActiva('neuronal')}
               alIrAAprendizaje={irAAprendizaje}
+              alIrAPanelAprendizaje={() => irAPanelAprendizaje('turing')}
               alVerDemostracion={irADemostracion}
               esFacilitador={esFacilitador}
+              usuario={usuario}
             />
           )}
           {pantallaActiva === 'aprendizaje' && (
-            <Aprendizaje partidaIdInicial={partidaParaAprender} alCargarPartida={() => setPartidaParaAprender(null)} />
+            <Aprendizaje
+              partidaIdInicial={partidaParaAprender}
+              alCargarPartida={() => setPartidaParaAprender(null)}
+              alIrASalaControl={() => irASalaControl()}
+              usuario={usuario}
+              esFacilitador={esFacilitador}
+            />
           )}
           {pantallaActiva === 'demostracion' && (
             <DemostracionEnVivo

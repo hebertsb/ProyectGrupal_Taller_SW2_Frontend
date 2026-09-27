@@ -44,6 +44,12 @@ const NIVELES_POR_CATEGORIA = [
   { etiqueta: 'Avanzado', desde: 14, hasta: NIVEL_MAX },
 ];
 
+function categoriaDeNivel(n) {
+  if (n <= 6) return 'Principiante';
+  if (n <= 13) return 'Intermedio';
+  return 'Avanzado';
+}
+
 // Cuando el facilitador está mirando la partida de OTRA persona (no la propia,
 // no la de un jugador viendo la suya), nadie mueve piezas desde esta pantalla
 // — así que si no se sondea el backend, el tablero/análisis queda congelado
@@ -52,12 +58,20 @@ const NIVELES_POR_CATEGORIA = [
 // el heartbeat de "backend conectado" y el resto de la UI de Sala de Control.
 const INTERVALO_SONDEO_PARTIDA_AJENA_MS = 2500;
 
-export default function SalaControl({ partidaIdInicial, onPartidaActivaChange, esFacilitador = false, usuarioIdPropio = null }) {
+export default function SalaControl({
+  partidaIdInicial,
+  onPartidaActivaChange,
+  esFacilitador = false,
+  usuarioIdPropio = null,
+  usuario = null,
+  alIrAAprendizaje = null,
+}) {
   const { dispararInferencia } = useRazonamiento() ?? {};
   const [partidaId, setPartidaId] = useState(null);
   const [fen, setFen] = useState(null);
   const [tipoOponente, setTipoOponente] = useState('modelo'); // 'modelo' (Red Neuronal v5) o 'motor' (Stockfish)
-  const [nivel, setNivel] = useState(NIVEL_INICIAL);
+  const nivelInicial = usuario?.nivel_estimado ?? (esFacilitador ? 20 : 5);
+  const [nivel, setNivel] = useState(nivelInicial);
   const [terminada, setTerminada] = useState(false);
   const [resultado, setResultado] = useState(null);
   const [vistaTablero, setVistaTablero] = useState('2d'); // '2d' (táctil estándar) o '3d' (gemelo digital Dobot CR5AS)
@@ -315,16 +329,20 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange, e
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partidaId, viendoPartidaAjena, terminada, nivel]);
 
-  // Si la selección de casilla queda "colgada" justo cuando se pasa a mirar
-  // una partida ajena (ej. el facilitador tenía una pieza propia seleccionada
-  // y cambia a ver la de otro estudiante), se limpia — no tiene sentido dejar
-  // un resaltado de una jugada que ya no se puede completar.
+  // Sincronizar nivel con el perfil del usuario si todavía no hay partida o es nueva
   useEffect(() => {
-    if (viendoPartidaAjena) {
-      setCasillaOrigen(null);
-      setDestinosValidos([]);
+    if (usuario?.nivel_estimado && !partidaId) {
+      setNivel(usuario.nivel_estimado);
     }
-  }, [viendoPartidaAjena]);
+  }, [usuario, partidaId]);
+
+  // Si el usuario es un jugador normal y la partida no tiene simulación 3D habilitada por el facilitador,
+  // forzar retorno a vista 2D táctica.
+  useEffect(() => {
+    if (!esFacilitador && !permiteSimulacion3D && vistaTablero === '3d') {
+      setVistaTablero('2d');
+    }
+  }, [esFacilitador, permiteSimulacion3D, vistaTablero]);
 
   async function actualizarAnalisis(fenActual) {
     try {
@@ -365,7 +383,20 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange, e
         await actualizarAnalisis(partida.fen);
       }
     } catch (err) {
-      setError(err.message);
+      onPartidaActivaChange?.(null);
+      setPartidaId(null);
+      const esPartidaAjena =
+        err?.message?.includes('otro usuario') ||
+        err?.status === 403 ||
+        err?.status === 404;
+
+      if (esPartidaAjena) {
+        console.warn('Partida no accesible para este usuario. Creando una partida propia e independiente...');
+        setError(null);
+        await manejarNuevaPartida();
+      } else {
+        setError(err.message);
+      }
     } finally {
       setCargando(null);
     }
@@ -552,6 +583,7 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange, e
 
   function manejarAbrirSimulacion3D() {
     if (!partidaId) return;
+    if (!esFacilitador && !permiteSimulacion3D) return;
     setVistaTablero((v) => (v === '3d' ? '2d' : '3d'));
     setAvisoSimulacion3D('Gemelo Digital 3D (Dobot CR5AS) activo en pantalla');
     setTimeout(() => setAvisoSimulacion3D(null), 5000);
@@ -600,8 +632,20 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange, e
             </span>
           </div>
           <div className="h-3 w-[1px] bg-surface-variant"></div>
-          <span className="font-mono-label text-mono-label text-on-surface-variant">
-            {tipoOponente === 'motor' ? `STOCKFISH · NIVEL ${nivel}` : 'TURING · SE-RESNET-8'}
+          <span className="font-mono-label text-mono-label text-on-surface-variant flex items-center gap-1.5 flex-wrap">
+            <span className="text-primary font-medium">
+              {tipoOponente === 'motor' ? 'STOCKFISH 16' : 'TURING IA (v5)'}
+            </span>
+            <span>·</span>
+            <span>NIVEL {nivel} ({categoriaDeNivel(nivel).toUpperCase()})</span>
+            {usuario && (
+              <>
+                <span className="text-outline">|</span>
+                <span className="text-secondary font-mono-micro px-2 py-0.5 rounded bg-secondary/10 font-medium">
+                  PERFIL: {usuario.rango_estimado ? usuario.rango_estimado.toUpperCase() : `NIVEL ${usuario.nivel_estimado ?? 5}`}
+                </span>
+              </>
+            )}
           </span>
           {esFacilitador && usuarioNombrePartida && usuarioIdPartida !== usuarioIdPropio && (
             <>
@@ -893,43 +937,55 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange, e
         {/* COLUMNA CENTRAL: TABLERO REAL Y GEMELO DIGITAL 3D */}
         <div className="xl:col-span-6 flex flex-col items-center justify-center">
           {/* SELECTOR DE VISTA: TABLERO 2D vs GEMELO DIGITAL 3D DOBOT CR5AS */}
-          <div className="w-full max-w-[660px] flex items-center justify-between mb-3 px-1">
-            <div className="inline-flex p-1 rounded-xl bg-surface-container-low border border-white/10 font-mono text-xs shadow-lg">
-              <button
-                type="button"
-                onClick={() => setVistaTablero('2d')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
-                  vistaTablero === '2d'
-                    ? 'bg-[#00e5ff] text-black font-bold shadow-[0_0_12px_rgba(0,229,255,0.4)]'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <span className="material-symbols-outlined text-[15px]">grid_view</span>
-                <span>Tablero 2D Táctil</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setVistaTablero('3d')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
-                  vistaTablero === '3d'
-                    ? 'bg-[#00e5ff] text-black font-bold shadow-[0_0_12px_rgba(0,229,255,0.4)]'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <span className="material-symbols-outlined text-[15px]">precision_manufacturing</span>
-                <span>Gemelo Digital 3D (Dobot CR5AS)</span>
-              </button>
+          {(esFacilitador || permiteSimulacion3D) ? (
+            <div className="w-full max-w-[660px] flex items-center justify-between mb-3 px-1">
+              <div className="inline-flex p-1 rounded-xl bg-surface-container-low border border-white/10 font-mono text-xs shadow-lg">
+                <button
+                  type="button"
+                  onClick={() => setVistaTablero('2d')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                    vistaTablero === '2d'
+                      ? 'bg-[#00e5ff] text-black font-bold shadow-[0_0_12px_rgba(0,229,255,0.4)]'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[15px]">grid_view</span>
+                  <span>Tablero 2D Táctil</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVistaTablero('3d')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                    vistaTablero === '3d'
+                      ? 'bg-[#00e5ff] text-black font-bold shadow-[0_0_12px_rgba(0,229,255,0.4)]'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[15px]">precision_manufacturing</span>
+                  <span>Gemelo Digital 3D (Dobot CR5AS)</span>
+                </button>
+              </div>
+
+              {vistaTablero === '3d' && (
+                <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-cyan-950/60 border border-[#00e5ff]/30 text-[11px] font-mono text-[#00e5ff]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#00e5ff] animate-ping" />
+                  <span>CINEMÁTICA 6-DOF EN VIVO</span>
+                </span>
+              )}
             </div>
-
-            {vistaTablero === '3d' && (
-              <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-cyan-950/60 border border-[#00e5ff]/30 text-[11px] font-mono text-[#00e5ff]">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#00e5ff] animate-ping" />
-                <span>CINEMÁTICA 6-DOF EN VIVO</span>
+          ) : (
+            <div className="w-full max-w-[660px] flex items-center justify-between mb-3 px-1">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[18px] text-primary">grid_view</span>
+                <span className="font-mono text-xs font-semibold uppercase tracking-wider text-on-surface">Tablero Táctil 2D</span>
+              </div>
+              <span className="text-[11px] font-mono text-outline">
+                Modo Jugador · Vista Táctica
               </span>
-            )}
-          </div>
+            </div>
+          )}
 
-          {vistaTablero === '3d' ? (
+          {vistaTablero === '3d' && (esFacilitador || permiteSimulacion3D) ? (
             <div className="w-full max-w-[660px] aspect-square rounded-2xl overflow-hidden shadow-2xl">
               <SimuladorBrazoTablero3D
                 fen={fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'}
@@ -1024,6 +1080,35 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange, e
           )}
 
           <div className="w-full max-w-[660px] mt-space-md flex flex-col gap-space-sm">
+            {/* TARJETA DE FINALIZACIÓN Y RETROSPECTIVA PEDAGÓGICA */}
+            {terminada && (
+              <div className="p-3.5 rounded-xl bg-gradient-to-r from-secondary-container/30 to-surface-container-high border border-secondary/40 shadow-xl flex items-center justify-between flex-wrap gap-3 animate-fadeIn">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-secondary/20 flex items-center justify-center text-secondary">
+                    <span className="material-symbols-outlined text-[22px]">school</span>
+                  </div>
+                  <div>
+                    <div className="font-headline-sm text-body-md font-bold text-on-surface">
+                      Partida Finalizada ({resultado || 'Juego Concluido'})
+                    </div>
+                    <div className="font-mono-micro text-[11px] text-on-surface-variant">
+                      Registrada en tu historial con {tipoOponente === 'modelo' ? 'Turing IA' : 'Stockfish'} (Nivel {nivel}).
+                    </div>
+                  </div>
+                </div>
+                {alIrAAprendizaje && (
+                  <button
+                    type="button"
+                    onClick={() => alIrAAprendizaje(partidaId)}
+                    className="px-3.5 py-1.5 rounded-lg bg-secondary text-on-secondary font-mono-label text-xs font-bold shadow hover:bg-secondary/90 transition-all flex items-center gap-1.5"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">psychology</span>
+                    <span>TUTOR Y FEEDBACK</span>
+                  </button>
+                )}
+              </div>
+            )}
+
             <div className="flex items-center justify-between gap-space-md p-space-sm rounded-xl bg-surface-container-low shadow-xl flex-wrap">
               <div className="flex items-center gap-space-sm pl-space-xs">
                 <span className="w-2 h-2 rounded-full bg-primary-container"></span>
@@ -1034,35 +1119,36 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange, e
                   </span>
                 </div>
               </div>
-              <div className="flex items-center gap-space-xs">
-                {tipoOponente === 'motor' ? (
-                  <>
-                    <label className="font-mono-micro text-mono-micro text-outline uppercase" htmlFor="nivelSelect">Nivel</label>
-                    <select
-                      id="nivelSelect"
-                      value={nivel}
-                      onChange={(evento) => setNivel(Number(evento.target.value))}
-                      className="bg-surface-container-high rounded-lg px-2 py-1 font-mono-label text-mono-label text-on-surface"
-                    >
-                      {NIVELES_POR_CATEGORIA.map((categoria) => (
-                        <optgroup key={categoria.etiqueta} label={categoria.etiqueta}>
-                          {Array.from(
-                            { length: categoria.hasta - categoria.desde + 1 },
-                            (_, indice) => categoria.desde + indice
-                          ).map((valor) => (
-                            <option key={valor} value={valor}>Nivel {valor}</option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
-                  </>
-                ) : (
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface-container-high/80 border border-primary/30">
-                    <span className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-[0_0_6px_#00e5ff]"></span>
-                    <span className="font-mono-micro text-[11px] text-primary font-bold">
-                      FIDE 2200+ · SE-ResNet-8
-                    </span>
-                  </div>
+              <div className="flex items-center gap-space-xs flex-wrap">
+                <div className="flex items-center gap-1.5 bg-surface-container-high/70 px-2 py-1 rounded-lg border border-outline-variant/30">
+                  <label className="font-mono-micro text-[10px] text-outline uppercase font-semibold" htmlFor="nivelSelect">
+                    Nivel {tipoOponente === 'modelo' ? 'IA' : 'Motor'}
+                  </label>
+                  <select
+                    id="nivelSelect"
+                    value={nivel}
+                    onChange={(evento) => setNivel(Number(evento.target.value))}
+                    className="bg-surface-container-high rounded px-2 py-0.5 font-mono-label text-mono-label text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
+                  >
+                    {NIVELES_POR_CATEGORIA.map((categoria) => (
+                      <optgroup key={categoria.etiqueta} label={categoria.etiqueta}>
+                        {Array.from(
+                          { length: categoria.hasta - categoria.desde + 1 },
+                          (_, indice) => categoria.desde + indice
+                        ).map((valor) => (
+                          <option key={valor} value={valor}>
+                            Nivel {valor} ({categoria.etiqueta})
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
+                {tipoOponente === 'modelo' && (
+                  <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono text-primary bg-primary/10 px-2 py-1 rounded border border-primary/20">
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                    Turing Adaptativo
+                  </span>
                 )}
                 <button
                   onClick={manejarReevaluar}

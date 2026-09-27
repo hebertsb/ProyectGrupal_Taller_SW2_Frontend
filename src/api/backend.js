@@ -278,6 +278,52 @@ export function actualizarPerfil(datos) {
   });
 }
 
+/**
+ * Guarda el nivel/rango que el jugador elige a mano en Mi Perfil. Mismo
+ * endpoint que ya usa el diagnóstico "Mide tu nivel" de la app móvil
+ * (`PATCH /auth/nivel-estimado`, ver game_screen.dart) — acá no hay
+ * diagnóstico, es autoselección directa, así que se reusan los mismos pares
+ * nivel/rango que ya define la app móvil para que ambas plataformas hablen
+ * el mismo idioma (Avanzado→18, Intermedio→11, Principiante→5). El backend
+ * puede recalibrar este valor más adelante solo, analizando partidas reales
+ * — esto solo pisa el punto de partida.
+ */
+export function guardarNivelEstimado(nivel, rango) {
+  return solicitarAuth("/auth/nivel-estimado", {
+    method: "PATCH",
+    body: JSON.stringify({ nivel, rango }),
+  });
+}
+
+/**
+ * Sube (o reemplaza) la foto de perfil real del usuario autenticado — multipart,
+ * mismo patrón que `subirVideoPieza`. Devuelve el `UsuarioResponse` actualizado
+ * (con la nueva `avatar_url`). Pedido a backend-fastapi (`POST /auth/foto`),
+ * puede no estar listo todavía — si no existe, la UI lo trata igual que
+ * cualquier otro endpoint en construcción (404/405).
+ */
+export async function subirFotoPerfil(archivo) {
+  const token = localStorage.getItem("access_token");
+  const datos = new FormData();
+  datos.append("archivo", archivo);
+  const headers = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  const respuesta = await fetch("/auth/foto", {
+    method: "POST",
+    body: datos,
+    headers,
+  });
+  if (!respuesta.ok) {
+    const detalle = await respuesta.json().catch(() => null);
+    const error = new Error(detalle?.detail ?? `Error ${respuesta.status}`);
+    error.status = respuesta.status;
+    throw error;
+  }
+  return respuesta.json();
+}
+
 /** Gestión de usuarios (solo facilitadores) */
 
 export function listarUsuarios() {
@@ -339,4 +385,57 @@ export async function subirVideoPieza(tipoPieza, archivo) {
     throw error;
   }
   return respuesta.json();
+}
+
+/** Tutor conversacional "Turing" (Panel de Aprendizaje) */
+
+/**
+ * Manda un mensaje al tutor conversacional "Turing" y persiste el turno en
+ * el backend — misma conversación que lee `obtenerHistorialTutor`. Devuelve
+ * `{respuesta, creado_en}`. El backend responde 503 si el tutor no está
+ * disponible (LLM caído o sin API key configurada) — la UI distingue ese
+ * caso vía `error.status` para mostrar un aviso amigable en vez de un error
+ * crudo.
+ */
+export function enviarMensajeTutor(mensaje) {
+  return solicitarAuth("/tutor/mensaje", {
+    method: "POST",
+    body: JSON.stringify({ mensaje }),
+  });
+}
+
+/**
+ * Historial de la conversación con Turing del usuario logueado, en orden
+ * cronológico (el más viejo primero). `limite` es la cantidad de turnos a
+ * traer (cada mensaje del usuario y cada respuesta cuentan como un turno
+ * cada uno), no de intercambios completos.
+ */
+export function obtenerHistorialTutor(limite = 50) {
+  return solicitarAuth(`/tutor/historial?limite=${limite}`);
+}
+
+/**
+ * Borra el historial de conversación con Turing del usuario logueado
+ * (reinicia la memoria del tutor — útil si una demo se traba a mitad de
+ * conversación). Devuelve 204 sin cuerpo, así que no reusa
+ * `solicitar`/`solicitarAuth` (que siempre parsean JSON de la respuesta):
+ * arma el fetch a mano, con el mismo manejo de token y de errores que el
+ * resto del archivo (ver `obtenerDemostracionActiva` más arriba, mismo
+ * criterio defensivo).
+ */
+export async function borrarHistorialTutor() {
+  const token = localStorage.getItem("access_token");
+  const respuesta = await fetch("/tutor/historial", {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!respuesta.ok) {
+    const detalle = await respuesta.json().catch(() => null);
+    const error = new Error(detalle?.detail ?? `Error ${respuesta.status}`);
+    error.status = respuesta.status;
+    throw error;
+  }
 }

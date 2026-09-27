@@ -72,6 +72,99 @@ export function extraerCasillaDestino(san) {
 }
 
 /**
+ * Compara dos FEN y devuelve, de forma heurística, qué piezas "se movieron"
+ * de una casilla a otra — pensado solo para animación (deslizamiento visual
+ * de SalaControl.jsx), nunca para decidir jugadas legales ni nada que
+ * dependa de reglas de ajedrez reales.
+ *
+ * Empareja cada casilla que quedó vacía con una casilla que ganó una pieza
+ * del MISMO tipo/color (maneja así una jugada simple y también el enroque,
+ * que vacía y ocupa dos pares de casillas a la vez). Si sobra algún cambio
+ * sin pareja de la misma letra, lo empareja igual como probable promoción
+ * (peón que vacía su casilla y una dama/torre/alfil/caballo que aparece).
+ *
+ * Una casilla que tenía una pieza y ahora tiene OTRA distinta (captura
+ * directa, sin pasar por "vacía" en este diff) cuenta solo como "ocupada"
+ * por la pieza nueva — la que estaba antes ahí fue capturada, no se movió a
+ * ningún lado, así que no hace falta encontrarle pareja.
+ *
+ * Devuelve `[]` (nada que animar, se cae al salto instantáneo de siempre)
+ * cuando:
+ *   - no cambió ninguna casilla,
+ *   - cambiaron demasiadas a la vez (`> límiteCambios`) — típico de cargar
+ *     una partida nueva o una posición escaneada por cámara, no de una
+ *     jugada — animar ahí sería ruido, no ayuda,
+ *   - queda una casilla "ocupada" sin explicar al terminar (algo no encaja
+ *     con el patrón esperado de una jugada) — más vale no animar que animar
+ *     mal. Una "vaciada" sin pareja SÍ es normal y esperable (una captura o
+ *     una captura al paso: la pieza tomada solo desaparece).
+ */
+export function detectarMovimientosVisuales(fenAnterior, fenNuevo, limiteCambios = 4) {
+  if (!fenAnterior || !fenNuevo || fenAnterior === fenNuevo) return [];
+
+  const matrizAnterior = fenAMatriz(fenAnterior);
+  const matrizNueva = fenAMatriz(fenNuevo);
+  const vaciadas = []; // { casilla, pieza } — piezas que dejaron de estar ahí
+  const ocupadas = []; // { casilla, pieza } — piezas que aparecieron ahí
+
+  for (let fila = 0; fila < 8; fila++) {
+    for (let columna = 0; columna < 8; columna++) {
+      const antes = matrizAnterior[fila]?.[columna] ?? null;
+      const despues = matrizNueva[fila]?.[columna] ?? null;
+      if (antes === despues) continue;
+      const casilla = nombreCasilla(fila, columna);
+      if (antes && !despues) {
+        vaciadas.push({ casilla, pieza: antes });
+      } else if (despues) {
+        // Cubre "estaba vacía y ahora tiene pieza" y "tenía una pieza y
+        // ahora tiene otra" (captura directa) por igual.
+        ocupadas.push({ casilla, pieza: despues });
+      }
+    }
+  }
+
+  const totalCambios = vaciadas.length + ocupadas.length;
+  if (totalCambios === 0 || totalCambios > limiteCambios) return [];
+
+  const ocupadasRestantes = [...ocupadas];
+  const movimientos = [];
+  const sinPareja = [];
+
+  for (const origen of vaciadas) {
+    const indice = ocupadasRestantes.findIndex((o) => o.pieza === origen.pieza);
+    if (indice === -1) {
+      sinPareja.push(origen);
+      continue;
+    }
+    const [destino] = ocupadasRestantes.splice(indice, 1);
+    if (origen.casilla !== destino.casilla) {
+      movimientos.push({ casillaOrigen: origen.casilla, casillaDestino: destino.casilla, pieza: destino.pieza });
+    }
+  }
+
+  // Sobras: probablemente una promoción (el peón "vaciado" no matchea por
+  // letra con la pieza nueva). Si sobra justo un origen y un destino, se
+  // asume que es esa jugada — mostrar la pieza YA promocionada volando es
+  // una simplificación aceptable para una animación, no para el motor.
+  if (sinPareja.length === 1 && ocupadasRestantes.length === 1) {
+    const [origen] = sinPareja;
+    const [destino] = ocupadasRestantes;
+    if (origen.casilla !== destino.casilla) {
+      movimientos.push({ casillaOrigen: origen.casilla, casillaDestino: destino.casilla, pieza: destino.pieza });
+    }
+  } else if (ocupadasRestantes.length > 0) {
+    // Queda una casilla ocupada sin ninguna explicación razonable (no es una
+    // promoción 1-a-1) — no encaja con el patrón esperado de una jugada,
+    // mejor no animar nada que animar algo incorrecto. Un `sinPareja` sobrante
+    // por sí solo (sin `ocupadasRestantes`) es normal — son piezas
+    // capturadas, no necesitan destino.
+    return [];
+  }
+
+  return movimientos;
+}
+
+/**
  * Casillas de movimiento ILUSTRATIVAS para una pieza parada sola en un
  * mini-tablero vacío (Panel de Aprendizaje, "Aprendé cada pieza") — reglas
  * simplificadas por tipo de pieza, sin capturas ni jaques ni reglas

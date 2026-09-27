@@ -1,7 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import gsap from 'gsap';
+import { useGSAP } from '@gsap/react';
 import { listarPartidas, listarUsuarios, obtenerPartida } from '../../api/backend';
 import { turnoDeFen } from '../../ajedrez';
 import TableroSoloLectura from '../../componentes/TableroSoloLectura';
+
+gsap.registerPlugin(useGSAP);
 
 const TAMANO_PAGINA = 4; // patrón "DVR de cámaras": hasta 4 tableros a la vez
 const INTERVALO_SONDEO_LISTA_MS = 5000; // refresca qué partidas hay activas
@@ -33,6 +37,21 @@ export default function Monitoreo() {
   const [pagina, setPagina] = useState(0);
   const [partidaGrande, setPartidaGrande] = useState(null);
   const [errorGrande, setErrorGrande] = useState(null);
+
+  // --- Capa de animación (GSAP) — solo presentación, no toca el sondeo ni el
+  // estado de arriba. `rejillaRef` acota los selectores de esta pantalla;
+  // `tarjetasRefs` guarda el nodo DOM de cada tarjeta (clave: partida.id) para
+  // poder destacar solo la que recibió una jugada nueva; `fensPreviosRef`
+  // recuerda el último FEN visto de cada partida para detectar ese cambio.
+  const rejillaRef = useRef(null);
+  const tarjetasRefs = useRef(new Map());
+  const fensPreviosRef = useRef(new Map());
+  const prefiereMovimientoReducidoRef = useRef(false);
+
+  function registrarTarjetaRef(id, nodo) {
+    if (nodo) tarjetasRefs.current.set(id, nodo);
+    else tarjetasRefs.current.delete(id);
+  }
 
   // Roster de usuarios — para saber quién es REALMENTE un jugador (no alcanza
   // con "usuario_id distinto al mío", ver comentario arriba) y de paso mostrar
@@ -145,6 +164,70 @@ export default function Monitoreo() {
     paginaSegura * TAMANO_PAGINA,
     paginaSegura * TAMANO_PAGINA + TAMANO_PAGINA
   );
+  // Clave estable del grupo de tarjetas visible — cambia solo cuando cambia
+  // DE VERDAD qué partidas se ven (otra página, alguien empezó/terminó), no
+  // en cada sondeo de 5s aunque el array se haya vuelto a crear igual.
+  const clavePagina = partidasPagina.map((partida) => partida.id).join(',');
+
+  // Respeta "reducir movimiento" (gsap.matchMedia(), patrón oficial de GSAP)
+  // — una sola vez para toda la pantalla.
+  useGSAP(
+    () => {
+      const mm = gsap.matchMedia();
+      mm.add({ reducido: '(prefers-reduced-motion: reduce)' }, (contexto) => {
+        prefiereMovimientoReducidoRef.current = contexto.conditions.reducido;
+        return () => {
+          prefiereMovimientoReducidoRef.current = false;
+        };
+      });
+      return () => mm.revert();
+    },
+    { scope: rejillaRef, dependencies: [] }
+  );
+
+  // Entrada escalonada de las tarjetas — solo cuando cambia el GRUPO que se
+  // ve (no en cada sondeo silencioso de la lista).
+  useGSAP(
+    () => {
+      if (prefiereMovimientoReducidoRef.current || !clavePagina) return;
+      gsap.from('.tarjeta-partida', {
+        autoAlpha: 0,
+        y: 16,
+        duration: 0.4,
+        stagger: 0.08,
+        ease: 'power2.out',
+      });
+    },
+    { scope: rejillaRef, dependencies: [clavePagina] }
+  );
+
+  // Destello breve en una tarjeta cuando su partida recibió una jugada nueva
+  // en vivo — se compara contra el último FEN visto de cada una; la primera
+  // vez que se ve un `partida.id` no cuenta como "cambio" (recién se cargó).
+  useGSAP(
+    () => {
+      for (const partida of partidasPagina) {
+        const fenPrevio = fensPreviosRef.current.get(partida.id);
+        fensPreviosRef.current.set(partida.id, partida.fen);
+        if (!fenPrevio || fenPrevio === partida.fen || prefiereMovimientoReducidoRef.current) continue;
+        const nodo = tarjetasRefs.current.get(partida.id);
+        if (!nodo) continue;
+        gsap.fromTo(
+          nodo,
+          { boxShadow: '0 0 0px rgba(0,229,255,0)' },
+          {
+            boxShadow: '0 0 20px rgba(0,229,255,0.55)',
+            duration: 0.25,
+            ease: 'power2.out',
+            yoyo: true,
+            repeat: 1,
+            overwrite: 'auto',
+          }
+        );
+      }
+    },
+    { scope: rejillaRef, dependencies: [partidasPagina] }
+  );
 
   function abrirPartidaGrande(id) {
     setPartidaSeleccionadaId(id);
@@ -195,13 +278,14 @@ export default function Monitoreo() {
         />
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-space-md">
+          <div ref={rejillaRef} className="grid grid-cols-1 sm:grid-cols-2 gap-space-md">
             {partidasPagina.map((partida) => (
               <button
                 key={partida.id}
+                ref={(nodo) => registrarTarjetaRef(partida.id, nodo)}
                 type="button"
                 onClick={() => abrirPartidaGrande(partida.id)}
-                className="bg-surface-container-low rounded-xl p-space-sm shadow-md flex flex-col gap-space-xs hover:bg-surface-container-high transition-colors text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                className="tarjeta-partida bg-surface-container-low rounded-xl p-space-sm shadow-md flex flex-col gap-space-xs hover:bg-surface-container-high transition-colors text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
               >
                 <div className="flex items-center justify-between px-space-2xs gap-space-xs">
                   <span className="font-body-sm text-body-sm font-medium text-on-surface truncate flex items-center gap-1 min-w-0">
@@ -253,9 +337,31 @@ export default function Monitoreo() {
 
 function VistaGrande({ partida, rango, error, alVolver }) {
   const turnoActual = partida?.fen ? turnoDeFen(partida.fen) : 'w';
+  const contenedorRef = useRef(null);
+
+  // Transición suave al "agrandar" un tablero — se dispara una sola vez, al
+  // montar (entrar a esta vista desde la grilla), no en cada sondeo de 1.5s
+  // que solo actualiza el `fen` ya montado.
+  useGSAP(
+    () => {
+      const mm = gsap.matchMedia();
+      mm.add({ reducido: '(prefers-reduced-motion: reduce)' }, (contexto) => {
+        if (!contexto.conditions.reducido) {
+          gsap.from(contenedorRef.current, {
+            autoAlpha: 0,
+            scale: 0.94,
+            duration: 0.35,
+            ease: 'power2.out',
+          });
+        }
+      });
+      return () => mm.revert();
+    },
+    { scope: contenedorRef, dependencies: [] }
+  );
 
   return (
-    <div className="flex flex-col items-center gap-space-md">
+    <div ref={contenedorRef} className="flex flex-col items-center gap-space-md">
       <div className="w-full max-w-[560px] flex items-center justify-between gap-space-sm">
         <button
           onClick={alVolver}

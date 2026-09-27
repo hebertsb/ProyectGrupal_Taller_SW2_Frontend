@@ -25,6 +25,7 @@ export default defineConfig({
       '/usuario': BACKEND_URL,
       '/facilitador': BACKEND_URL,
       '/media': BACKEND_URL,
+      '/tutor': BACKEND_URL,
     },
   },
 });
