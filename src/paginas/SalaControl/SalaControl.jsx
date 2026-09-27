@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
+import gsap from 'gsap';
+import { useGSAP } from '@gsap/react';
 import './SalaControl.css';
 import AvatarAgente3D from '../../componentes/AvatarAgente3D';
+import SimuladorBrazoTablero3D from '../../componentes/SimuladorBrazoTablero3D';
 import { useRazonamiento } from '../../contexto/ContextoRazonamiento';
 import {
   abrirSimulacion3D,
@@ -17,6 +20,7 @@ import {
 } from '../../api/backend';
 import {
   claseDePieza,
+  detectarMovimientosVisuales,
   esPromocionDePeon,
   fenAMatriz,
   nombreCasilla,
@@ -24,6 +28,10 @@ import {
   rutaImagenPieza,
   turnoDeFen,
 } from '../../ajedrez';
+
+gsap.registerPlugin(useGSAP);
+
+const DURACION_VUELO_PIEZA = 0.28; // segundos — deslizamiento contenido, no un efecto largo
 
 const NIVEL_MAX = 20;
 const NIVEL_INICIAL = 8; // arranca en "Intermedio", no siempre al máximo
@@ -52,6 +60,7 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange, e
   const [nivel, setNivel] = useState(NIVEL_INICIAL);
   const [terminada, setTerminada] = useState(false);
   const [resultado, setResultado] = useState(null);
+  const [vistaTablero, setVistaTablero] = useState('2d'); // '2d' (táctil estándar) o '3d' (gemelo digital Dobot CR5AS)
   const [casillaOrigen, setCasillaOrigen] = useState(null);
   const [destinosValidos, setDestinosValidos] = useState([]);
   const [jugadas, setJugadas] = useState([]);
@@ -92,6 +101,158 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange, e
   // abajo siempre compare contra el valor más reciente sin tener que recrear
   // el `setInterval` en cada jugada (ver ese efecto para el porqué).
   const fenActualRef = useRef(null);
+
+  const matriz = fen ? fenAMatriz(fen) : null;
+  const turnoActual = fen ? turnoDeFen(fen) : 'w';
+  const porcentajeVentaja = calcularPorcentajeBarra(analisis);
+
+  // --- Capa de animación (GSAP) — solo presentación, no toca el estado de
+  // arriba. `raizRef` acota los selectores de texto (".panel-entrada") a esta
+  // pantalla; `casillasRefs` guarda el nodo DOM de cada casilla del tablero
+  // (siempre montado, solo cambia qué pieza dibuja adentro) para poder medir
+  // sus coordenadas y animar el "vuelo" de la pieza que se movió.
+  const raizRef = useRef(null);
+  const indicadorTurnoRef = useRef(null);
+  const casillasRefs = useRef(new Map());
+  const fenAnteriorParaAnimarRef = useRef(null);
+  const fantasmasActivosRef = useRef([]);
+  const prefiereMovimientoReducidoRef = useRef(false);
+
+  function registrarCasillaRef(casilla, nodo) {
+    if (nodo) casillasRefs.current.set(casilla, nodo);
+    else casillasRefs.current.delete(casilla);
+  }
+
+  /**
+   * Deslizamiento visual de las piezas que se movieron entre un FEN y el
+   * siguiente (jugada propia, del motor/modelo, o detectada por cámara —
+   * a esta altura ya da lo mismo el origen). No reemplaza el render real:
+   * dibuja una pieza "fantasma" (position: fixed) que viaja de la casilla de
+   * origen a la de destino, oculta un instante la pieza real en destino para
+   * no ver doble, y al terminar la restaura y se autodestruye.
+   */
+  function animarMovimientosVisuales(movimientos) {
+    for (const { casillaOrigen: origen, casillaDestino: destino, pieza } of movimientos) {
+      const nodoOrigen = casillasRefs.current.get(origen);
+      const nodoDestino = casillasRefs.current.get(destino);
+      if (!nodoOrigen || !nodoDestino) continue;
+
+      const rectOrigen = nodoOrigen.getBoundingClientRect();
+      const rectDestino = nodoDestino.getBoundingClientRect();
+      const piezaDestinoNodo = nodoDestino.querySelector('.chess-piece');
+      if (piezaDestinoNodo) gsap.set(piezaDestinoNodo, { autoAlpha: 0 });
+
+      const tamano = Math.min(rectOrigen.width, rectOrigen.height) * 0.82;
+      const fantasma = document.createElement('img');
+      fantasma.src = rutaImagenPieza(pieza);
+      fantasma.alt = '';
+      fantasma.setAttribute('aria-hidden', 'true');
+      Object.assign(fantasma.style, {
+        position: 'fixed',
+        left: `${rectOrigen.left + rectOrigen.width / 2 - tamano / 2}px`,
+        top: `${rectOrigen.top + rectOrigen.height / 2 - tamano / 2}px`,
+        width: `${tamano}px`,
+        height: `${tamano}px`,
+        pointerEvents: 'none',
+        zIndex: 60,
+        filter: 'drop-shadow(0 3px 3px rgba(0,0,0,0.45))',
+      });
+      document.body.appendChild(fantasma);
+      fantasmasActivosRef.current.push(fantasma);
+
+      const dx = rectDestino.left + rectDestino.width / 2 - (rectOrigen.left + rectOrigen.width / 2);
+      const dy = rectDestino.top + rectDestino.height / 2 - (rectOrigen.top + rectOrigen.height / 2);
+
+      gsap.to(fantasma, {
+        x: dx,
+        y: dy,
+        duration: DURACION_VUELO_PIEZA,
+        ease: 'power2.inOut',
+        onComplete: () => {
+          fantasma.remove();
+          fantasmasActivosRef.current = fantasmasActivosRef.current.filter((nodo) => nodo !== fantasma);
+          if (piezaDestinoNodo) gsap.set(piezaDestinoNodo, { clearProps: 'visibility,opacity' });
+        },
+      });
+    }
+  }
+
+  // Registra si hay que respetar "reducir movimiento" (patrón oficial de GSAP:
+  // gsap.matchMedia()) y, si no, hace aparecer los paneles con un fade-up
+  // escalonado apenas se monta la pantalla — una sola vez, no en cada jugada.
+  useGSAP(
+    () => {
+      const mm = gsap.matchMedia();
+      mm.add({ reducido: '(prefers-reduced-motion: reduce)' }, (contexto) => {
+        const { reducido } = contexto.conditions;
+        prefiereMovimientoReducidoRef.current = reducido;
+        if (!reducido) {
+          gsap.from('.panel-entrada', {
+            autoAlpha: 0,
+            y: 14,
+            duration: 0.45,
+            stagger: 0.06,
+            ease: 'power2.out',
+          });
+        }
+        return () => {
+          prefiereMovimientoReducidoRef.current = false;
+        };
+      });
+      return () => mm.revert();
+    },
+    { scope: raizRef, dependencies: [] }
+  );
+
+  // Deslizamiento de piezas: se dispara solo cuando cambia `fen` (jugada real
+  // aplicada), comparando contra el FEN anterior. `detectarMovimientosVisuales`
+  // (ajedrez.js) es la única lógica de "qué se movió" — acá solo se anima.
+  useGSAP(
+    () => {
+      const anterior = fenAnteriorParaAnimarRef.current;
+      fenAnteriorParaAnimarRef.current = fen;
+      if (!anterior || !fen || prefiereMovimientoReducidoRef.current) return;
+      const movimientos = detectarMovimientosVisuales(anterior, fen);
+      if (movimientos.length > 0) animarMovimientosVisuales(movimientos);
+
+      return () => {
+        // Si la pantalla se desmonta (cambio de pestaña) a mitad de un vuelo,
+        // no dejamos fantasmas huérfanos pegados al <body>.
+        fantasmasActivosRef.current.forEach((nodo) => nodo.remove());
+        fantasmasActivosRef.current = [];
+      };
+    },
+    { scope: raizRef, dependencies: [fen] }
+  );
+
+  // Transición sutil del indicador de turno (y del cartel de "TERMINADA") cada
+  // vez que cambia a quién le toca jugar o termina la partida — un pulso
+  // breve de opacidad/escala, nunca un rebote llamativo.
+  useGSAP(
+    () => {
+      if (!indicadorTurnoRef.current || prefiereMovimientoReducidoRef.current) return;
+      gsap.fromTo(
+        indicadorTurnoRef.current,
+        { autoAlpha: 0.4, scale: 0.97 },
+        { autoAlpha: 1, scale: 1, duration: 0.3, ease: 'power2.out' }
+      );
+    },
+    { scope: raizRef, dependencies: [turnoActual, terminada] }
+  );
+
+  const { contextSafe } = useGSAP({ scope: raizRef });
+
+  // Feedback táctil sutil al presionar un botón de acción — un pulso chico de
+  // escala, contextSafe porque se crea en un handler de evento (no durante el
+  // efecto de useGSAP), ver skill gsap-react.
+  const manejarPulsacion = contextSafe((evento) => {
+    if (prefiereMovimientoReducidoRef.current) return;
+    gsap.fromTo(
+      evento.currentTarget,
+      { scale: 1 },
+      { scale: 0.94, duration: 0.08, ease: 'power1.out', yoyo: true, repeat: 1 }
+    );
+  });
 
   useEffect(() => {
     // `partidaIdInicial` viene de App.tsx y sobrevive a que este componente se
@@ -389,26 +550,11 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange, e
     }
   }
 
-  async function manejarAbrirSimulacion3D() {
+  function manejarAbrirSimulacion3D() {
     if (!partidaId) return;
-    setError(null);
-    setAvisoSimulacion3D(null);
-    setCargando('simulacion3d');
-    try {
-      await abrirSimulacion3D(partidaId);
-      setAvisoSimulacion3D('Ventana 3D abierta — buscala en la barra de tareas');
-      setTimeout(() => setAvisoSimulacion3D(null), 6000);
-    } catch (err) {
-      if (err.status === 404) {
-        setError('No se encontró la partida — iniciá una nueva.');
-      } else {
-        // 503 (falta el entorno conda con PyBullet) trae en `detail` justo lo
-        // que hay que instalar — se muestra tal cual, es información útil.
-        setError(err.message);
-      }
-    } finally {
-      setCargando(null);
-    }
+    setVistaTablero((v) => (v === '3d' ? '2d' : '3d'));
+    setAvisoSimulacion3D('Gemelo Digital 3D (Dobot CR5AS) activo en pantalla');
+    setTimeout(() => setAvisoSimulacion3D(null), 5000);
   }
 
   /**
@@ -442,12 +588,8 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange, e
     setFotoKey((valor) => valor + 1);
   }
 
-  const matriz = fen ? fenAMatriz(fen) : null;
-  const turnoActual = fen ? turnoDeFen(fen) : 'w';
-  const porcentajeVentaja = calcularPorcentajeBarra(analisis);
-
   return (
-    <div className="w-full px-space-lg py-space-md flex flex-col gap-space-lg max-w-[1720px] mx-auto animate-in fade-in duration-500">
+    <div ref={raizRef} className="w-full px-space-lg py-space-md flex flex-col gap-space-lg max-w-[1720px] mx-auto animate-in fade-in duration-500">
       {/* SUB-BARRA DE ESTADO SUPERIOR */}
       <div className="flex items-center justify-between px-space-md py-space-xs rounded-xl bg-surface-container-low/70 shadow-md flex-wrap gap-2">
         <div className="flex items-center gap-space-md flex-wrap">
@@ -471,7 +613,7 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange, e
             </>
           )}
         </div>
-        <div className="flex items-center gap-space-lg">
+        <div ref={indicadorTurnoRef} className="flex items-center gap-space-lg">
           {terminada ? (
             <span className="font-mono-metric text-mono-metric text-primary font-medium">TERMINADA — {resultado}</span>
           ) : (
@@ -505,7 +647,7 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange, e
           />
 
           {/* SELECTOR DE OPONENTE (MODELO IA v5 vs STOCKFISH 16) */}
-          <div className="bg-surface-container-low rounded-xl p-3.5 shadow-xl flex flex-col gap-2.5 border border-outline-variant/30">
+          <div className="panel-entrada bg-surface-container-low rounded-xl p-3.5 shadow-xl flex flex-col gap-2.5 border border-outline-variant/30">
             <div className="flex items-center justify-between">
               <span className="font-mono-micro text-[11px] uppercase tracking-wider text-on-surface-variant flex items-center gap-1 font-semibold">
                 <span className="material-symbols-outlined text-[14px] text-primary">swords</span>
@@ -523,6 +665,7 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange, e
                   setTipoOponente('modelo');
                   manejarNuevaPartida('modelo');
                 }}
+                onPointerDown={manejarPulsacion}
                 disabled={cargando === 'nueva'}
                 className={`py-2 px-1.5 rounded-lg font-mono-label text-[11px] font-semibold flex flex-col items-center justify-center gap-1 transition-all ${
                   tipoOponente === 'modelo'
@@ -543,6 +686,7 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange, e
                   setTipoOponente('motor');
                   manejarNuevaPartida('motor');
                 }}
+                onPointerDown={manejarPulsacion}
                 disabled={cargando === 'nueva'}
                 className={`py-2 px-1.5 rounded-lg font-mono-label text-[11px] font-semibold flex flex-col items-center justify-center gap-1 transition-all ${
                   tipoOponente === 'motor'
@@ -565,7 +709,7 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange, e
               a mano. Solo facilitador; solo funciona en una partida propia (el
               backend devuelve 400 si no lo es). */}
           {esFacilitador && (
-            <div className="bg-surface-container-low rounded-xl p-space-md shadow-xl flex flex-col gap-space-sm">
+            <div className="panel-entrada bg-surface-container-low rounded-xl p-space-md shadow-xl flex flex-col gap-space-sm">
               <div className="flex items-center justify-between">
                 <span className="font-mono-micro text-mono-micro uppercase tracking-wider text-on-surface-variant flex items-center gap-1">
                   <span className="material-symbols-outlined text-[13px] text-primary">sensors</span> TRANSMISIÓN EN VIVO
@@ -596,13 +740,14 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange, e
               de abajo — un jugador practicando desde el navegador por defecto no
               tiene tablero físico ni cámara al lado. */}
           {(esFacilitador || permiteCamara) && (
-            <div className="bg-surface-container-low rounded-xl p-space-md shadow-xl flex flex-col gap-space-sm relative overflow-hidden">
+            <div className="panel-entrada bg-surface-container-low rounded-xl p-space-md shadow-xl flex flex-col gap-space-sm relative overflow-hidden">
               <div className="flex items-center justify-between">
                 <span className="font-mono-micro text-mono-micro uppercase tracking-wider text-on-surface-variant flex items-center gap-1">
                   <span className="material-symbols-outlined text-[13px] text-primary">videocam</span> CÁMARA FIJA
                 </span>
                 <button
                   onClick={actualizarFoto}
+                  onPointerDown={manejarPulsacion}
                   className="font-mono-micro text-mono-micro text-primary-fixed-dim px-1.5 py-0.5 rounded bg-primary/10 hover:bg-primary/20 transition-colors"
                 >
                   ACTUALIZAR
@@ -681,7 +826,7 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange, e
               de ningún permiso por partida, no es algo que se le pueda "regalar"
               a un jugador. */}
           {esFacilitador && (
-            <div className="bg-surface-container-low rounded-xl p-space-md shadow-xl flex flex-col gap-space-sm">
+            <div className="panel-entrada bg-surface-container-low rounded-xl p-space-md shadow-xl flex flex-col gap-space-sm">
               <div className="flex items-center justify-between">
                 <span className="font-mono-micro text-mono-micro uppercase tracking-wider text-on-surface-variant flex items-center gap-1">
                   <span className="material-symbols-outlined text-[13px] text-primary">precision_manufacturing</span> BRAZO ROBÓTICO
@@ -713,7 +858,7 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange, e
               facilitador la puede habilitar para el jugador partida por partida
               (`permite_simulacion_3d`). El facilitador siempre puede abrirla. */}
           {(esFacilitador || permiteSimulacion3D) && (
-            <div className="bg-surface-container-low rounded-xl p-space-md shadow-xl flex flex-col gap-space-sm">
+            <div className="panel-entrada bg-surface-container-low rounded-xl p-space-md shadow-xl flex flex-col gap-space-sm">
               {esFacilitador && (
                 <InterruptorPermiso
                   id="permiso-simulacion3d"
@@ -725,15 +870,19 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange, e
               )}
               <button
                 onClick={manejarAbrirSimulacion3D}
-                disabled={!partidaId || cargando === 'simulacion3d'}
-                title={!partidaId ? 'Iniciá una partida primero' : 'Abre una ventana de escritorio aparte con el tablero 3D en vivo'}
-                className="w-full py-2 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface transition-colors font-mono-label text-mono-label flex items-center justify-center gap-1.5 disabled:opacity-50"
+                disabled={!partidaId}
+                title={!partidaId ? 'Iniciá una partida primero' : 'Alterna el Gemelo Digital 3D (Dobot CR5AS) en pantalla'}
+                className={`w-full py-2.5 rounded-lg transition-all font-mono-label text-mono-label flex items-center justify-center gap-2 disabled:opacity-50 ${
+                  vistaTablero === '3d'
+                    ? 'bg-[#00e5ff] text-black font-bold shadow-[0_0_15px_rgba(0,229,255,0.45)]'
+                    : 'bg-surface-container-high hover:bg-surface-bright text-on-surface'
+                }`}
               >
-                <span className="material-symbols-outlined text-[16px]">view_in_ar</span>
-                {cargando === 'simulacion3d' ? 'ABRIENDO…' : 'ABRIR SIMULACIÓN 3D'}
+                <span className="material-symbols-outlined text-[17px]">precision_manufacturing</span>
+                {vistaTablero === '3d' ? 'VISTA 3D EN PANTALLA (ACTIVA)' : 'VER GEMELO DIGITAL 3D'}
               </button>
               {avisoSimulacion3D && (
-                <div className="bg-primary/10 text-primary font-mono-micro text-mono-micro px-2 py-1.5 rounded-lg text-center">
+                <div className="bg-primary/10 text-primary font-mono-micro text-mono-micro px-2 py-1.5 rounded-lg text-center animate-fadeIn">
                   {avisoSimulacion3D}
                 </div>
               )}
@@ -741,83 +890,131 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange, e
           )}
         </div>
 
-        {/* COLUMNA CENTRAL: TABLERO REAL */}
+        {/* COLUMNA CENTRAL: TABLERO REAL Y GEMELO DIGITAL 3D */}
         <div className="xl:col-span-6 flex flex-col items-center justify-center">
-          <div className="relative w-full max-w-[660px] flex items-center justify-center">
-            {analisis && (
-              <div className="absolute -left-7 top-6 bottom-6 w-3 rounded-full bg-surface-container-high overflow-hidden shadow-inner flex flex-col justify-end p-0.5">
-                <div
-                  className="w-full bg-gradient-to-t from-primary-container to-primary rounded-full transition-all duration-700 shadow-[0_0_8px_#00e5ff]"
-                  style={{ height: `${porcentajeVentaja}%` }}
-                ></div>
-                <span className="absolute -left-11 top-1/2 -translate-y-1/2 font-mono-micro text-mono-micro font-medium text-primary bg-surface-container-lowest/90 px-1 py-0.5 rounded shadow">
-                  {formatearEvaluacion(analisis)}
-                </span>
-              </div>
-            )}
-
-            <div
-              className="w-full aspect-square p-5 sm:p-7 rounded-2xl shadow-[0_24px_50px_-12px_rgba(0,0,0,0.9),0_0_30px_rgba(0,0,0,0.7)] relative flex items-center justify-center"
-              style={{
-                background: 'linear-gradient(135deg, #422617 0%, #2c180e 25%, #4a2b1b 50%, #20110a 75%, #3d2215 100%)',
-                boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.15), inset 0 -3px 6px rgba(0,0,0,0.8), 0 20px 40px -10px #000',
-              }}
-            >
-              <div
-                className="w-full h-full rounded-lg p-2.5 sm:p-3 relative flex items-center justify-center shadow-inner"
-                style={{ background: 'linear-gradient(180deg, #1b0e08 0%, #2d180f 100%)' }}
+          {/* SELECTOR DE VISTA: TABLERO 2D vs GEMELO DIGITAL 3D DOBOT CR5AS */}
+          <div className="w-full max-w-[660px] flex items-center justify-between mb-3 px-1">
+            <div className="inline-flex p-1 rounded-xl bg-surface-container-low border border-white/10 font-mono text-xs shadow-lg">
+              <button
+                type="button"
+                onClick={() => setVistaTablero('2d')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                  vistaTablero === '2d'
+                    ? 'bg-[#00e5ff] text-black font-bold shadow-[0_0_12px_rgba(0,229,255,0.4)]'
+                    : 'text-slate-400 hover:text-white'
+                }`}
               >
-                <div className="w-full h-full grid grid-cols-8 grid-rows-8 rounded shadow-2xl overflow-hidden relative">
-                  {matriz &&
-                    matriz.map((fila, indiceFila) =>
-                      fila.map((pieza, indiceColumna) => {
-                        const casilla = nombreCasilla(indiceFila, indiceColumna);
-                        const clara = (indiceFila + indiceColumna) % 2 === 0;
-                        const seleccionada = casilla === casillaOrigen;
-                        const esDestinoValido = destinosValidos.includes(casilla);
-                        return (
-                          <button
-                            key={casilla}
-                            type="button"
-                            onClick={() => manejarClicCasilla(casilla)}
-                            disabled={viendoPartidaAjena}
-                            aria-label={`Casilla ${casilla}${pieza ? ', pieza ' + pieza : ', vacía'}${esDestinoValido ? ', jugada válida' : ''}${viendoPartidaAjena ? ', solo lectura' : ''}`}
-                            className={`relative flex items-center justify-center ${clara ? 'bg-[#b89772]' : 'bg-[#543423]'} ${seleccionada ? 'ring-2 ring-inset ring-primary' : ''} ${viendoPartidaAjena ? 'cursor-default' : ''}`}
-                          >
-                            {pieza && (
-                              <div className={claseDePieza(pieza)}>
-                                <img
-                                  className="chess-piece-imagen"
-                                  src={rutaImagenPieza(pieza)}
-                                  alt={pieza}
-                                  draggable={false}
-                                />
-                              </div>
-                            )}
-                            {esDestinoValido && (
-                              <span
-                                className={`pointer-events-none absolute rounded-full ${
-                                  pieza
-                                    ? 'inset-[8%] border-[3px] border-primary/80 shadow-[0_0_6px_rgba(0,229,255,0.5)]'
-                                    : 'w-[28%] h-[28%] bg-primary/70 shadow-[0_0_6px_rgba(0,229,255,0.6)]'
-                                }`}
-                              ></span>
-                            )}
-                          </button>
-                        );
-                      })
-                    )}
-                </div>
+                <span className="material-symbols-outlined text-[15px]">grid_view</span>
+                <span>Tablero 2D Táctil</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setVistaTablero('3d')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                  vistaTablero === '3d'
+                    ? 'bg-[#00e5ff] text-black font-bold shadow-[0_0_12px_rgba(0,229,255,0.4)]'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[15px]">precision_manufacturing</span>
+                <span>Gemelo Digital 3D (Dobot CR5AS)</span>
+              </button>
+            </div>
 
-                <div className="absolute left-1 top-2 bottom-2 flex flex-col justify-around font-mono-micro text-[9px] text-[#e0cfba]/40 pointer-events-none font-bold select-none">
-                  <span>8</span><span>7</span><span>6</span><span>5</span><span>4</span><span>3</span><span>2</span><span>1</span>
+            {vistaTablero === '3d' && (
+              <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-cyan-950/60 border border-[#00e5ff]/30 text-[11px] font-mono text-[#00e5ff]">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#00e5ff] animate-ping" />
+                <span>CINEMÁTICA 6-DOF EN VIVO</span>
+              </span>
+            )}
+          </div>
+
+          {vistaTablero === '3d' ? (
+            <div className="w-full max-w-[660px] aspect-square rounded-2xl overflow-hidden shadow-2xl">
+              <SimuladorBrazoTablero3D
+                fen={fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'}
+                ultimoMovimiento={jugadas[jugadas.length - 1]}
+                pensando={cargando === 'jugada'}
+              />
+            </div>
+          ) : (
+            <div className="panel-entrada relative w-full max-w-[660px] flex items-center justify-center">
+              {analisis && (
+                <div className="absolute -left-7 top-6 bottom-6 w-3 rounded-full bg-surface-container-high overflow-hidden shadow-inner flex flex-col justify-end p-0.5">
+                  <div
+                    className="w-full bg-gradient-to-t from-primary-container to-primary rounded-full transition-all duration-700 shadow-[0_0_8px_#00e5ff]"
+                    style={{ height: `${porcentajeVentaja}%` }}
+                  ></div>
+                  <span className="absolute -left-11 top-1/2 -translate-y-1/2 font-mono-micro text-mono-micro font-medium text-primary bg-surface-container-lowest/90 px-1 py-0.5 rounded shadow">
+                    {formatearEvaluacion(analisis)}
+                  </span>
                 </div>
-                <div className="absolute bottom-0.5 left-4 right-4 flex justify-around font-mono-micro text-[9px] text-[#e0cfba]/40 pointer-events-none font-bold select-none">
-                  <span>a</span><span>b</span><span>c</span><span>d</span><span>e</span><span>f</span><span>g</span><span>h</span>
+              )}
+
+              <div
+                className="w-full aspect-square p-5 sm:p-7 rounded-2xl shadow-[0_24px_50px_-12px_rgba(0,0,0,0.9),0_0_30px_rgba(0,0,0,0.7)] relative flex items-center justify-center"
+                style={{
+                  background: 'linear-gradient(135deg, #422617 0%, #2c180e 25%, #4a2b1b 50%, #20110a 75%, #3d2215 100%)',
+                  boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.15), inset 0 -3px 6px rgba(0,0,0,0.8), 0 20px 40px -10px #000',
+                }}
+              >
+                <div
+                  className="w-full h-full rounded-lg p-2.5 sm:p-3 relative flex items-center justify-center shadow-inner"
+                  style={{ background: 'linear-gradient(180deg, #1b0e08 0%, #2d180f 100%)' }}
+                >
+                  <div className="w-full h-full grid grid-cols-8 grid-rows-8 rounded shadow-2xl overflow-hidden relative">
+                    {matriz &&
+                      matriz.map((fila, indiceFila) =>
+                        fila.map((pieza, indiceColumna) => {
+                          const casilla = nombreCasilla(indiceFila, indiceColumna);
+                          const clara = (indiceFila + indiceColumna) % 2 === 0;
+                          const seleccionada = casilla === casillaOrigen;
+                          const esDestinoValido = destinosValidos.includes(casilla);
+                          return (
+                            <button
+                              key={casilla}
+                              ref={(nodo) => registrarCasillaRef(casilla, nodo)}
+                              type="button"
+                              onClick={() => manejarClicCasilla(casilla)}
+                              disabled={viendoPartidaAjena}
+                              aria-label={`Casilla ${casilla}${pieza ? ', pieza ' + pieza : ', vacía'}${esDestinoValido ? ', jugada válida' : ''}${viendoPartidaAjena ? ', solo lectura' : ''}`}
+                              className={`relative flex items-center justify-center ${clara ? 'bg-[#b89772]' : 'bg-[#543423]'} ${seleccionada ? 'ring-2 ring-inset ring-primary' : ''} ${viendoPartidaAjena ? 'cursor-default' : ''}`}
+                            >
+                              {pieza && (
+                                <div className={claseDePieza(pieza)}>
+                                  <img
+                                    className="chess-piece-imagen"
+                                    src={rutaImagenPieza(pieza)}
+                                    alt={pieza}
+                                    draggable={false}
+                                  />
+                                </div>
+                              )}
+                              {esDestinoValido && (
+                                <span
+                                  className={`pointer-events-none absolute rounded-full ${
+                                    pieza
+                                      ? 'inset-[8%] border-[3px] border-primary/80 shadow-[0_0_6px_rgba(0,229,255,0.5)]'
+                                      : 'w-[28%] h-[28%] bg-primary/70 shadow-[0_0_6px_rgba(0,229,255,0.6)]'
+                                  }`}
+                                ></span>
+                              )}
+                            </button>
+                          );
+                        })
+                      )}
+                  </div>
+
+                  <div className="absolute left-1 top-2 bottom-2 flex flex-col justify-around font-mono-micro text-[9px] text-[#e0cfba]/40 pointer-events-none font-bold select-none">
+                    <span>8</span><span>7</span><span>6</span><span>5</span><span>4</span><span>3</span><span>2</span><span>1</span>
+                  </div>
+                  <div className="absolute bottom-0.5 left-4 right-4 flex justify-around font-mono-micro text-[9px] text-[#e0cfba]/40 pointer-events-none font-bold select-none">
+                    <span>a</span><span>b</span><span>c</span><span>d</span><span>e</span><span>f</span><span>g</span><span>h</span>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
 
           {viendoPartidaAjena && (
             <div className="flex items-center gap-1 mt-space-xs font-mono-micro text-[10px] text-outline uppercase tracking-wide">
@@ -869,6 +1066,7 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange, e
                 )}
                 <button
                   onClick={manejarReevaluar}
+                  onPointerDown={manejarPulsacion}
                   disabled={cargando === 'reevaluar' || !fen}
                   className="px-space-md py-2.5 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface transition-colors font-mono-label text-mono-label flex items-center gap-1.5 disabled:opacity-50"
                 >
@@ -876,6 +1074,7 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange, e
                 </button>
                 <button
                   onClick={() => manejarNuevaPartida()}
+                  onPointerDown={manejarPulsacion}
                   disabled={cargando === 'nueva'}
                   className="px-space-lg py-2.5 rounded-lg bg-primary-container text-on-primary-container font-headline-sm text-body-lg font-medium shadow-[0_0_16px_rgba(0,229,255,0.35)] hover:shadow-[0_0_24px_rgba(0,229,255,0.6)] hover:bg-primary transition-all flex items-center gap-2 disabled:opacity-50"
                 >
@@ -889,7 +1088,7 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange, e
 
         {/* COLUMNA DERECHA: ANÁLISIS REAL DE STOCKFISH E HISTORIAL */}
         <div className="xl:col-span-3 flex flex-col gap-space-md">
-          <div className="bg-surface-container-low rounded-xl p-space-md shadow-xl flex flex-col gap-space-sm">
+          <div className="panel-entrada bg-surface-container-low rounded-xl p-space-md shadow-xl flex flex-col gap-space-sm">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-[15px] text-primary">neurology</span>
@@ -951,7 +1150,7 @@ export default function SalaControl({ partidaIdInicial, onPartidaActivaChange, e
             )}
           </div>
 
-          <div className="bg-surface-container-low rounded-xl p-space-md shadow-xl flex flex-col gap-space-sm flex-1">
+          <div className="panel-entrada bg-surface-container-low rounded-xl p-space-md shadow-xl flex flex-col gap-space-sm flex-1">
             <span className="font-mono-micro text-mono-micro uppercase tracking-wider text-on-surface-variant flex items-center gap-1">
               <span className="material-symbols-outlined text-[14px] text-primary">format_list_numbered</span> MOVIMIENTOS DE ESTA PARTIDA
             </span>
