@@ -38,6 +38,40 @@ export function obtenerPartida(partidaId) {
   return solicitar(`/partida/${partidaId}`, { method: "GET" });
 }
 
+/**
+ * Arma el `Error` de una respuesta HTTP fallida: usa el `detail` del backend
+ * solo si es texto (un 422 de FastAPI manda una lista, que no sirve mostrar
+ * tal cual) y conserva el `status` para que la UI distinga 404, 409, 403, etc.
+ */
+async function errorDeRespuesta(respuesta) {
+  const detalle = await respuesta.json().catch(() => null);
+  const mensaje = typeof detalle?.detail === "string" ? detalle.detail : `Error ${respuesta.status}`;
+  const error = new Error(mensaje);
+  error.status = respuesta.status;
+  return error;
+}
+
+/**
+ * Partida sin terminar del usuario autenticado, para ofrecer retomarla en vez
+ * de crear otra al abrir la Sala de Control. Devuelve `null` si no hay ninguna
+ * (el backend responde `null` o 204). Campos nuevos opcionales: `estado`,
+ * `iniciada_en`, `actualizada_en`, `jugadas_jugador`. Si el endpoint todavía no
+ * existe en el backend desplegado lanza el error con su `status` (404/405): quien
+ * llama decide degradar al flujo de siempre.
+ */
+export async function obtenerPartidaEnCurso() {
+  const token = localStorage.getItem("access_token");
+  const headers = { "Content-Type": "application/json" };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  const respuesta = await fetch("/partida/en-curso", { method: "GET", headers });
+  if (respuesta.status === 204) return null;
+  if (!respuesta.ok) throw await errorDeRespuesta(respuesta);
+  const datos = await respuesta.json().catch(() => null);
+  return datos && typeof datos === "object" ? datos : null;
+}
+
 /** Registro de partidas jugadas mientras el backend sigue corriendo (no sobrevive un reinicio). */
 export function listarPartidas() {
   return solicitar("/partida", { method: "GET" });
@@ -268,6 +302,35 @@ async function solicitarAuth(endpoint, opciones = {}) {
 }
 
 /**
+ * Perfil actual del usuario autenticado, leído del servidor. El `usuario` que
+ * la web guarda en localStorage al loguear no se actualiza solo: esto sirve
+ * para traer el nivel recalibrado (`nivel_estimado`, `rango_estimado`) y los
+ * campos `diagnostico_completado` / `partidas_calibradas`.
+ */
+export function obtenerPerfil() {
+  return solicitarAuth("/auth/me");
+}
+
+/**
+ * Calibra el nivel del jugador con una partida terminada: el backend la
+ * analiza contra Stockfish (tarda unos segundos) y devuelve si quedó
+ * registrada (`registrada`), el motivo si no (`motivo`), la precisión y el
+ * nivel/rango nuevo. Es idempotente: repetirla para la misma partida responde
+ * `motivo: "ya_registrada"`.
+ */
+export function calibrarPartida(partidaId) {
+  return solicitarAuth(`/partida/${partidaId}/calibrar`, { method: "POST" });
+}
+
+/**
+ * Nivel medido del jugador para la sección "Tu nivel": nivel/rango, progreso
+ * hacia el siguiente nivel, últimas calibraciones y la escala vigente.
+ */
+export function obtenerNivelJugador() {
+  return solicitarAuth("/auth/nivel");
+}
+
+/**
  * Edición del propio perfil — cualquier rol autenticado (RF/HU perfil).
  * Edición parcial: solo se pisan los campos incluidos en `datos`.
  */
@@ -438,4 +501,71 @@ export async function borrarHistorialTutor() {
     error.status = respuesta.status;
     throw error;
   }
+}
+
+/** Entrenamiento del modelo Turing (solo facilitadores) */
+
+/**
+ * Estado de los datos acumulados para reentrenar a Turing: umbral de partidas,
+ * cuántas partidas válidas hay en total y cuántas son nuevas desde la última
+ * descarga, progreso (0..1), si ya está `listo_para_entrenar`, la
+ * `ultima_descarga` (o `null`) y el `modelo_actual`. Responde 403 a los
+ * jugadores. El reentrenamiento en sí NO es automático: lo hace el equipo
+ * técnico por lotes (HU4, pendiente); esto solo dice si ya hay datos suficientes.
+ */
+export function obtenerEstadoEntrenamiento() {
+  return solicitarAuth("/entrenamiento/estado");
+}
+
+/**
+ * Nombre de archivo que viene en el header `Content-Disposition`
+ * (`filename="..."` o `filename*=UTF-8''...`), o `null` si no se puede leer.
+ */
+function nombreDesdeContentDisposition(cabecera) {
+  if (!cabecera) return null;
+  const codificado = /filename\*\s*=\s*(?:UTF-8|utf-8)''([^;]+)/.exec(cabecera);
+  if (codificado) {
+    try {
+      return decodeURIComponent(codificado[1].trim());
+    } catch {
+      // si la codificación viene rota se prueba con el formato simple
+    }
+  }
+  const simple = /filename\s*=\s*"?([^";]+)"?/.exec(cabecera);
+  return simple ? simple[1].trim() : null;
+}
+
+/** `dataset_ajedrez_AAAAMMDD_HHMM.zip` con la hora local, por si el header no se puede leer. */
+function nombreDatasetPorDefecto() {
+  const ahora = new Date();
+  const dos = (n) => String(n).padStart(2, "0");
+  const fecha = `${ahora.getFullYear()}${dos(ahora.getMonth() + 1)}${dos(ahora.getDate())}`;
+  const hora = `${dos(ahora.getHours())}${dos(ahora.getMinutes())}`;
+  return `dataset_ajedrez_${fecha}_${hora}.zip`;
+}
+
+/**
+ * Descarga el dataset de entrenamiento (ZIP con partidas.pgn, jugadas.csv,
+ * partidas.csv, manifiesto.json y LEEME.txt). Hace falta leer el binario con
+ * fetch (lleva el token), así que devuelve `{ blob, nombre }` y la pantalla
+ * dispara la descarga con un `<a download>`. Con `soloNuevas` trae únicamente
+ * las partidas posteriores a la última descarga. Si falla lanza un `Error` con
+ * el `detail` del backend (ej. 409 cuando todavía no hay partidas válidas).
+ */
+export async function descargarDatasetEntrenamiento({ soloNuevas = false } = {}) {
+  const token = localStorage.getItem("access_token");
+  const headers = { "Content-Type": "application/json" };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  const respuesta = await fetch("/entrenamiento/dataset", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ solo_nuevas: Boolean(soloNuevas) }),
+  });
+  if (!respuesta.ok) throw await errorDeRespuesta(respuesta);
+  const blob = await respuesta.blob();
+  const nombre =
+    nombreDesdeContentDisposition(respuesta.headers.get("Content-Disposition")) ?? nombreDatasetPorDefecto();
+  return { blob, nombre };
 }

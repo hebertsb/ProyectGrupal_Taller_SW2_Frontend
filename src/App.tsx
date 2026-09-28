@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useEffect, useState, Suspense, lazy } from 'react';
+import { useEffect, useRef, useState, Suspense, lazy } from 'react';
 import SalaControl from './paginas/SalaControl/SalaControl';
 import RazonamientoNeuronal from './paginas/RazonamientoNeuronal/RazonamientoNeuronal';
 import Administracion from './paginas/Administracion/Administracion';
@@ -13,13 +13,18 @@ import PanelAprendizaje from './paginas/PanelAprendizaje/PanelAprendizaje';
 import DemostracionEnVivo from './paginas/DemostracionEnVivo/DemostracionEnVivo';
 import Monitoreo from './paginas/Monitoreo/Monitoreo';
 import ConfiguracionEnsenanza from './paginas/ConfiguracionEnsenanza/ConfiguracionEnsenanza';
+import EntrenamientoModelo from './paginas/EntrenamientoModelo/EntrenamientoModelo';
 import Perfil from './paginas/Perfil/Perfil';
 import Login from './paginas/Login/Login';
 import AccesoRestringido from './componentes/AccesoRestringido';
-import { backendEnLinea } from './api/backend';
+import { backendEnLinea, obtenerDemostracionActiva, obtenerEstadoEntrenamiento, obtenerPerfil } from './api/backend';
 import { ProveedorRazonamiento } from './contexto/ContextoRazonamiento';
 
 const GestionUsuarios = lazy(() => import('./paginas/Administracion/GestionUsuarios.jsx'));
+
+// Mismo intervalo que ya usaba el sondeo local de RegistroPartidas.jsx — acá se sondea a nivel
+// global (cualquier pantalla), así que ese sondeo local queda redundante pero no molesta.
+const INTERVALO_SONDEO_DEMOSTRACION_MS = 8000;
 
 function obtenerUsuarioGuardado() {
   try {
@@ -45,6 +50,18 @@ export default function App() {
   // transmitiendo" — ver Registro de Partidas y DemostracionEnVivo.
   const [partidaDemostracionId, setPartidaDemostracionId] = useState<string | null>(null);
   const [usuario, setUsuario] = useState(() => obtenerUsuarioGuardado());
+  // Estado de "datos para entrenar a Turing" (HU4) — solo tiene sentido para el facilitador.
+  // Se sondea acá (una vez al iniciar sesión y después cada 60 s) para poder mostrar la insignia
+  // del menú aunque la pantalla de Entrenamiento del modelo nunca se haya abierto; esa pantalla
+  // reusa este mismo estado para no repetir la consulta apenas se abre.
+  const [estadoEntrenamiento, setEstadoEntrenamiento] = useState<any>(null);
+  // Transmisión en vivo del facilitador, sondeada en cualquier pantalla (no solo Registro de
+  // Partidas) para que un jugador se entere aunque esté jugando su propia partida en Sala de
+  // Control. `null` si no hay ninguna activa. Se descarta apenas se cierra sesión o el rol pasa a
+  // facilitador (a él nunca le corresponde este aviso). Un id de demostración "cerrado" a mano por
+  // el jugador (botón "×" del banner) no vuelve a mostrarse solo — hasta que cambie a otra distinta.
+  const [demostracionActiva, setDemostracionActiva] = useState<any>(null);
+  const [bannerDemoDescartadoId, setBannerDemoDescartadoId] = useState<string | null>(null);
 
   // Limpiar partidas activas en memoria al cambiar de cuenta para que cada usuario tenga su propio tablero independiente
   useEffect(() => {
@@ -77,6 +94,32 @@ export default function App() {
       // el estado en memoria ya se actualizó.
     }
   };
+
+  // Relee el perfil del servidor y lo mezcla con el usuario guardado. El `usuario`
+  // de localStorage se fija al loguear y nunca se actualizaba solo, por eso un
+  // nivel recalibrado no llegaba a la Sala de Control. Silenciosa a propósito:
+  // si el backend no responde (o todavía no expone los campos nuevos) la UI
+  // sigue con lo que ya tenía. Devuelve el usuario ya mezclado, o null si no se pudo actualizar.
+  const usuarioRef = useRef(usuario);
+  useEffect(() => {
+    usuarioRef.current = usuario;
+  }, [usuario]);
+
+  async function refrescarUsuario() {
+    try {
+      const perfil = await obtenerPerfil();
+      const actual = usuarioRef.current;
+      // Si mientras tanto se cerró la sesión o cambió la cuenta, no se reescribe nada.
+      if (!perfil || typeof perfil !== 'object' || !actual) return null;
+      if (perfil.id != null && actual.id != null && perfil.id !== actual.id) return null;
+      const combinado = { ...actual, ...perfil };
+      usuarioRef.current = combinado;
+      manejarActualizarUsuario(combinado);
+      return combinado;
+    } catch {
+      return null;
+    }
+  }
 
   const manejarLogout = () => {
     localStorage.removeItem('access_token');
@@ -121,6 +164,74 @@ export default function App() {
     const intervalo = setInterval(verificar, 5000);
     return () => clearInterval(intervalo);
   }, []);
+
+  // Estado de "datos para entrenar a Turing" — solo para facilitadores, silencioso ante errores (es
+  // apenas la insignia del menú). Se sondea al iniciar sesión y cada 60 s; se limpia al cerrar sesión
+  // o dejar de ser facilitador. La pantalla de Entrenamiento del modelo reusa este mismo estado.
+  useEffect(() => {
+    if (!esFacilitador || usuario?.id == null) {
+      setEstadoEntrenamiento(null);
+      return;
+    }
+    let cancelado = false;
+    const sondear = () => {
+      obtenerEstadoEntrenamiento()
+        .then((datos) => {
+          if (!cancelado) setEstadoEntrenamiento(datos);
+        })
+        .catch(() => {
+          // Silencioso a propósito: esto solo alimenta una insignia informativa del menú.
+        });
+    };
+    sondear();
+    const intervalo = setInterval(sondear, 60000);
+    return () => {
+      cancelado = true;
+      clearInterval(intervalo);
+    };
+  }, [esFacilitador, usuario?.id]);
+
+  // Transmisión en vivo del facilitador — sondeo GLOBAL (no solo en Registro de Partidas) para que
+  // un jugador se entere aunque esté en otra pantalla, por ejemplo jugando su propia partida en
+  // Sala de Control. Solo para jugadores; silencioso ante errores (mismo criterio que arriba).
+  useEffect(() => {
+    if (esFacilitador || usuario?.id == null) {
+      setDemostracionActiva(null);
+      return;
+    }
+    let cancelado = false;
+    const sondear = () => {
+      obtenerDemostracionActiva()
+        .then((datos) => {
+          if (!cancelado) setDemostracionActiva(datos);
+        })
+        .catch(() => {
+          // Silencioso a propósito: no hay nada que el jugador deba hacer si esto falla.
+        });
+    };
+    sondear();
+    const intervalo = setInterval(sondear, INTERVALO_SONDEO_DEMOSTRACION_MS);
+    return () => {
+      cancelado = true;
+      clearInterval(intervalo);
+    };
+  }, [esFacilitador, usuario?.id]);
+
+  // Si aparece una demostración nueva (id distinto de la que el jugador ya cerró a mano), el banner
+  // vuelve a mostrarse — cerrar el aviso de UNA transmisión no debe silenciar la siguiente.
+  useEffect(() => {
+    if (demostracionActiva?.id == null) setBannerDemoDescartadoId(null);
+  }, [demostracionActiva?.id]);
+
+  // Al entrar a la Sala de Control o al Panel de Aprendizaje se relee el perfil, para que el nivel precargado
+  // (y el estado del diagnóstico) sea el vigente y no el de cuando se inició sesión.
+  // Una vez por entrada: solo depende de la pantalla y de la cuenta.
+  useEffect(() => {
+    if ((pantallaActiva === 'control' || pantallaActiva === 'panelAprendizaje') && usuario?.id != null) {
+      refrescarUsuario();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pantallaActiva, usuario?.id]);
 
   // Verificar token al cargar
   useEffect(() => {
@@ -185,9 +296,11 @@ export default function App() {
                   <span className="material-symbols-outlined text-[18px]">grid_view</span>Monitoreo
                 </button>
               )}
-              <button onClick={() => setPantallaActiva('admin')} className={navClasses('admin')}>
-                <span className="material-symbols-outlined text-[18px]">tune</span>Administración
-              </button>
+              {esFacilitador && (
+                <button onClick={() => setPantallaActiva('admin')} className={navClasses('admin')}>
+                  <span className="material-symbols-outlined text-[18px]">tune</span>Administración
+                </button>
+              )}
               {esFacilitador && (
                 <button onClick={() => setPantallaActiva('usuarios')} className={navClasses('usuarios')}>
                   <span className="material-symbols-outlined text-[18px]">manage_accounts</span>Gestión de Usuarios
@@ -196,6 +309,20 @@ export default function App() {
               {esFacilitador && (
                 <button onClick={() => setPantallaActiva('ensenanza')} className={navClasses('ensenanza')}>
                   <span className="material-symbols-outlined text-[18px]">video_settings</span>Configuración de Enseñanza
+                </button>
+              )}
+              {esFacilitador && (
+                <button onClick={() => setPantallaActiva('entrenamiento')} className={navClasses('entrenamiento')}>
+                  <span className="material-symbols-outlined text-[18px]">database</span>Entrenamiento del modelo
+                  {estadoEntrenamiento?.listo_para_entrenar && (
+                    <>
+                      <span className="relative flex h-2 w-2 shrink-0 ml-auto" aria-hidden="true">
+                        <span className="animate-ping motion-reduce:animate-none absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+                      </span>
+                      <span className="sr-only">, datos listos</span>
+                    </>
+                  )}
                 </button>
               )}
               <button onClick={() => setPantallaActiva('perfil')} className={navClasses('perfil')}>
@@ -286,12 +413,28 @@ export default function App() {
                 {esFacilitador && (
                   <button onClick={() => setPantallaActiva('monitoreo')} className={headerNavClasses('monitoreo')}>MONITOREO</button>
                 )}
-                <button onClick={() => setPantallaActiva('admin')} className={headerNavClasses('admin')}>ADMINISTRACIÓN</button>
+                {esFacilitador && (
+                  <button onClick={() => setPantallaActiva('admin')} className={headerNavClasses('admin')}>ADMINISTRACIÓN</button>
+                )}
                 {esFacilitador && (
                   <button onClick={() => setPantallaActiva('usuarios')} className={headerNavClasses('usuarios')}>GESTIÓN USUARIOS</button>
                 )}
                 {esFacilitador && (
                   <button onClick={() => setPantallaActiva('ensenanza')} className={headerNavClasses('ensenanza')}>ENSEÑANZA</button>
+                )}
+                {esFacilitador && (
+                  <button onClick={() => setPantallaActiva('entrenamiento')} className={`${headerNavClasses('entrenamiento')} relative`}>
+                    ENTRENAMIENTO
+                    {estadoEntrenamiento?.listo_para_entrenar && (
+                      <>
+                        <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2" aria-hidden="true">
+                          <span className="animate-ping motion-reduce:animate-none absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+                        </span>
+                        <span className="sr-only">, datos listos</span>
+                      </>
+                    )}
+                  </button>
                 )}
                 <button onClick={() => setPantallaActiva('perfil')} className={headerNavClasses('perfil')}>MI PERFIL</button>
               </nav>
@@ -339,6 +482,42 @@ export default function App() {
         </header>
 
         <main className="w-full pt-16 bg-surface-container-lowest min-h-screen">
+          {/* Banner global de transmisión en vivo — a propósito NO es un toast: se queda mientras
+              la transmisión siga activa y el jugador no la esté viendo, en CUALQUIER pantalla (no
+              solo Registro de Partidas). Nunca se le muestra al facilitador. */}
+          {!esFacilitador && pantallaActiva !== 'demostracion' && demostracionActiva?.id && demostracionActiva.id !== bannerDemoDescartadoId && (
+            <div
+              role="status"
+              className="w-full px-space-lg py-space-sm bg-primary/10 border-b border-primary/30 flex items-center justify-between gap-space-sm flex-wrap"
+            >
+              <div className="flex items-center gap-space-sm">
+                <span className="relative flex h-2.5 w-2.5 shrink-0" aria-hidden="true">
+                  <span className="animate-ping motion-reduce:animate-none absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-primary"></span>
+                </span>
+                <span className="font-body-sm text-body-sm text-on-surface">
+                  Tu facilitador está transmitiendo una partida en vivo
+                </span>
+              </div>
+              <div className="flex items-center gap-space-xs">
+                <button
+                  type="button"
+                  onClick={() => irADemostracion(demostracionActiva.id)}
+                  className="px-space-md py-space-2xs rounded-lg bg-primary text-on-primary font-body-sm text-body-sm font-medium hover:brightness-110 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                >
+                  Ver transmisión
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBannerDemoDescartadoId(demostracionActiva.id)}
+                  aria-label="Cerrar aviso de transmisión en vivo"
+                  className="text-on-surface-variant hover:text-on-surface rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                >
+                  <span className="material-symbols-outlined text-[18px]">close</span>
+                </button>
+              </div>
+            </div>
+          )}
           {pantallaActiva === 'control' && (
             <SalaControl
               key={`sala-control-${usuario?.id ?? 'anon'}`}
@@ -347,6 +526,8 @@ export default function App() {
               esFacilitador={esFacilitador}
               usuarioIdPropio={usuario?.id ?? null}
               usuario={usuario}
+              alActualizarUsuario={refrescarUsuario}
+              alIrAMiNivel={esFacilitador ? null : () => irAPanelAprendizaje('nivel')}
               alIrAAprendizaje={(id?: string) => {
                 if (esFacilitador) {
                   irAAprendizaje(id);
@@ -354,6 +535,8 @@ export default function App() {
                   setPantallaActiva('panelAprendizaje');
                 }
               }}
+              demostracionActiva={demostracionActiva}
+              alVerDemostracion={irADemostracion}
             />
           )}
           {pantallaActiva === 'neuronal' && (
@@ -398,6 +581,23 @@ export default function App() {
               />
             )
           )}
+          {pantallaActiva === 'entrenamiento' && (
+            esFacilitador ? (
+              <EntrenamientoModelo
+                estadoCompartido={estadoEntrenamiento}
+                alActualizarEstadoCompartido={setEstadoEntrenamiento}
+              />
+            ) : (
+              <AccesoRestringido
+                icono="smartphone"
+                colorIcono="text-primary"
+                titulo="Esta vista es para tu facilitador"
+                mensaje="El Entrenamiento del modelo es un panel para tu facilitador. Para jugar y aprender desde tu celular, usá la app móvil."
+                textoBoton="Ir a Registro de Partidas"
+                alClickBoton={() => setPantallaActiva('registro')}
+              />
+            )
+          )}
           {pantallaActiva === 'panelAprendizaje' && (
             esFacilitador ? (
               <AccesoRestringido
@@ -413,10 +613,24 @@ export default function App() {
                 usuario={usuario}
                 seccionInicial={seccionPanelAprendizaje}
                 onSeccionConsumida={() => setSeccionPanelAprendizaje(null)}
+                alIrASalaControl={() => irASalaControl()}
               />
             )
           )}
-          {pantallaActiva === 'admin' && <Administracion />}
+          {pantallaActiva === 'admin' && (
+            esFacilitador ? (
+              <Administracion />
+            ) : (
+              <AccesoRestringido
+                icono="smartphone"
+                colorIcono="text-primary"
+                titulo="Esta vista es para tu facilitador"
+                mensaje="Administración es la consola de telemetría del brazo y de todas las sesiones — es un panel para tu facilitador. Para jugar y aprender desde tu celular, usá la app móvil."
+                textoBoton="Ir a Registro de Partidas"
+                alClickBoton={() => setPantallaActiva('registro')}
+              />
+            )
+          )}
           {pantallaActiva === 'perfil' && (
             <Perfil usuario={usuario} alActualizarUsuario={manejarActualizarUsuario} />
           )}

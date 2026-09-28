@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { analisisCompletoPartida, listarPartidas } from '../../api/backend';
+import { fechaDesdeIso } from '../../formatoTiempo';
 import {
   caidaDeJugada,
   clasificarJugada,
@@ -40,9 +41,13 @@ function categoriaNivel(n) {
   return 'Avanzado';
 }
 
+// `fechaDesdeIso` interpreta como UTC un ISO del backend sin sufijo de zona (si no, la hora se ve
+// adelantada según el huso del navegador) — se conserva el mismo formato visual de siempre.
 function fechaLegible(iso) {
+  const fecha = fechaDesdeIso(iso);
+  if (!fecha) return iso;
   try {
-    return new Date(iso).toLocaleString('es-BO', {
+    return fecha.toLocaleString('es-BO', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',

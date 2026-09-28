@@ -3,6 +3,7 @@ import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { listarPartidas, listarUsuarios, obtenerPartida } from '../../api/backend';
 import { turnoDeFen } from '../../ajedrez';
+import { fechaDesdeIso } from '../../formatoTiempo';
 import TableroSoloLectura from '../../componentes/TableroSoloLectura';
 
 gsap.registerPlugin(useGSAP);
@@ -144,18 +145,23 @@ export default function Monitoreo() {
   // activa más reciente. Se agrupa por `usuario_id` quedándose, de cada
   // grupo, con la de `creada_en` más nueva; el resto se descarta para esta
   // vista (no para el sistema — siguen existiendo, solo no se muestran acá).
+  // `fechaDesdeIso` (no `new Date` a pelo) interpreta como UTC un ISO del backend sin sufijo de
+  // zona — acá el orden relativo ya daba igual con el bug (el mismo corrimiento se aplicaba a
+  // ambos lados de cada comparación), pero se prolija junto con el resto de las pantallas.
   const masRecientePorJugador = partidas
     .filter((p) => p.terminada === false && jugadores.has(p.usuario_id))
     .reduce((porUsuario, partida) => {
       const actual = porUsuario.get(partida.usuario_id);
-      if (!actual || new Date(partida.creada_en) > new Date(actual.creada_en)) {
+      const fechaPartida = fechaDesdeIso(partida.creada_en)?.getTime() ?? 0;
+      const fechaActual = actual ? (fechaDesdeIso(actual.creada_en)?.getTime() ?? 0) : -Infinity;
+      if (!actual || fechaPartida > fechaActual) {
         porUsuario.set(partida.usuario_id, partida);
       }
       return porUsuario;
     }, new Map());
 
   const partidasActivas = Array.from(masRecientePorJugador.values()).sort(
-    (a, b) => new Date(b.creada_en) - new Date(a.creada_en)
+    (a, b) => (fechaDesdeIso(b.creada_en)?.getTime() ?? 0) - (fechaDesdeIso(a.creada_en)?.getTime() ?? 0)
   );
 
   const totalPaginas = Math.max(1, Math.ceil(partidasActivas.length / TAMANO_PAGINA));

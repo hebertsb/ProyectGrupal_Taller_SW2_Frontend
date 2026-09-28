@@ -26,6 +26,7 @@ export default defineConfig({
       '/facilitador': BACKEND_URL,
       '/media': BACKEND_URL,
       '/tutor': BACKEND_URL,
+      '/entrenamiento': BACKEND_URL,
     },
   },
 });

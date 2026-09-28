@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { listarUsuarios, historialPartidasUsuario } from '../../api/backend';
+import { fechaDesdeIso } from '../../formatoTiempo';
 
 function roleBadge(rol) {
   return rol === 'facilitador'
@@ -163,7 +164,7 @@ export default function GestionUsuarios() {
                       </div>
                     </div>
                     <div className="flex items-center justify-between pt-space-2xs font-mono-micro text-mono-micro text-on-surface-variant">
-                      <span>Creado: {new Date(usuario.creado_en).toLocaleDateString('es-ES')}</span>
+                      <span>Creado: {fechaDesdeIso(usuario.creado_en)?.toLocaleDateString('es-ES') ?? usuario.creado_en}</span>
                       {usuario.nivel_estimado && (
                         <span className="flex items-center gap-space-2xs text-primary">
                           <span className="material-symbols-outlined text-[14px]">stars</span>
@@ -248,7 +249,7 @@ export default function GestionUsuarios() {
                             </span>
                           </div>
                           <div className="flex items-center justify-between pt-space-2xs font-mono-micro text-mono-micro text-on-surface-variant">
-                            <span>{new Date(partida.fecha).toLocaleString('es-ES')}</span>
+                            <span>{fechaDesdeIso(partida.fecha)?.toLocaleString('es-ES') ?? partida.fecha}</span>
                           </div>
                         </div>
                       );

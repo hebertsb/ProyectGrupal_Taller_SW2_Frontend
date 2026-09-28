@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { analisisCompletoPartida, historialPartidasPropio } from '../../api/backend';
 import { casillasIlustrativas, rutaImagenPieza } from '../../ajedrez';
+import { fechaHoraLegible as fechaLegible } from '../../formatoTiempo';
 import PiezaModelo3D from '../../componentes/PiezaModelo3D';
 import FondoCapasScroll from '../../componentes/FondoCapasScroll';
 import ChatTuring from './ChatTuring';
-
-const NIVELES = ['Principiante', 'Intermedio', 'Avanzado'];
+import TuNivel from './TuNivel';
 
 /**
  * 6 piezas — letra en mayúscula para `rutaImagenPieza` (siempre el set blanco,
@@ -699,19 +699,9 @@ function BannerPiezas({ piezas, claseTextoContenido, onCambiarPieza }) {
   );
 }
 
-function fechaLegible(iso) {
-  try {
-    return new Date(iso).toLocaleString('es-BO', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return iso;
-  }
-}
+// `fechaLegible` = `fechaHoraLegible` (formatoTiempo.js), importada arriba — interpreta como UTC un
+// ISO del backend sin sufijo de zona (si no, la hora se ve adelantada según el huso del navegador;
+// este es justo el caso reportado: "Última partida analizada" mostraba una hora ~4h adelantada).
 
 /**
  * Panel de Aprendizaje — tutor "Turing" para el rol `jugador`. A diferencia
@@ -720,7 +710,12 @@ function fechaLegible(iso) {
  * alguien que recién está aprendiendo: oraciones cortas, narración por voz,
  * y todo detrás de un acordeón para no abrumar con todo junto.
  */
-export default function PanelAprendizaje({ usuario, seccionInicial = null, onSeccionConsumida = null }) {
+export default function PanelAprendizaje({
+  usuario,
+  seccionInicial = null,
+  onSeccionConsumida = null,
+  alIrASalaControl = null,
+}) {
   const [seccionAbierta, setSeccionAbierta] = useState(() => seccionInicial || 'nivel');
   const refsSeccion = useRef({});
   const [sidebarColapsado, setSidebarColapsado] = useState(() => cargarSidebarColapsado(usuario?.id));
@@ -1010,43 +1005,7 @@ export default function PanelAprendizaje({ usuario, seccionInicial = null, onSec
             onToggle={() => alternarSeccion('nivel')}
             innerRef={(el) => { refsSeccion.current.nivel = el; }}
           >
-            <div className="grid grid-cols-3 gap-space-xs">
-              {NIVELES.map((n) => {
-                const esActual = n === rango;
-                return (
-                  <div
-                    key={n}
-                    className={`flex flex-col items-center gap-space-2xs p-space-sm rounded-xl border ${
-                      esActual ? 'bg-primary/10 border-primary text-primary' : 'bg-surface-container-lowest border-outline-variant/20 text-on-surface-variant'
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-[22px]">{esActual ? 'check_circle' : 'radio_button_unchecked'}</span>
-                    <span className="font-body-sm text-body-sm font-medium">{n}</span>
-                  </div>
-                );
-              })}
-            </div>
-            <p className="font-mono-micro text-mono-micro text-on-surface-variant">
-              Tu nivel lo calcula el diagnóstico inicial. No se cambia a mano acá.
-            </p>
-            <div className="flex items-center gap-space-2xs pt-space-2xs" aria-hidden="true">
-              {NIVELES.map((n, indice) => (
-                <div key={n} className="flex items-center flex-1 last:flex-none">
-                  <div
-                    className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center border-2 font-mono-micro text-[11px] font-bold ${
-                      n === rango
-                        ? 'bg-primary text-on-primary border-primary'
-                        : 'bg-surface-container-lowest text-on-surface-variant border-outline-variant/30'
-                    }`}
-                  >
-                    {indice + 1}
-                  </div>
-                  {indice < NIVELES.length - 1 && (
-                    <div className={`flex-1 h-0.5 mx-space-2xs ${NIVELES.indexOf(rango) > indice ? 'bg-primary' : 'bg-outline-variant/30'}`} />
-                  )}
-                </div>
-              ))}
-            </div>
+            <TuNivel usuario={usuario} alIrASalaControl={alIrASalaControl} claseTextoContenido={claseTextoContenido} />
           </SeccionAcordeon>
 
           {/* 2. Repaso de tu partida */}

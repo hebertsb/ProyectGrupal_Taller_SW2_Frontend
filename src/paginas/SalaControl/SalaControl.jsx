@@ -5,16 +5,20 @@ import './SalaControl.css';
 import AvatarAgente3D from '../../componentes/AvatarAgente3D';
 import SimuladorBrazoTablero3D from '../../componentes/SimuladorBrazoTablero3D';
 import { useRazonamiento } from '../../contexto/ContextoRazonamiento';
+import AvisoNivelCalculado, { EstadoCalibracionPartida } from './AvisoNivelCalculado';
+import ModalRetomarPartida from './ModalRetomarPartida';
 import {
   abrirSimulacion3D,
   actualizarPermisosPartida,
   analizarPosicion,
   backendEnLinea,
+  calibrarPartida,
   crearPartida,
   moverPartida,
   moverPartidaDesdeFoto,
   obtenerJugadasLegales,
   obtenerPartida,
+  obtenerPartidaEnCurso,
   reconocerTablero,
   urlFotoCamara,
 } from '../../api/backend';
@@ -28,27 +32,60 @@ import {
   rutaImagenPieza,
   turnoDeFen,
 } from '../../ajedrez';
+import { NIVEL_DIAGNOSTICO, NIVEL_MAX_MODELO, NIVEL_MAX_STOCKFISH } from '../../nivelJugador';
 
 gsap.registerPlugin(useGSAP);
 
 const DURACION_VUELO_PIEZA = 0.28; // segundos — deslizamiento contenido, no un efecto largo
 
-const NIVEL_MAX = 20;
-const NIVEL_INICIAL = 8; // arranca en "Intermedio", no siempre al máximo
-
-// Niveles de Stockfish (0-20, "Skill Level") agrupados por franja de dificultad,
-// para que elegir el nivel sea más legible que un número suelto.
-const NIVELES_POR_CATEGORIA = [
-  { etiqueta: 'Básico', desde: 0, hasta: 6 },
+// La escala del selector depende del rival (constantes en ../../nivelJugador):
+// - Stockfish ("Skill Level"): 0-20.
+// - Turing: 0-18. Fue entrenado con partidas de maestros, por eso su techo es
+//   "Maestro" (18); los niveles 19 y 20 solo existen en Stockfish.
+// Se agrupan por franja de dificultad para que elegir el nivel sea más legible
+// que un número suelto.
+const NIVELES_STOCKFISH_POR_CATEGORIA = [
+  { etiqueta: 'Principiante', desde: 0, hasta: 6 },
   { etiqueta: 'Intermedio', desde: 7, hasta: 13 },
-  { etiqueta: 'Avanzado', desde: 14, hasta: NIVEL_MAX },
+  { etiqueta: 'Avanzado', desde: 14, hasta: NIVEL_MAX_STOCKFISH },
 ];
 
-function categoriaDeNivel(n) {
+const NIVELES_TURING_POR_CATEGORIA = [
+  { etiqueta: 'Principiante', desde: 0, hasta: 6 },
+  { etiqueta: 'Intermedio', desde: 7, hasta: 13 },
+  { etiqueta: 'Avanzado', desde: 14, hasta: NIVEL_MAX_MODELO - 1 },
+  { etiqueta: 'Maestro', desde: NIVEL_MAX_MODELO, hasta: NIVEL_MAX_MODELO },
+];
+
+function categoriaDeNivel(n, esTuring = false) {
   if (n <= 6) return 'Principiante';
   if (n <= 13) return 'Intermedio';
+  if (esTuring && n >= NIVEL_MAX_MODELO) return 'Maestro';
   return 'Avanzado';
 }
+
+function etiquetaOpcionNivel(valor, etiquetaCategoria, esTuring) {
+  if (esTuring && valor === NIVEL_MAX_MODELO) {
+    return `Nivel ${valor} (Maestro · máximo de Turing)`;
+  }
+  return `Nivel ${valor} (${etiquetaCategoria})`;
+}
+
+/**
+ * Nivel con el que se juega contra un rival: el del perfil/selector, recortado
+ * al techo de Turing si el rival es el modelo. El valor sin recortar se conserva
+ * en el estado, así al volver a Stockfish no se pierde un 19-20 del perfil.
+ */
+function nivelSegunOponente(nivel, tipoOponente) {
+  return tipoOponente === 'modelo' ? Math.min(nivel, NIVEL_MAX_MODELO) : nivel;
+}
+
+// Estados de HTTP en los que el endpoint de calibración simplemente no existe
+// todavía en el backend desplegado: se ignora en silencio en vez de mostrar un error.
+const ESTADOS_CALIBRACION_NO_DISPONIBLE = [404, 405, 501];
+
+// id del bloque de notas bajo el selector de nivel (lo referencia `aria-describedby`).
+const notasNivelId = 'notas-nivel-partida';
 
 // Cuando el facilitador está mirando la partida de OTRA persona (no la propia,
 // no la de un jugador viendo la suya), nadie mueve piezas desde esta pantalla
@@ -65,12 +102,28 @@ export default function SalaControl({
   usuarioIdPropio = null,
   usuario = null,
   alIrAAprendizaje = null,
+  alActualizarUsuario = null,
+  alIrAMiNivel = null,
+  // Transmisión en vivo de OTRA partida del facilitador, sondeada de forma global en App.tsx
+  // (mismo objeto que ya usa RegistroPartidas) — null si no hay ninguna activa. Solo llega con
+  // contenido cuando quien juega es un jugador; para el facilitador esto siempre es null.
+  demostracionActiva = null,
+  alVerDemostracion = null,
 }) {
   const { dispararInferencia } = useRazonamiento() ?? {};
   const [partidaId, setPartidaId] = useState(null);
   const [fen, setFen] = useState(null);
-  const [tipoOponente, setTipoOponente] = useState('modelo'); // 'modelo' (Red Neuronal v5) o 'motor' (Stockfish)
-  const nivelInicial = usuario?.nivel_estimado ?? (esFacilitador ? 20 : 5);
+  // Selección de rival y nivel para la PRÓXIMA partida: 'modelo' (Turing) o 'motor' (Stockfish).
+  // Lo que se muestra de la partida ya creada sale de `configPartida` (ver más abajo).
+  const [tipoOponente, setTipoOponente] = useState('modelo');
+  // Primera partida del jugador = partida de diagnóstico: contra Stockfish a nivel fijo, para medir
+  // su nivel real. `=== false` (y no `!`) a propósito: con un backend que todavía no manda el campo
+  // llega `undefined`, y eso NO debe tratarse como diagnóstico pendiente.
+  const diagnosticoPendiente = !esFacilitador && Boolean(usuario) && usuario.diagnostico_completado === false;
+  // El facilitador no tiene nivel de jugador — ignora `nivel_estimado` por completo (no solo como
+  // fallback con `??`): una cuenta de facilitador con ese campo poblado por datos viejos no debe
+  // arrancar con un nivel de jugador cualquiera.
+  const nivelInicial = esFacilitador ? 20 : (usuario?.nivel_estimado ?? (diagnosticoPendiente ? NIVEL_DIAGNOSTICO : 5));
   const [nivel, setNivel] = useState(nivelInicial);
   const [terminada, setTerminada] = useState(false);
   const [resultado, setResultado] = useState(null);
@@ -105,6 +158,59 @@ export default function SalaControl({
   // como "ajenas" aunque tampoco coincidan con `usuarioIdPropio`.
   const viendoPartidaAjena =
     esFacilitador && usuarioIdPartida != null && usuarioIdPartida !== usuarioIdPropio;
+  // Hay una transmisión en vivo activa de una partida que NO es esta (si fuera la misma partida que
+  // ya se está mirando acá, no hace falta bloquear nada — de hecho sería redundante con la vista normal).
+  const demostracionDeOtraPartida = Boolean(demostracionActiva?.id) && demostracionActiva.id !== partidaId;
+  // Rival y nivel con los que se creó (o cargó) la partida actual. Es la fuente de verdad de lo
+  // que se muestra "de la partida" (cabecera, tarjeta final, selectores bloqueados): la selección
+  // de arriba puede cambiar después sin que eso cambie la partida ya creada.
+  const [configPartida, setConfigPartida] = useState(null);
+  // Cálculo de nivel al terminar la partida: { partidaId, fase: 'calculando' | 'listo' | 'incompleta' | 'error', ... }
+  const [estadoCalibracion, setEstadoCalibracion] = useState(null);
+  const [avisoNivelAbierto, setAvisoNivelAbierto] = useState(false);
+  // Partida sin terminar que `GET /partida/en-curso` encontró al abrir la pantalla (solo jugadores,
+  // solo si no vinimos con un `partidaIdInicial` explícito): mientras esto no sea null se muestra el
+  // modal a elegir y NO se crea ninguna partida nueva.
+  const [partidaPendienteDetectada, setPartidaPendienteDetectada] = useState(null);
+  // Aviso no bloqueante tras elegir "Empezar una nueva" en ese modal.
+  const [avisoPartidaDescartada, setAvisoPartidaDescartada] = useState(null);
+
+  // Rival y nivel que rigen la próxima partida. Durante el diagnóstico se fuerzan (Stockfish, nivel
+  // fijo); con Turing el nivel se recorta a su techo sin tocar el valor guardado en `nivel`.
+  const tipoOponenteSeleccionado = diagnosticoPendiente ? 'motor' : tipoOponente;
+  const nivelSeleccionado = diagnosticoPendiente
+    ? NIVEL_DIAGNOSTICO
+    : nivelSegunOponente(nivel, tipoOponenteSeleccionado);
+  // "En curso" = ya se jugó al menos una jugada. Una partida recién creada (se crea sola al abrir la
+  // pantalla) todavía no cuenta: si contara, el nivel y el rival quedarían bloqueados desde el primer
+  // segundo y nunca se podrían elegir antes de empezar a jugar.
+  const partidaEnCurso = Boolean(partidaId) && !terminada && jugadas.length > 0;
+  const selectoresBloqueados = partidaEnCurso || viendoPartidaAjena;
+  const seleccionBloqueada = selectoresBloqueados || diagnosticoPendiente;
+  const oponenteMostrado = configPartida?.tipoOponente ?? tipoOponenteSeleccionado;
+  const nivelMostrado = configPartida?.nivel ?? nivelSeleccionado;
+  // Qué muestra el selector: con la partida en curso, la configuración de esa partida; si no, la selección.
+  const oponenteEnSelector = selectoresBloqueados ? oponenteMostrado : tipoOponenteSeleccionado;
+  const nivelEnSelector = selectoresBloqueados
+    ? nivelSegunOponente(nivelMostrado, oponenteEnSelector)
+    : nivelSeleccionado;
+  const gruposDeNiveles =
+    oponenteEnSelector === 'modelo' ? NIVELES_TURING_POR_CATEGORIA : NIVELES_STOCKFISH_POR_CATEGORIA;
+  const nivelPendienteDeAplicar =
+    Boolean(partidaId) && configPartida != null && !seleccionBloqueada && configPartida.nivel !== nivelSeleccionado;
+  const motivoBloqueoSeleccion = diagnosticoPendiente
+    ? `Partida de diagnóstico: el rival (Stockfish) y el nivel (${NIVEL_DIAGNOSTICO}) son fijos.`
+    : viendoPartidaAjena
+      ? 'Solo lectura: es la partida de otra persona.'
+      : 'El rival y el nivel quedan fijos mientras dura la partida. Se pueden cambiar al terminarla.';
+  const mensajeEstadoNivel =
+    estadoCalibracion?.fase === 'calculando'
+      ? 'Calculando tu nivel…'
+      : estadoCalibracion?.fase === 'listo'
+        ? 'Tu nivel fue calculado.'
+        : estadoCalibracion?.fase === 'error'
+          ? 'No se pudo calcular tu nivel.'
+          : '';
   // Guarda contra el doble-montaje de StrictMode en desarrollo: React invoca este
   // efecto dos veces seguidas al montar (monta → limpia → monta), y como los estados
   // no se actualizan sincrónicamente entre esas dos pasadas, `!partidaId` daba true
@@ -279,7 +385,7 @@ export default function SalaControl({
       }
     } else if (!partidaId && !partidaInicialSolicitada.current) {
       partidaInicialSolicitada.current = true;
-      manejarNuevaPartida();
+      iniciarFlujoPartidaInicial();
     }
     const intervalo = setInterval(async () => {
       setBackendConectado(await backendEnLinea());
@@ -329,12 +435,46 @@ export default function SalaControl({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partidaId, viendoPartidaAjena, terminada, nivel]);
 
-  // Sincronizar nivel con el perfil del usuario si todavía no hay partida o es nueva
+  // Sincronizar el nivel elegido con el del perfil cada vez que el perfil trae un nivel distinto
+  // (al abrir la pantalla, y después de que una partida recalibra el nivel). Nunca en medio de
+  // una partida: si llega tarde, se aplica apenas termina. Durante el diagnóstico no aplica (el
+  // nivel es fijo). Nunca para el facilitador tampoco: no tiene "nivel de perfil" que sincronizar
+  // (y una cuenta con `nivel_estimado` poblado por datos viejos no debe pisarle su selección).
+  // Se recuerda el último valor aplicado para no pisar un nivel que el jugador haya elegido a mano
+  // cuando lo único que cambió es el estado de la partida.
+  const ultimoNivelPerfilAplicadoRef = useRef(null);
   useEffect(() => {
-    if (usuario?.nivel_estimado && !partidaId) {
-      setNivel(usuario.nivel_estimado);
-    }
-  }, [usuario, partidaId]);
+    const nivelPerfil = usuario?.nivel_estimado;
+    if (nivelPerfil == null || diagnosticoPendiente || partidaEnCurso || esFacilitador) return;
+    if (ultimoNivelPerfilAplicadoRef.current === nivelPerfil) return;
+    ultimoNivelPerfilAplicadoRef.current = nivelPerfil;
+    setNivel(nivelPerfil);
+  }, [usuario?.nivel_estimado, diagnosticoPendiente, partidaEnCurso, esFacilitador]);
+
+  // Al terminar una partida propia se calcula el nivel del jugador. Solo se dispara cuando la
+  // partida PASA a terminada estando abierta acá (no al cargar una que ya estaba terminada, por
+  // ejemplo desde el Registro de Partidas), y una sola vez por partida. La partida de otra persona
+  // que mira el facilitador nunca califica: el nivel es del jugador.
+  const estadoPartidaPrevioRef = useRef({ partidaId: null, terminada: false });
+  const partidasCalibracionIniciadaRef = useRef(new Set());
+  useEffect(() => {
+    const previo = estadoPartidaPrevioRef.current;
+    estadoPartidaPrevioRef.current = { partidaId, terminada };
+    if (!terminada || !partidaId) return;
+    if (previo.partidaId !== partidaId || previo.terminada) return;
+    if (esFacilitador || viendoPartidaAjena) return;
+    if (partidasCalibracionIniciadaRef.current.has(partidaId)) return;
+    partidasCalibracionIniciadaRef.current.add(partidaId);
+    calibrarPartidaTerminada(partidaId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [partidaId, terminada, esFacilitador, viendoPartidaAjena]);
+
+  // Autodesaparición del aviso "la partida anterior quedó sin terminar..." — no bloqueante.
+  useEffect(() => {
+    if (!avisoPartidaDescartada) return;
+    const idTimeout = setTimeout(() => setAvisoPartidaDescartada(null), 6000);
+    return () => clearTimeout(idTimeout);
+  }, [avisoPartidaDescartada]);
 
   // Si el usuario es un jugador normal y la partida no tiene simulación 3D habilitada por el facilitador,
   // forzar retorno a vista 2D táctica.
@@ -344,9 +484,9 @@ export default function SalaControl({
     }
   }, [esFacilitador, permiteSimulacion3D, vistaTablero]);
 
-  async function actualizarAnalisis(fenActual) {
+  async function actualizarAnalisis(fenActual, nivelAnalisis = nivelSeleccionado) {
     try {
-      const datos = await analizarPosicion(fenActual, nivel);
+      const datos = await analizarPosicion(fenActual, nivelAnalisis);
       setAnalisis(datos);
       if (typeof datos.evaluacion_cp === 'number') {
         setEvaluacionesHistorial((previas) => [...previas.slice(-9), datos.evaluacion_cp]);
@@ -364,10 +504,16 @@ export default function SalaControl({
       setPartidaId(partida.id);
       onPartidaActivaChange?.(partida.id);
       setFen(partida.fen);
-      setNivel(partida.nivel);
-      if (partida.tipo_oponente) {
-        setTipoOponente(partida.tipo_oponente);
+      // Una partida en curso se retoma con su rival y nivel. Una ya terminada NO pisa la selección:
+      // sirve solo para mirarla (su configuración queda en `configPartida`), y la próxima partida
+      // debe usar el nivel vigente del jugador, no el de aquella.
+      if (!partida.terminada) {
+        setNivel(partida.nivel);
+        if (partida.tipo_oponente) {
+          setTipoOponente(partida.tipo_oponente);
+        }
       }
+      setConfigPartida({ tipoOponente: partida.tipo_oponente ?? tipoOponente, nivel: partida.nivel });
       setTerminada(partida.terminada);
       setResultado(partida.resultado);
       setJugadas(partida.jugadas);
@@ -380,11 +526,12 @@ export default function SalaControl({
       setUsuarioIdPartida(partida.usuario_id ?? null);
       setUsuarioNombrePartida(partida.usuario_nombre ?? null);
       if (!partida.terminada) {
-        await actualizarAnalisis(partida.fen);
+        await actualizarAnalisis(partida.fen, partida.nivel);
       }
     } catch (err) {
       onPartidaActivaChange?.(null);
       setPartidaId(null);
+      setConfigPartida(null);
       const esPartidaAjena =
         err?.message?.includes('otro usuario') ||
         err?.status === 403 ||
@@ -402,16 +549,87 @@ export default function SalaControl({
     }
   }
 
-  async function manejarNuevaPartida(oponenteDeseado) {
+  /**
+   * Punto de entrada al abrir la pantalla sin un `partidaIdInicial` explícito. Antes de crear una
+   * partida (comportamiento de siempre) se consulta si quien entra dejó una sin terminar — jugador o
+   * facilitador por igual: el facilitador también puede tener una partida propia a medias (por ejemplo
+   * una que estaba transmitiendo). Si hay una, se muestra `ModalRetomarPartida` y no se crea nada hasta
+   * que se elija. Si el endpoint no existe todavía (404/405) o falla por cualquier otro motivo, se
+   * degrada al flujo de crear partida de siempre.
+   */
+  async function iniciarFlujoPartidaInicial() {
+    setCargando('nueva');
+    let partidaExistente = null;
+    try {
+      partidaExistente = await obtenerPartidaEnCurso();
+    } catch {
+      // Endpoint no disponible o falla de red: se sigue con el flujo de siempre.
+    }
+    if (partidaExistente?.id) {
+      setCargando(null);
+      setPartidaPendienteDetectada(partidaExistente);
+      return;
+    }
+    await iniciarPartidaInicial();
+  }
+
+  /**
+   * "Retomar partida" del modal: misma carga que usa Registro de Partidas para abrir una partida por
+   * id. Si el facilitador estaba transmitiendo esa partida (`es_demostracion`), sigue transmitida —
+   * `cargarPartidaExistente` ya refleja tal cual lo que trae el backend, sin tocar ese campo.
+   */
+  async function manejarRetomarPartidaPendiente() {
+    const partida = partidaPendienteDetectada;
+    setPartidaPendienteDetectada(null);
+    if (!partida?.id) return;
+    await cargarPartidaExistente(partida.id);
+  }
+
+  /** "Empezar una nueva" del modal: la pendiente se descarta (el backend la cierra al crear la nueva) y se avisa. */
+  async function manejarEmpezarNuevaDesdeModal() {
+    setPartidaPendienteDetectada(null);
+    setAvisoPartidaDescartada(
+      esFacilitador
+        ? 'La partida anterior quedó sin terminar y se descartó.'
+        : 'La partida anterior quedó sin terminar y no cuenta para tu nivel.'
+    );
+    await iniciarPartidaInicial();
+  }
+
+  /**
+   * La primera partida se crea sola al abrir la pantalla. Si la sesión guardada es anterior a que el
+   * backend exponga el estado del diagnóstico (`diagnostico_completado` sin definir), se relee el
+   * perfil ANTES de crearla: si no, el jugador nuevo arrancaría contra Turing en vez de contra
+   * Stockfish nivel 8 y esa partida no sería de diagnóstico.
+   */
+  async function iniciarPartidaInicial() {
+    let esDiagnostico = diagnosticoPendiente;
+    let nivelBase = nivel;
+    if (!esFacilitador && usuario && usuario.diagnostico_completado === undefined && alActualizarUsuario) {
+      setCargando('nueva');
+      const perfil = await alActualizarUsuario();
+      if (perfil) {
+        esDiagnostico = perfil.diagnostico_completado === false;
+        nivelBase = perfil.nivel_estimado ?? nivelBase;
+      }
+    }
+    await manejarNuevaPartida(undefined, esDiagnostico, nivelBase);
+  }
+
+  async function manejarNuevaPartida(oponenteDeseado, esDiagnostico = diagnosticoPendiente, nivelBase = nivel) {
     setError(null);
     setCargando('nueva');
     try {
-      const op = oponenteDeseado !== undefined ? oponenteDeseado : tipoOponente;
-      const partida = await crearPartida(nivel, null, op);
+      const op = esDiagnostico ? 'motor' : oponenteDeseado !== undefined ? oponenteDeseado : tipoOponente;
+      const nivelPartida = esDiagnostico ? NIVEL_DIAGNOSTICO : nivelSegunOponente(nivelBase, op);
+      const partida = await crearPartida(nivelPartida, null, op);
       setPartidaId(partida.id);
       onPartidaActivaChange?.(partida.id);
       setFen(partida.fen);
-      setTipoOponente(partida.tipo_oponente || op);
+      // En el diagnóstico el rival es forzado: no se toca la selección, así al terminarlo el
+      // jugador sigue con el rival que tenía elegido (Turing por defecto).
+      if (!esDiagnostico) setTipoOponente(partida.tipo_oponente || op);
+      setConfigPartida({ tipoOponente: partida.tipo_oponente || op, nivel: partida.nivel ?? nivelPartida });
       setTerminada(false);
       setResultado(null);
       setJugadas(partida.jugadas);
@@ -424,11 +642,46 @@ export default function SalaControl({
       setUsuarioIdPartida(partida.usuario_id ?? null);
       setUsuarioNombrePartida(partida.usuario_nombre ?? null);
       dispararInferencia?.(partida.fen); // posición nueva disponible — no bloquea la UI de la partida
-      await actualizarAnalisis(partida.fen);
+      await actualizarAnalisis(partida.fen, nivelPartida);
     } catch (err) {
       setError(err.message);
     } finally {
       setCargando(null);
+    }
+  }
+
+  /**
+   * Pide al backend que calcule el nivel del jugador con la partida que acaba de terminar
+   * (compara sus jugadas con las de Stockfish; tarda unos segundos) y avisa el resultado.
+   * No bloquea la pantalla: la tarjeta de finalización muestra el estado y el resultado
+   * llega como aviso aparte. El estado se guarda con el id de la partida para no mostrarle
+   * el cálculo de una partida vieja a quien ya empezó otra.
+   */
+  async function calibrarPartidaTerminada(idPartida) {
+    setEstadoCalibracion({ partidaId: idPartida, fase: 'calculando' });
+    try {
+      const calibracion = await calibrarPartida(idPartida);
+      if (calibracion?.registrada && calibracion.nivel != null) {
+        // Se relee el perfil para que la Sala de Control y el resto de la web vean el nivel nuevo.
+        await alActualizarUsuario?.();
+        setEstadoCalibracion({ partidaId: idPartida, fase: 'listo', resultado: calibracion });
+        setAvisoNivelAbierto(true);
+      } else if (calibracion?.motivo === 'partida_incompleta') {
+        setEstadoCalibracion({
+          partidaId: idPartida,
+          fase: 'incompleta',
+          esDiagnostico: Boolean(calibracion.es_diagnostico),
+        });
+      } else {
+        // 'ya_registrada', 'no_terminada', 'dueno_no_jugador', 'sin_dueno': no hay nada que avisar.
+        setEstadoCalibracion(null);
+      }
+    } catch (err) {
+      if (ESTADOS_CALIBRACION_NO_DISPONIBLE.includes(err?.status)) {
+        setEstadoCalibracion(null);
+        return;
+      }
+      setEstadoCalibracion({ partidaId: idPartida, fase: 'error', mensaje: err?.message ?? null });
     }
   }
 
@@ -451,7 +704,7 @@ export default function SalaControl({
   }
 
   async function manejarClicCasilla(casilla) {
-    if (!partidaId || terminada || viendoPartidaAjena) return;
+    if (!partidaId || terminada || viendoPartidaAjena || demostracionDeOtraPartida) return;
 
     if (!casillaOrigen) {
       if (esPiezaDelTurno(casilla)) {
@@ -533,10 +786,14 @@ export default function SalaControl({
     setError(null);
     setCargando('nueva');
     try {
-      const partida = await crearPartida(nivel, fenReconocido, tipoOponente);
+      const partida = await crearPartida(nivelSeleccionado, fenReconocido, tipoOponenteSeleccionado);
       setPartidaId(partida.id);
       onPartidaActivaChange?.(partida.id);
       setFen(partida.fen);
+      setConfigPartida({
+        tipoOponente: partida.tipo_oponente || tipoOponenteSeleccionado,
+        nivel: partida.nivel ?? nivelSeleccionado,
+      });
       setTerminada(false);
       setResultado(null);
       setJugadas(partida.jugadas);
@@ -559,7 +816,7 @@ export default function SalaControl({
   }
 
   async function manejarMoverDesdeFoto() {
-    if (!partidaId || terminada) return;
+    if (!partidaId || terminada || demostracionDeOtraPartida) return;
     setError(null);
     setCargando('mover-foto');
     try {
@@ -634,15 +891,23 @@ export default function SalaControl({
           <div className="h-3 w-[1px] bg-surface-variant"></div>
           <span className="font-mono-label text-mono-label text-on-surface-variant flex items-center gap-1.5 flex-wrap">
             <span className="text-primary font-medium">
-              {tipoOponente === 'motor' ? 'STOCKFISH 16' : 'TURING IA (v5)'}
+              {oponenteMostrado === 'motor' ? 'STOCKFISH 16' : 'TURING IA (v5)'}
             </span>
             <span>·</span>
-            <span>NIVEL {nivel} ({categoriaDeNivel(nivel).toUpperCase()})</span>
-            {usuario && (
+            <span>NIVEL {nivelMostrado} ({categoriaDeNivel(nivelMostrado, oponenteMostrado === 'modelo').toUpperCase()})</span>
+            {/* Un facilitador no tiene rango de ajedrez — este bloque es el nivel MEDIDO del
+                jugador, no aplica a su cuenta (a diferencia del "NIVEL {nivelMostrado}" de arriba,
+                que es del RIVAL y sí corresponde mostrarle). */}
+            {usuario && !esFacilitador && (
               <>
                 <span className="text-outline">|</span>
                 <span className="text-secondary font-mono-micro px-2 py-0.5 rounded bg-secondary/10 font-medium">
-                  PERFIL: {usuario.rango_estimado ? usuario.rango_estimado.toUpperCase() : `NIVEL ${usuario.nivel_estimado ?? 5}`}
+                  PERFIL:{' '}
+                  {diagnosticoPendiente
+                    ? 'SIN MEDIR'
+                    : usuario.rango_estimado
+                      ? usuario.rango_estimado.toUpperCase()
+                      : `NIVEL ${usuario.nivel_estimado ?? 5}`}
                 </span>
               </>
             )}
@@ -675,13 +940,33 @@ export default function SalaControl({
         </div>
       )}
 
+      {diagnosticoPendiente && (
+        <section
+          aria-labelledby="titulo-partida-diagnostico"
+          className="px-space-md py-space-sm rounded-xl bg-primary/10 border border-primary/40 flex items-start gap-space-sm"
+        >
+          <span className="material-symbols-outlined text-[24px] text-primary shrink-0 mt-0.5" aria-hidden="true">
+            target
+          </span>
+          <div className="flex flex-col gap-space-2xs min-w-0">
+            <h2 id="titulo-partida-diagnostico" className="font-headline-sm text-headline-sm text-on-surface">
+              Partida de diagnóstico
+            </h2>
+            <p className="font-body-sm text-body-sm text-on-surface-variant">
+              Juega tu primera partida contra Stockfish (nivel {NIVEL_DIAGNOSTICO}): al terminarla el sistema mide tu
+              nivel comparando tus jugadas con las de Stockfish, y Turing y tus próximas partidas se ajustan a él.
+            </p>
+          </div>
+        </section>
+      )}
+
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-space-lg items-start">
         {/* COLUMNA IZQUIERDA: AVATAR 3D DEL RIVAL Y VISIÓN FÍSICA */}
         <div className="xl:col-span-3 flex flex-col gap-space-md">
           {/* AVATAR 3D DEL AGENTE INTELIGENTE (THREE.JS / HU7) */}
           <AvatarAgente3D
             pensando={cargando === 'mover' || cargando === 'mover-foto'}
-            tipoOponente={tipoOponente}
+            tipoOponente={oponenteMostrado}
             evaluacionCp={analisis?.evaluacion_cp ?? 0}
             mateEn={analisis?.mate_en ?? null}
             ultimoMovimiento={jugadas.length > 0 ? jugadas[jugadas.length - 1] : null}
@@ -698,7 +983,7 @@ export default function SalaControl({
                 RIVAL DIGITAL
               </span>
               <span className="text-[10px] text-primary font-mono font-bold">
-                {tipoOponente === 'modelo' ? 'TURING · IA v5 AUTÓNOMA' : 'STOCKFISH 16'}
+                {oponenteEnSelector === 'modelo' ? 'TURING · IA v5 AUTÓNOMA' : 'STOCKFISH 16'}
               </span>
             </div>
 
@@ -710,18 +995,17 @@ export default function SalaControl({
                   manejarNuevaPartida('modelo');
                 }}
                 onPointerDown={manejarPulsacion}
-                disabled={cargando === 'nueva'}
-                className={`py-2 px-1.5 rounded-lg font-mono-label text-[11px] font-semibold flex flex-col items-center justify-center gap-1 transition-all ${
-                  tipoOponente === 'modelo'
-                    ? 'bg-primary text-on-primary shadow-[0_0_14px_rgba(0,229,255,0.45)]'
-                    : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'
-                }`}
+                disabled={cargando === 'nueva' || seleccionBloqueada}
+                aria-pressed={oponenteEnSelector === 'modelo'}
+                className={claseBotonRival(oponenteEnSelector === 'modelo', seleccionBloqueada)}
               >
                 <div className="flex items-center gap-1">
                   <span className="material-symbols-outlined text-[15px]">psychology</span>
                   <span>TURING</span>
                 </div>
-                <span className="text-[9px] opacity-80 font-normal">IA v5 · SE-ResNet-8 FIDE</span>
+                <span className="text-[9px] opacity-80 font-normal text-center leading-tight">
+                  Turing v5 · entrenado con partidas de maestros
+                </span>
               </button>
 
               <button
@@ -731,12 +1015,9 @@ export default function SalaControl({
                   manejarNuevaPartida('motor');
                 }}
                 onPointerDown={manejarPulsacion}
-                disabled={cargando === 'nueva'}
-                className={`py-2 px-1.5 rounded-lg font-mono-label text-[11px] font-semibold flex flex-col items-center justify-center gap-1 transition-all ${
-                  tipoOponente === 'motor'
-                    ? 'bg-primary text-on-primary shadow-[0_0_14px_rgba(0,229,255,0.45)]'
-                    : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'
-                }`}
+                disabled={cargando === 'nueva' || seleccionBloqueada}
+                aria-pressed={oponenteEnSelector === 'motor'}
+                className={claseBotonRival(oponenteEnSelector === 'motor', seleccionBloqueada)}
               >
                 <div className="flex items-center gap-1">
                   <span className="material-symbols-outlined text-[15px]">smart_toy</span>
@@ -745,6 +1026,19 @@ export default function SalaControl({
                 <span className="text-[9px] opacity-80 font-normal">Minimax Alfa-Beta</span>
               </button>
             </div>
+
+            {seleccionBloqueada && (
+              <p className="font-mono-micro text-[10px] text-outline leading-relaxed flex items-start gap-1">
+                <span className="material-symbols-outlined text-[13px] shrink-0" aria-hidden="true">lock</span>
+                <span>
+                  {diagnosticoPendiente
+                    ? 'Diagnóstico: solo Stockfish.'
+                    : viendoPartidaAjena
+                      ? 'Solo lectura.'
+                      : 'Rival fijo durante la partida.'}
+                </span>
+              </p>
+            )}
           </div>
 
           {/* TRANSMISIÓN EN VIVO — el facilitador juega esta partida para mostrarle
@@ -839,8 +1133,12 @@ export default function SalaControl({
               {partidaId && !terminada && (
                 <button
                   onClick={manejarMoverDesdeFoto}
-                  disabled={cargando === 'mover-foto'}
-                  title="Mové una pieza en el tablero físico y tocá esto — detecta la jugada comparando la foto con la posición actual"
+                  disabled={cargando === 'mover-foto' || demostracionDeOtraPartida}
+                  title={
+                    demostracionDeOtraPartida
+                      ? 'No disponible mientras tu facilitador transmite otra partida'
+                      : 'Mové una pieza en el tablero físico y tocá esto — detecta la jugada comparando la foto con la posición actual'
+                  }
                   className="w-full py-2 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface transition-colors font-mono-label text-mono-label flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
                   <span className="material-symbols-outlined text-[16px]">back_hand</span>
@@ -1032,9 +1330,9 @@ export default function SalaControl({
                               ref={(nodo) => registrarCasillaRef(casilla, nodo)}
                               type="button"
                               onClick={() => manejarClicCasilla(casilla)}
-                              disabled={viendoPartidaAjena}
-                              aria-label={`Casilla ${casilla}${pieza ? ', pieza ' + pieza : ', vacía'}${esDestinoValido ? ', jugada válida' : ''}${viendoPartidaAjena ? ', solo lectura' : ''}`}
-                              className={`relative flex items-center justify-center ${clara ? 'bg-[#b89772]' : 'bg-[#543423]'} ${seleccionada ? 'ring-2 ring-inset ring-primary' : ''} ${viendoPartidaAjena ? 'cursor-default' : ''}`}
+                              disabled={viendoPartidaAjena || demostracionDeOtraPartida}
+                              aria-label={`Casilla ${casilla}${pieza ? ', pieza ' + pieza : ', vacía'}${esDestinoValido ? ', jugada válida' : ''}${viendoPartidaAjena ? ', solo lectura' : ''}${demostracionDeOtraPartida ? ', no disponible mientras se transmite otra partida' : ''}`}
+                              className={`relative flex items-center justify-center ${clara ? 'bg-[#b89772]' : 'bg-[#543423]'} ${seleccionada ? 'ring-2 ring-inset ring-primary' : ''} ${viendoPartidaAjena || demostracionDeOtraPartida ? 'cursor-default' : ''}`}
                             >
                               {pieza && (
                                 <div className={claseDePieza(pieza)}>
@@ -1079,6 +1377,34 @@ export default function SalaControl({
             </div>
           )}
 
+          {/* Transmisión de OTRA partida activa: se bloquea el propio tablero mientras dure — se
+              rehabilita solo apenas `demostracionActiva` deja de traer esa partida (sondeo en App.tsx). */}
+          {demostracionDeOtraPartida && (
+            <div
+              role="status"
+              className="w-full max-w-[660px] mt-space-sm px-space-md py-space-sm rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-between gap-space-sm flex-wrap"
+            >
+              <div className="flex items-center gap-space-xs min-w-0">
+                <span className="relative flex h-2 w-2 shrink-0" aria-hidden="true">
+                  <span className="animate-ping motion-reduce:animate-none absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+                </span>
+                <span className="font-body-sm text-body-sm text-on-surface">
+                  Tu facilitador está transmitiendo otra partida — no muevas piezas mientras tanto.
+                </span>
+              </div>
+              {alVerDemostracion && (
+                <button
+                  type="button"
+                  onClick={() => alVerDemostracion(demostracionActiva.id)}
+                  className="px-space-md py-space-2xs rounded-lg bg-primary text-on-primary font-body-sm text-body-sm font-medium hover:brightness-110 transition-colors shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                >
+                  Ver transmisión
+                </button>
+              )}
+            </div>
+          )}
+
           <div className="w-full max-w-[660px] mt-space-md flex flex-col gap-space-sm">
             {/* TARJETA DE FINALIZACIÓN Y RETROSPECTIVA PEDAGÓGICA */}
             {terminada && (
@@ -1092,7 +1418,7 @@ export default function SalaControl({
                       Partida Finalizada ({resultado || 'Juego Concluido'})
                     </div>
                     <div className="font-mono-micro text-[11px] text-on-surface-variant">
-                      Registrada en tu historial con {tipoOponente === 'modelo' ? 'Turing IA' : 'Stockfish'} (Nivel {nivel}).
+                      Registrada en tu historial con {oponenteMostrado === 'modelo' ? 'Turing IA' : 'Stockfish'} (Nivel {nivelMostrado}).
                     </div>
                   </div>
                 </div>
@@ -1100,13 +1426,22 @@ export default function SalaControl({
                   <button
                     type="button"
                     onClick={() => alIrAAprendizaje(partidaId)}
-                    className="px-3.5 py-1.5 rounded-lg bg-secondary text-on-secondary font-mono-label text-xs font-bold shadow hover:bg-secondary/90 transition-all flex items-center gap-1.5"
+                    className="px-3.5 py-1.5 rounded-lg bg-secondary text-on-secondary font-mono-label text-xs font-bold shadow hover:bg-secondary/90 transition-all flex items-center gap-1.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                   >
                     <span className="material-symbols-outlined text-[16px]">psychology</span>
                     <span>TUTOR Y FEEDBACK</span>
                   </button>
                 )}
               </div>
+            )}
+
+            {/* CÁLCULO DE NIVEL — solo para la partida propia que acaba de terminar */}
+            {terminada && estadoCalibracion?.partidaId === partidaId && (
+              <EstadoCalibracionPartida
+                estado={estadoCalibracion}
+                alReintentar={() => calibrarPartidaTerminada(partidaId)}
+                alVerNivel={() => setAvisoNivelAbierto(true)}
+              />
             )}
 
             <div className="flex items-center justify-between gap-space-md p-space-sm rounded-xl bg-surface-container-low shadow-xl flex-wrap">
@@ -1122,29 +1457,32 @@ export default function SalaControl({
               <div className="flex items-center gap-space-xs flex-wrap">
                 <div className="flex items-center gap-1.5 bg-surface-container-high/70 px-2 py-1 rounded-lg border border-outline-variant/30">
                   <label className="font-mono-micro text-[10px] text-outline uppercase font-semibold" htmlFor="nivelSelect">
-                    Nivel {tipoOponente === 'modelo' ? 'IA' : 'Motor'}
+                    Nivel {oponenteEnSelector === 'modelo' ? 'IA' : 'Motor'}
                   </label>
                   <select
                     id="nivelSelect"
-                    value={nivel}
+                    value={nivelEnSelector}
                     onChange={(evento) => setNivel(Number(evento.target.value))}
-                    className="bg-surface-container-high rounded px-2 py-0.5 font-mono-label text-mono-label text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
+                    disabled={seleccionBloqueada}
+                    aria-describedby={notasNivelId}
+                    title={seleccionBloqueada ? motivoBloqueoSeleccion : undefined}
+                    className="bg-surface-container-high rounded px-2 py-0.5 font-mono-label text-mono-label text-on-surface focus:outline-none focus:ring-1 focus:ring-primary focus-visible:ring-2 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    {NIVELES_POR_CATEGORIA.map((categoria) => (
+                    {gruposDeNiveles.map((categoria) => (
                       <optgroup key={categoria.etiqueta} label={categoria.etiqueta}>
                         {Array.from(
                           { length: categoria.hasta - categoria.desde + 1 },
                           (_, indice) => categoria.desde + indice
                         ).map((valor) => (
                           <option key={valor} value={valor}>
-                            Nivel {valor} ({categoria.etiqueta})
+                            {etiquetaOpcionNivel(valor, categoria.etiqueta, oponenteEnSelector === 'modelo')}
                           </option>
                         ))}
                       </optgroup>
                     ))}
                   </select>
                 </div>
-                {tipoOponente === 'modelo' && (
+                {oponenteEnSelector === 'modelo' && (
                   <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono text-primary bg-primary/10 px-2 py-1 rounded border border-primary/20">
                     <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
                     Turing Adaptativo
@@ -1168,6 +1506,30 @@ export default function SalaControl({
                   NUEVA PARTIDA
                 </button>
               </div>
+            </div>
+
+            <div id={notasNivelId} className="flex flex-col gap-1 px-space-xs font-mono-micro text-[10px] text-outline leading-relaxed">
+              {seleccionBloqueada && (
+                <p className="flex items-start gap-1">
+                  <span className="material-symbols-outlined text-[13px] shrink-0" aria-hidden="true">lock</span>
+                  <span>{motivoBloqueoSeleccion}</span>
+                </p>
+              )}
+              {nivelPendienteDeAplicar && (
+                <p className="flex items-start gap-1">
+                  <span className="material-symbols-outlined text-[13px] shrink-0" aria-hidden="true">info</span>
+                  <span>El nivel elegido se aplica en la próxima partida (NUEVA PARTIDA).</span>
+                </p>
+              )}
+              {oponenteEnSelector === 'modelo' && (
+                <p className="flex items-start gap-1">
+                  <span className="material-symbols-outlined text-[13px] shrink-0" aria-hidden="true">psychology</span>
+                  <span>
+                    Turing fue entrenado con partidas de maestros, por eso su techo es Maestro (nivel {NIVEL_MAX_MODELO}).
+                    Los niveles {NIVEL_MAX_MODELO + 1} y {NIVEL_MAX_STOCKFISH} solo existen en Stockfish.
+                  </span>
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -1255,8 +1617,66 @@ export default function SalaControl({
           </div>
         </div>
       </div>
+
+      {/* Anuncia a lectores de pantalla los cambios del cálculo de nivel (la tarjeta visible aparece y desaparece). */}
+      <div className="sr-only" role="status" aria-live="polite">
+        {mensajeEstadoNivel}
+      </div>
+
+      {avisoNivelAbierto && estadoCalibracion?.fase === 'listo' && (
+        <AvisoNivelCalculado
+          resultado={estadoCalibracion.resultado}
+          alCerrar={() => setAvisoNivelAbierto(false)}
+          alVerProgreso={
+            alIrAMiNivel
+              ? () => {
+                  setAvisoNivelAbierto(false);
+                  alIrAMiNivel();
+                }
+              : null
+          }
+        />
+      )}
+
+      {partidaPendienteDetectada && (
+        <ModalRetomarPartida
+          partida={partidaPendienteDetectada}
+          alRetomar={manejarRetomarPartidaPendiente}
+          alEmpezarNueva={manejarEmpezarNuevaDesdeModal}
+          esFacilitador={esFacilitador}
+        />
+      )}
+
+      {/* Aviso no bloqueante: nunca tapa el tablero ni impide seguir usando la pantalla. */}
+      {avisoPartidaDescartada && (
+        <div
+          role="status"
+          className="fixed top-20 left-1/2 -translate-x-1/2 z-[70] w-[calc(100%-2rem)] max-w-md px-space-md py-space-sm rounded-xl bg-surface-container-low border border-outline-variant/40 shadow-2xl flex items-center gap-space-sm"
+        >
+          <span className="material-symbols-outlined text-[20px] text-on-surface-variant shrink-0" aria-hidden="true">
+            info
+          </span>
+          <span className="font-body-sm text-body-sm text-on-surface flex-1">{avisoPartidaDescartada}</span>
+          <button
+            type="button"
+            onClick={() => setAvisoPartidaDescartada(null)}
+            aria-label="Cerrar aviso"
+            className="text-on-surface-variant hover:text-on-surface rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary shrink-0"
+          >
+            <span className="material-symbols-outlined text-[18px]">close</span>
+          </button>
+        </div>
+      )}
     </div>
   );
+}
+
+/** Clases del botón de rival (Turing / Stockfish): relleno = elegido, atenuado = bloqueado y no elegido. */
+function claseBotonRival(activo, bloqueado) {
+  const base =
+    'py-2 px-1.5 rounded-lg font-mono-label text-[11px] font-semibold flex flex-col items-center justify-center gap-1 transition-all motion-reduce:transition-none disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
+  if (activo) return `${base} bg-primary text-on-primary shadow-[0_0_14px_rgba(0,229,255,0.45)]`;
+  return `${base} text-on-surface-variant ${bloqueado ? 'opacity-50' : 'hover:text-on-surface hover:bg-surface-container-high'}`;
 }
 
 function agruparJugadasPorRonda(jugadas) {

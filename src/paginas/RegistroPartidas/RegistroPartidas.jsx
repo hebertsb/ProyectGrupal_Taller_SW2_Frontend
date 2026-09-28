@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { listarPartidas, obtenerPartida, obtenerDemostracionActiva } from '../../api/backend';
+import { fechaDesdeIso } from '../../formatoTiempo';
 
 const INTERVALO_SONDEO_DEMOSTRACION_MS = 8000;
 
@@ -38,6 +39,22 @@ function oponenteLegible(tipoOponente) {
   return tipoOponente === 'modelo' ? 'Turing IA' : 'Stockfish 16';
 }
 
+/**
+ * Insignia de "Terminada" / "Sin terminar" — campo nuevo y opcional
+ * (`estado`: 'en_curso' | 'terminada' | 'abandonada'). `null` si el backend
+ * todavía no lo manda, para no mostrar nada en vez de un dato inventado.
+ */
+function estadoLegible(estado) {
+  if (estado === 'terminada') return 'Terminada';
+  if (estado === 'en_curso' || estado === 'abandonada') return 'Sin terminar';
+  return null;
+}
+
+function colorEstado(estado) {
+  if (estado === 'terminada') return 'bg-emerald-950/70 text-emerald-300 border border-emerald-500/50';
+  return 'bg-slate-800/70 text-slate-300 border border-slate-500/40';
+}
+
 function categoriaNivel(n) {
   if (n == null) return 'Intermedio';
   if (n <= 6) return 'Principiante';
@@ -45,9 +62,17 @@ function categoriaNivel(n) {
   return 'Avanzado';
 }
 
+/**
+ * `fechaDesdeIso` (formatoTiempo.js) interpreta como UTC un ISO del backend sin
+ * sufijo de zona (bug ya identificado: sin esto la hora se ve adelantada según
+ * el huso del navegador) — acá solo se conserva el mismo formato visual de
+ * siempre (con segundos), ya sobre esa fecha corregida.
+ */
 function fechaLegible(iso) {
+  const fecha = fechaDesdeIso(iso);
+  if (!fecha) return iso;
   try {
-    return new Date(iso).toLocaleString('es-BO', {
+    return fecha.toLocaleString('es-BO', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -86,9 +111,16 @@ function TarjetaPartida({ partida, activa, alSeleccionar, esFacilitador, modoGri
             <span className={`font-mono text-base sm:text-lg font-bold tracking-tight ${activa ? 'text-cyan-300' : 'text-white group-hover:text-cyan-300 transition-colors'}`}>
               #{partida.id.slice(0, 8)}
             </span>
-            <span className={`px-3.5 py-1 rounded-full font-mono text-xs font-bold shrink-0 tracking-wide ${colorResultado(partida.resultado)}`}>
-              {resultadoLegible(partida.resultado)}
-            </span>
+            <div className="flex items-center gap-1.5 flex-wrap justify-end shrink-0">
+              {estadoLegible(partida.estado) && (
+                <span className={`px-2.5 py-1 rounded-full font-mono text-[10px] sm:text-xs font-bold tracking-wide ${colorEstado(partida.estado)}`}>
+                  {estadoLegible(partida.estado)}
+                </span>
+              )}
+              <span className={`px-3.5 py-1 rounded-full font-mono text-xs font-bold tracking-wide ${colorResultado(partida.resultado)}`}>
+                {resultadoLegible(partida.resultado)}
+              </span>
+            </div>
           </div>
 
           {/* Fila 2: Oponente y Nivel más grandes y claros */}
@@ -126,6 +158,11 @@ function TarjetaPartida({ partida, activa, alSeleccionar, esFacilitador, modoGri
               }`}>
                 {partida.cantidad_jugadas} {partida.cantidad_jugadas === 1 ? 'jugada' : 'jugadas'}
               </span>
+              {typeof partida.jugadas_jugador === 'number' && (
+                <span className="font-medium text-slate-400" title="Jugadas hechas por el jugador (sin contar las del rival)">
+                  (jugador: {partida.jugadas_jugador})
+                </span>
+              )}
               {modoGrid && (
                 <span className="material-symbols-outlined text-[18px] text-cyan-400 group-hover:translate-x-1.5 transition-transform ml-1">
                   arrow_forward
@@ -487,6 +524,11 @@ export default function RegistroPartidas({
                       #{detalle.id.slice(0, 8)}
                     </h2>
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      {estadoLegible(detalle.estado) && (
+                        <span className={`px-2.5 py-0.5 rounded-full font-mono text-xs font-bold ${colorEstado(detalle.estado)}`}>
+                          {estadoLegible(detalle.estado)}
+                        </span>
+                      )}
                       <span className={`px-2.5 py-0.5 rounded-full font-mono text-xs font-bold ${colorResultado(detalle.resultado)}`}>
                         {resultadoLegible(detalle.resultado)}
                       </span>

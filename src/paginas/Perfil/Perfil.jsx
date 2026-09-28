@@ -328,9 +328,8 @@ export default function Perfil({ usuario, alActualizarUsuario }) {
             <h2 className="font-headline-sm text-headline-sm text-on-surface">Tu nivel</h2>
           </div>
           <p className="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
-            Elegí un nivel de partida mientras jugás tus primeras partidas — después el sistema lo va a ir ajustando
-            solo según cómo juegues. Esto define cómo te habla Turing en el Panel de Aprendizaje, no es un
-            diagnóstico.
+            Este es tu punto de partida (define cómo te habla Turing hasta que te midamos). Tu primera partida —de
+            diagnóstico, contra Stockfish— mide tu nivel y luego se reajusta con cada partida.
           </p>
 
           {errorNivel && (
