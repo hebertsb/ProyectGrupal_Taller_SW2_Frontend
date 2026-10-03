@@ -186,3 +186,31 @@
     animation: none;
   }
 }
+
+/* Tarjeta de login en pantallas bajas: menos relleno y espacio entre campos para que entre sin
+   desplazarse. Sin capa, como la barra lateral de abajo. */
+@media (max-height: 860px) {
+  .tarjeta-login {
+    padding: 1rem 1.25rem;
+  }
+  .tarjeta-login form > * + * {
+    margin-top: 0.625rem;
+  }
+}
+
+/* Barra lateral en pantallas bajas: menos aire entre marca, opciones y pie para que el menú
+   entre sin desplazarse. Va sin capa para ganar a las utilidades de Tailwind. Si aun así no
+   entra, `.barra-lateral nav` tiene desplazamiento propio y el pie queda fijo abajo. */
+@media (max-height: 800px) {
+  .barra-lateral {
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+  }
+  .barra-lateral > div {
+    gap: 0.5rem;
+  }
+  .barra-lateral .boton-nav {
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+  }
+}

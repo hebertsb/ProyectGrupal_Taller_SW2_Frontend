@@ -9,6 +9,9 @@ export default function Login({ onLoginSuccess }) {
   const [password, setPassword] = useState('');
   const [claveFacilitador, setClaveFacilitador] = useState('');
   const [mostrarPassword, setMostrarPassword] = useState(false);
+  // Las credenciales de prueba van abiertas solo en pantallas anchas y altas; en el resto quedan
+  // plegadas para que la tarjeta entre completa sin desplazarse.
+  const pantallaAncha = typeof window !== 'undefined' && window.matchMedia('(min-width: 640px) and (min-height: 900px)').matches;
   const [recordar, setRecordar] = useState(true);
 
   const [cargando, setCargando] = useState(false);
@@ -216,7 +219,7 @@ export default function Login({ onLoginSuccess }) {
       </div>
 
       {/* 2. BARRA DE TELEMETRÍA SUPERIOR */}
-      <header className="relative z-10 w-full px-5 sm:px-8 py-3.5 flex items-center justify-between border-b border-[#00e5ff]/20 bg-[#0c0e14]/85 backdrop-blur-md font-mono text-xs" data-purpose="telemetry-bar">
+      <header className="relative z-10 w-full px-5 sm:px-8 py-3.5 max-[860px]:py-2 flex items-center justify-between border-b border-[#00e5ff]/20 bg-[#0c0e14]/85 backdrop-blur-md font-mono text-xs" data-purpose="telemetry-bar">
         <div className="flex items-center space-x-3 sm:space-x-5">
           <div className="flex items-center space-x-2">
             <span className="relative flex h-2.5 w-2.5">
@@ -251,9 +254,9 @@ export default function Login({ onLoginSuccess }) {
       </header>
 
       {/* 3. CARD CENTRAL GLASSMÓRFICA DE AUTENTICACIÓN */}
-      <main className="relative z-10 flex-1 flex items-center justify-center px-4 py-6 sm:px-6">
+      <main className="relative z-10 flex-1 flex items-center justify-center px-4 py-6 sm:px-6 max-[860px]:py-2">
         <div className="w-full max-w-[440px] mx-auto">
-          <section className="relative bg-[#111319]/90 backdrop-blur-2xl rounded-2xl border border-[#00e5ff]/30 p-6 sm:p-7 neon-border-cyan shadow-2xl transition-all duration-300">
+          <section className="tarjeta-login relative bg-[#111319]/90 backdrop-blur-2xl rounded-2xl border border-[#00e5ff]/30 p-6 sm:p-7 neon-border-cyan shadow-2xl transition-all duration-300">
             {/* Esquinas Cibernéticas Decorativas */}
             <div className="absolute -top-1 -left-1 w-3.5 h-3.5 border-t-2 border-l-2 border-[#00e5ff]" />
             <div className="absolute -top-1 -right-1 w-3.5 h-3.5 border-t-2 border-r-2 border-[#00e5ff]" />
@@ -261,8 +264,8 @@ export default function Login({ onLoginSuccess }) {
             <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 border-b-2 border-r-2 border-[#00e5ff]" />
 
             {/* LOGOTIPO E IDENTIDAD OFICIAL: ChessIA // KAIROS CORE */}
-            <div className="text-center mb-5" data-purpose="brand-logo-identity">
-              <div className="flex justify-center mb-4">
+            <div className="text-center mb-5 max-[860px]:mb-3" data-purpose="brand-logo-identity">
+              <div className="flex justify-center mb-4 max-[860px]:hidden">
                 <div className="inline-flex p-1.5 rounded-2xl bg-[#0c0e14] border border-[#00e5ff]/30 shadow-[0_0_20px_rgba(0,229,255,0.45)] overflow-hidden">
                   <img
                     alt="ChessIA Logo"
@@ -588,10 +591,10 @@ export default function Login({ onLoginSuccess }) {
             )}
 
             {/* CREDENCIALES DE PRUEBA RÁPIDA (CHIPS CON CLIC DIRECTO) */}
-            <div className="mt-5 p-2.5 rounded-xl bg-surface-container-lowest/80 border border-outline-variant/30">
-              <p className="font-mono-micro text-[10px] text-slate-400 text-center mb-1.5 uppercase tracking-wider">
+            <details className="mt-5 p-2.5 rounded-xl bg-surface-container-lowest/80 border border-outline-variant/30" open={pantallaAncha}>
+              <summary className="font-mono-micro text-[10px] text-slate-400 text-center mb-1.5 uppercase tracking-wider cursor-pointer list-none">
                 Credenciales de prueba rápida (clic para rellenar):
-              </p>
+              </summary>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 font-mono text-[10px]">
                 <button
                   type="button"
@@ -621,7 +624,7 @@ export default function Login({ onLoginSuccess }) {
                   <span className="text-slate-500">clave: test123456</span>
                 </button>
               </div>
-            </div>
+            </details>
           </section>
 
           {/* PIE DE SEGURIDAD CRIPTOGRÁFICA */}
@@ -634,7 +637,7 @@ export default function Login({ onLoginSuccess }) {
       </main>
 
       {/* 4. BARRA DE TELEMETRÍA PERIMETRAL INFERIOR */}
-      <footer className="relative z-10 w-full px-5 sm:px-8 py-2.5 border-t border-[#00e5ff]/20 bg-[#0c0e14]/90 backdrop-blur-md flex flex-col sm:flex-row items-center justify-between text-[11px] font-mono text-slate-400">
+      <footer className="max-sm:hidden max-[860px]:hidden relative z-10 w-full px-5 sm:px-8 py-2.5 border-t border-[#00e5ff]/20 bg-[#0c0e14]/90 backdrop-blur-md flex flex-col sm:flex-row items-center justify-between text-[11px] font-mono text-slate-400">
         <div className="flex items-center space-x-3 mb-1.5 sm:mb-0">
           <span>
             MOTOR CHESS IA: <span className="text-slate-200">STOCKFISH NEURAL HYBRID</span>

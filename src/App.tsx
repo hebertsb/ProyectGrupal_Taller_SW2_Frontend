@@ -37,7 +37,14 @@ function obtenerUsuarioGuardado() {
 
 export default function App() {
   const [pantallaActiva, setPantallaActiva] = useState('control');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  // En pantallas angostas (menos de lg) la barra lateral arranca cerrada: si no, tapa el contenido.
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() =>
+    typeof window === 'undefined' || window.matchMedia('(min-width: 1024px)').matches,
+  );
+  // En pantallas angostas, elegir una opción del menú cierra la barra para ver la pantalla.
+  useEffect(() => {
+    if (window.matchMedia('(max-width: 1023px)').matches) setIsSidebarOpen(false);
+  }, [pantallaActiva]);
   const [backendConectado, setBackendConectado] = useState<boolean | null>(null);
   // Partida activa de Sala de Control — vive acá (no en el estado local de <SalaControl>)
   // para que sobreviva al desmontaje cuando se cambia de pantalla. Nunca se limpia sola:
@@ -240,8 +247,8 @@ export default function App() {
 
   const navClasses = (path: string) => 
     pantallaActiva === path
-      ? "flex items-center gap-space-sm px-space-sm py-space-xs transition-colors bg-surface-container-high text-primary font-medium rounded-lg shadow-[0_1px_8px_rgba(0,0,0,0.04)] w-full text-left"
-      : "flex items-center gap-space-sm px-space-sm py-space-xs rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors font-body-sm text-body-sm w-full text-left";
+      ? "boton-nav flex items-center gap-space-sm px-space-sm py-space-xs transition-colors bg-surface-container-high text-primary font-medium rounded-lg shadow-[0_1px_8px_rgba(0,0,0,0.04)] w-full text-left"
+      : "boton-nav flex items-center gap-space-sm px-space-sm py-space-xs rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors font-body-sm text-body-sm w-full text-left";
 
   const headerNavClasses = (path: string) =>
     pantallaActiva === path
@@ -259,9 +266,17 @@ export default function App() {
 
   return (
     <ProveedorRazonamiento>
-    <div className="bg-surface-container-lowest font-body-lg text-on-surface antialiased selection:bg-primary-container selection:text-on-primary-container min-h-screen">
-      <aside className={`fixed left-0 top-0 h-full w-64 bg-surface-container-low/80 backdrop-blur-xl z-50 flex flex-col justify-between py-space-lg px-space-md transition-transform duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="flex flex-col gap-space-lg">
+    <div className="bg-surface-container-lowest font-body-lg text-on-surface antialiased selection:bg-primary-container selection:text-on-primary-container min-h-dvh">
+      {isSidebarOpen && (
+        <button
+          type="button"
+          aria-label="Cerrar menú"
+          onClick={() => setIsSidebarOpen(false)}
+          className="lg:hidden fixed inset-0 z-40 bg-black/50"
+        />
+      )}
+      <aside className={`barra-lateral fixed left-0 top-0 h-dvh overflow-hidden w-64 bg-surface-container-low/80 backdrop-blur-xl z-50 flex flex-col justify-between py-space-lg px-space-md transition-transform duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="flex flex-col gap-space-lg min-h-0 flex-1">
           <div className="flex items-center justify-between gap-space-xs px-space-xs">
             <div className="flex items-center gap-space-xs">
               <div className="w-2 h-2 rounded-full bg-primary-container shadow-[0_0_8px_rgba(0,229,255,0.6)]"></div>
@@ -271,9 +286,9 @@ export default function App() {
               <span className="material-symbols-outlined text-[20px]">close</span>
             </button>
           </div>
-          <div className="flex flex-col gap-space-2xs">
+          <div className="flex flex-col gap-space-2xs min-h-0 flex-1">
             <span className="font-mono-micro text-mono-micro uppercase text-on-surface-variant px-space-xs">Subsystems</span>
-            <nav className="flex flex-col gap-space-2xs">
+            <nav className="flex flex-col gap-space-2xs min-h-0 flex-1 overflow-y-auto overscroll-contain">
               <button onClick={() => setPantallaActiva('control')} className={navClasses('control')}>
                 <span className="material-symbols-outlined text-[18px]">sports_esports</span>Sala de Control
               </button>
@@ -335,7 +350,7 @@ export default function App() {
             </nav>
           </div>
         </div>
-        <div className="flex flex-col gap-space-sm px-space-xs">
+        <div className="flex flex-col gap-space-sm px-space-xs shrink-0">
           <div className="p-space-sm rounded-lg bg-surface-container-lowest/60 flex flex-col gap-space-2xs">
             <div className="flex items-center justify-between">
               <span className="font-mono-micro text-mono-micro uppercase text-on-surface-variant">Backend</span>
@@ -398,7 +413,9 @@ export default function App() {
                 <span className="font-mono-label text-mono-label text-outline">//</span>
                 <span className="font-mono-label text-mono-label text-on-surface-variant hidden sm:inline">BRAZO ROBÓTICO</span>
               </div>
-              <nav className="hidden xl:flex items-center gap-space-xs">
+              {/* Menú superior solo en pantalla ancha. La barra lateral ocupa 256px: con ella abierta
+                  se necesita más ancho para que el menú no se encime con el estado y E-STOP. */}
+              <nav className={`${isSidebarOpen ? 'hidden min-[2200px]:flex' : 'hidden min-[1920px]:flex'} items-center gap-space-xs`}>
                 <button onClick={() => setPantallaActiva('control')} className={headerNavClasses('control')}>SALA DE CONTROL</button>
                 {!esFacilitador && (
                   <button onClick={() => setPantallaActiva('panelAprendizaje')} className={headerNavClasses('panelAprendizaje')}>PANEL DE APRENDIZAJE</button>

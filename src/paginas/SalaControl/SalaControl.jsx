@@ -1537,8 +1537,8 @@ export default function SalaControl({
                   </span>
                 </div>
               </div>
-              <div className="flex items-center gap-space-xs flex-wrap">
-                <div className="flex items-center gap-1.5 bg-surface-container-high/70 px-2 py-1 rounded-lg border border-outline-variant/30">
+              <div className="flex items-center gap-space-xs flex-wrap w-full sm:w-auto min-w-0">
+                <div className="flex items-center gap-1.5 bg-surface-container-high/70 px-2 py-1 rounded-lg border border-outline-variant/30 min-w-0 max-w-full">
                   <label className="font-mono-micro text-[10px] text-outline uppercase font-semibold" htmlFor="nivelSelect">
                     Nivel {oponenteEnSelector === 'modelo' ? 'IA' : 'Motor'}
                   </label>
@@ -1549,7 +1549,7 @@ export default function SalaControl({
                     disabled={seleccionBloqueada}
                     aria-describedby={notasNivelId}
                     title={seleccionBloqueada ? motivoBloqueoSeleccion : undefined}
-                    className="bg-surface-container-high rounded px-2 py-0.5 font-mono-label text-mono-label text-on-surface focus:outline-none focus:ring-1 focus:ring-primary focus-visible:ring-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="min-w-0 max-w-full bg-surface-container-high rounded px-2 py-0.5 font-mono-label text-mono-label text-on-surface focus:outline-none focus:ring-1 focus:ring-primary focus-visible:ring-2 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     {gruposDeNiveles.map((categoria) => (
                       <optgroup key={categoria.etiqueta} label={categoria.etiqueta}>
