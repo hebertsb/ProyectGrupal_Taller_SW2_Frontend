@@ -58,6 +58,8 @@ export default function App() {
   // transmitiendo" — ver Registro de Partidas y DemostracionEnVivo.
   const [partidaDemostracionId, setPartidaDemostracionId] = useState<string | null>(null);
   const [usuario, setUsuario] = useState(() => obtenerUsuarioGuardado());
+  // Sube cada vez que el jugador pide volver a ver el tutorial desde el panel de piezas.
+  const [pedidoTutorial, setPedidoTutorial] = useState(0);
   // Estado de "datos para entrenar a Turing" (HU4) — solo tiene sentido para el facilitador.
   // Se sondea acá (una vez al iniciar sesión y después cada 60 s) para poder mostrar la insignia
   // del menú aunque la pantalla de Entrenamiento del modelo nunca se haya abierto; esa pantalla
@@ -272,6 +274,7 @@ export default function App() {
       {!esFacilitador && (
         <Onboarding
           usuario={usuario}
+          pedidoAbrir={pedidoTutorial}
           alVerPiezas={() => {
             setPantallaActiva('panelAprendizaje');
             setSeccionPanelAprendizaje('piezas');
@@ -638,6 +641,7 @@ export default function App() {
                 seccionInicial={seccionPanelAprendizaje}
                 onSeccionConsumida={() => setSeccionPanelAprendizaje(null)}
                 alIrASalaControl={() => irASalaControl()}
+                alVerTutorial={() => setPedidoTutorial((n) => n + 1)}
               />
             )
           )}

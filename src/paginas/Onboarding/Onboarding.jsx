@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { casillasIlustrativas, rutaImagenPieza } from '../../ajedrez';
 import { PIEZAS } from '../../contenido/piezas';
@@ -212,11 +212,20 @@ function PuzzleJaque({ onResuelto }) {
  * Overlay del onboarding. Se muestra solo si el usuario todavía no lo completó
  * en este navegador. `usuario` es el dueño de la sesión actual.
  */
-export default function Onboarding({ usuario = null, alVerPiezas = null }) {
+export default function Onboarding({ usuario = null, alVerPiezas = null, pedidoAbrir = 0 }) {
   const reducir = useReducedMotion();
   const [visible, setVisible] = useState(() => !onboardingCompletado(usuario?.id));
   const [indice, setIndice] = useState(0);
   const [puzzleResuelto, setPuzzleResuelto] = useState(false);
+
+  // Cada vez que el panel pide verlo de nuevo (`pedidoAbrir` sube), vuelve a abrirse desde la primera tarjeta.
+  useEffect(() => {
+    if (pedidoAbrir > 0) {
+      setIndice(0);
+      setPuzzleResuelto(false);
+      setVisible(true);
+    }
+  }, [pedidoAbrir]);
 
   if (!visible) return null;
 

@@ -666,6 +666,7 @@ export default function PanelAprendizaje({
   seccionInicial = null,
   onSeccionConsumida = null,
   alIrASalaControl = null,
+  alVerTutorial = null,
 }) {
   const [seccionAbierta, setSeccionAbierta] = useState(() => seccionInicial || 'nivel');
   const refsSeccion = useRef({});
@@ -1070,6 +1071,17 @@ export default function PanelAprendizaje({
                 así la ficha de detalle de abajo y el registro de "vistas"
                 (logro "Conocé las 6 piezas") lo siguen automáticamente. */}
             <BannerPiezas piezas={PIEZAS} claseTextoContenido={claseTextoContenido} onCambiarPieza={elegirPieza} />
+
+            {alVerTutorial && (
+              <button
+                type="button"
+                onClick={alVerTutorial}
+                className="self-start flex items-center gap-space-xs px-space-md py-space-xs rounded-full bg-surface-container-high text-on-surface font-body-sm text-body-sm hover:bg-surface-bright transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+              >
+                <span className="material-symbols-outlined text-[18px]">school</span>
+                Ver el tutorial de nuevo
+              </button>
+            )}
 
             {piezaActual && (
               <div className="flex flex-col gap-space-sm pt-space-xs">
