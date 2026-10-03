@@ -202,9 +202,54 @@ export async function reconocerTablero(turno = "w", archivoFoto = null) {
   return respuesta.json();
 }
 
-/** URL de la última foto de la cámara fija — agregar un timestamp para evitar el caché del navegador. */
-export function urlFotoCamara() {
-  return `/vision/foto?t=${Date.now()}`;
+/**
+ * Captura una foto de la cámara fija. Va con fetch y el token porque un
+ * <img src> no manda el header Authorization y la ruta exige sesión. Devuelve
+ * un object URL (JPEG), listo para un <img src>; quien lo use es responsable
+ * de revocarlo con `URL.revokeObjectURL` cuando ya no haga falta.
+ */
+export async function obtenerUrlFotoCamara() {
+  const token = localStorage.getItem("access_token");
+  const headers = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  const respuesta = await fetch("/vision/foto", { headers, cache: "no-store" });
+  if (!respuesta.ok) {
+    const detalle = await respuesta.json().catch(() => null);
+    throw new Error(detalle?.detail ?? `Error ${respuesta.status}`);
+  }
+  const blob = await respuesta.blob();
+  return URL.createObjectURL(blob);
+}
+
+/**
+ * Pide al backend la foto subida enderezada con la grilla 8x8 dibujada
+ * encima — prueba visual de que la detección geométrica del tablero
+ * encontró las esquinas y alineó bien, sin depender del clasificador de
+ * piezas. Devuelve un object URL (JPEG), listo para un <img src=...>; quien
+ * lo use es responsable de revocarlo con `URL.revokeObjectURL` cuando ya no
+ * haga falta.
+ */
+export async function obtenerUrlGrillaDebug(archivoFoto) {
+  const token = localStorage.getItem("access_token");
+  const datos = new FormData();
+  datos.append("foto_subida", archivoFoto);
+  const headers = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  const respuesta = await fetch("/vision/grilla-debug", {
+    method: "POST",
+    body: datos,
+    headers,
+  });
+  if (!respuesta.ok) {
+    const detalle = await respuesta.json().catch(() => null);
+    throw new Error(detalle?.detail ?? `Error ${respuesta.status}`);
+  }
+  const blob = await respuesta.blob();
+  return URL.createObjectURL(blob);
 }
 
 /** Health check del backend — sin auth para que funcione antes de login */

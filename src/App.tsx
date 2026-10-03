@@ -77,12 +77,8 @@ export default function App() {
     setPartidaParaAprender(null);
     setPartidaDemostracionId(null);
     setSeccionPanelAprendizaje(null);
-    // Redirigir según rol
-    if (usuarioData.rol === 'facilitador') {
-      setPantallaActiva('usuarios');
-    } else {
-      setPantallaActiva('control');
-    }
+    // Todos entran a la Sala de Control; el facilitador llega a Gestión de Usuarios desde el menú.
+    setPantallaActiva('control');
   };
 
   const manejarActualizarUsuario = (usuarioActualizado) => {

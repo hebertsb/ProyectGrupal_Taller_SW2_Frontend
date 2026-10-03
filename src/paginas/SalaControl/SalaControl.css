@@ -24,3 +24,19 @@
   width: 68%;
   height: 68%;
 }
+
+/* Secciones plegables (PanelPlegable.jsx): <details>/<summary> nativo, sin
+   triángulo de disclosure por defecto — el estado lo comunica la flecha
+   .panel-plegable-chevron, que PanelPlegable ya rota con Tailwind. */
+.panel-plegable > summary {
+  list-style: none;
+}
+.panel-plegable > summary::-webkit-details-marker {
+  display: none;
+}
+.panel-plegable > summary::marker {
+  content: '';
+}
+.panel-plegable[open] > summary .panel-plegable-chevron {
+  transform: rotate(180deg);
+}

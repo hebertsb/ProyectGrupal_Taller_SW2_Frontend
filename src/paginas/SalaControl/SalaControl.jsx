@@ -7,6 +7,7 @@ import SimuladorBrazoTablero3D from '../../componentes/SimuladorBrazoTablero3D';
 import { useRazonamiento } from '../../contexto/ContextoRazonamiento';
 import AvisoNivelCalculado, { EstadoCalibracionPartida } from './AvisoNivelCalculado';
 import ModalRetomarPartida from './ModalRetomarPartida';
+import PanelPlegable from './PanelPlegable';
 import {
   abrirSimulacion3D,
   actualizarPermisosPartida,
@@ -19,8 +20,9 @@ import {
   obtenerJugadasLegales,
   obtenerPartida,
   obtenerPartidaEnCurso,
+  obtenerUrlFotoCamara,
+  obtenerUrlGrillaDebug,
   reconocerTablero,
-  urlFotoCamara,
 } from '../../api/backend';
 import {
   claseDePieza,
@@ -135,9 +137,51 @@ export default function SalaControl({
   const [evaluacionesHistorial, setEvaluacionesHistorial] = useState([]);
   const [backendConectado, setBackendConectado] = useState(null);
   const [fotoKey, setFotoKey] = useState(0);
+  // Vista previa LOCAL de la foto recién subida con "SUBIR FOTO DEL TABLERO" (object URL del
+  // propio archivo, nunca pasa por el backend) — se muestra en el recuadro de la cámara en vez
+  // de la foto en vivo mientras haya una subida vigente, así se confirma a simple vista qué foto
+  // se mandó a reconocer. `actualizarFoto` (botón ACTUALIZAR) la descarta para volver a la cámara.
+  const [previsualizacionSubida, setPrevisualizacionSubida] = useState(null);
+  // URL vigente de la vista previa (la misma que se muestra) y número de la última subida: así
+  // se libera la URL que se reemplaza y se descarta la grilla de una subida que ya no es la actual.
+  const previsualizacionRef = useRef(null);
+  const ultimaSubidaRef = useRef(0);
   const [fenReconocido, setFenReconocido] = useState(null);
   const [cargando, setCargando] = useState(null);
   const [error, setError] = useState(null);
+  // Foto de la cámara fija ya pedida con el token (object URL). Se renueva con cada ACTUALIZAR.
+  const [fotoCamaraUrl, setFotoCamaraUrl] = useState(null);
+  const urlFotoCamaraRef = useRef(null);
+
+  useEffect(() => {
+    if (fotoKey === 0) return undefined;
+    let vigente = true;
+    obtenerUrlFotoCamara()
+      .then((nueva) => {
+        // Si llegó otro ACTUALIZAR mientras esta captura viajaba, se descarta la respuesta vieja.
+        if (!vigente) {
+          URL.revokeObjectURL(nueva);
+          return;
+        }
+        if (urlFotoCamaraRef.current) URL.revokeObjectURL(urlFotoCamaraRef.current);
+        urlFotoCamaraRef.current = nueva;
+        setFotoCamaraUrl(nueva);
+      })
+      .catch((fallo) => {
+        if (vigente) setError(`No se pudo obtener la foto de la cámara: ${fallo.message}`);
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [fotoKey]);
+
+  useEffect(
+    () => () => {
+      if (urlFotoCamaraRef.current) URL.revokeObjectURL(urlFotoCamaraRef.current);
+      if (previsualizacionRef.current) URL.revokeObjectURL(previsualizacionRef.current);
+    },
+    [],
+  );
   const [avisoSimulacion3D, setAvisoSimulacion3D] = useState(null);
   // Permisos de esta partida puntual (no del usuario) — el facilitador decide,
   // partida por partida, si el jugador puede ver la simulación 3D y/o usar la
@@ -773,11 +817,39 @@ export default function SalaControl({
     }
   }
 
-  function manejarSeleccionarFoto(evento) {
+  // Muestra una URL en la vista previa y libera la anterior. Única forma de cambiarla, para
+  // que no quede ninguna URL huérfana ni se revoque dentro de un updater de estado.
+  function reemplazarPrevisualizacion(url) {
+    if (previsualizacionRef.current) URL.revokeObjectURL(previsualizacionRef.current);
+    previsualizacionRef.current = url;
+    setPrevisualizacionSubida(url);
+  }
+
+  async function manejarSeleccionarFoto(evento) {
     const archivo = evento.target.files?.[0];
     evento.target.value = ''; // permite volver a elegir el mismo archivo después
-    if (archivo) {
-      manejarReconocerTablero(archivo);
+    if (!archivo) return;
+
+    // Vista previa inmediata con la foto cruda — no espera al backend.
+    const subida = ultimaSubidaRef.current + 1;
+    ultimaSubidaRef.current = subida;
+    reemplazarPrevisualizacion(URL.createObjectURL(archivo));
+    manejarReconocerTablero(archivo);
+
+    // Reemplazo por la foto con la grilla 8x8 dibujada encima apenas el backend la arma —
+    // prueba visual de que la detección geométrica encontró el tablero. Si este pedido falla
+    // (ej. no se encontró el tablero en la imagen), se queda con la foto cruda de arriba, no
+    // hace falta mostrar un error aparte acá: `manejarReconocerTablero` ya muestra el suyo.
+    try {
+      const urlGrilla = await obtenerUrlGrillaDebug(archivo);
+      // Si mientras esperaba llegó otra subida (o ACTUALIZAR), esta grilla ya no corresponde.
+      if (subida !== ultimaSubidaRef.current) {
+        URL.revokeObjectURL(urlGrilla);
+        return;
+      }
+      reemplazarPrevisualizacion(urlGrilla);
+    } catch {
+      // se queda con la vista previa cruda que ya se mostró arriba
     }
   }
 
@@ -874,6 +946,9 @@ export default function SalaControl({
   }
 
   function actualizarFoto() {
+    // Invalida cualquier grilla de subida que todavía esté viajando, para que no reaparezca.
+    ultimaSubidaRef.current += 1;
+    reemplazarPrevisualizacion(null);
     setFotoKey((valor) => valor + 1);
   }
 
@@ -975,18 +1050,119 @@ export default function SalaControl({
             resultado={resultado}
           />
 
-          {/* SELECTOR DE OPONENTE (MODELO IA v5 vs STOCKFISH 16) */}
-          <div className="panel-entrada bg-surface-container-low rounded-xl p-3.5 shadow-xl flex flex-col gap-2.5 border border-outline-variant/30">
-            <div className="flex items-center justify-between">
-              <span className="font-mono-micro text-[11px] uppercase tracking-wider text-on-surface-variant flex items-center gap-1 font-semibold">
-                <span className="material-symbols-outlined text-[14px] text-primary">swords</span>
-                RIVAL DIGITAL
-              </span>
+          {/* CÁMARA FIJA / TABLERO FÍSICO — operación de hardware, SIEMPRE VISIBLE
+              (nunca plegada): el facilitador siempre la ve; para el jugador
+              depende del permiso de esta partida (`permite_camara`), que el
+              facilitador prende/apaga desde "CONTROLES PARA EL JUGADOR" más
+              abajo — un jugador practicando desde el navegador por defecto no
+              tiene tablero físico ni cámara al lado. */}
+          {(esFacilitador || permiteCamara) && (
+            <div className="panel-entrada bg-surface-container-low rounded-xl p-space-md shadow-xl flex flex-col gap-space-sm relative overflow-hidden">
+              <div className="flex items-center justify-between">
+                <span className="font-mono-micro text-mono-micro uppercase tracking-wider text-on-surface-variant flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[13px] text-primary">videocam</span> CÁMARA FIJA
+                </span>
+                <button
+                  onClick={actualizarFoto}
+                  onPointerDown={manejarPulsacion}
+                  className="font-mono-micro text-mono-micro text-primary-fixed-dim px-1.5 py-0.5 rounded bg-primary/10 hover:bg-primary/20 transition-colors"
+                >
+                  ACTUALIZAR
+                </button>
+              </div>
+              <div className="relative w-full aspect-[4/3] rounded-lg overflow-hidden bg-surface-container-lowest flex items-center justify-center">
+                {previsualizacionSubida ? (
+                  <>
+                    <img
+                      className="absolute inset-0 w-full h-full object-cover"
+                      alt="Vista previa de la foto subida del tablero"
+                      src={previsualizacionSubida}
+                    />
+                    <span className="absolute top-1 left-1 font-mono-micro text-[9px] px-1.5 py-0.5 rounded bg-surface-container-lowest/90 text-on-surface-variant">
+                      FOTO SUBIDA
+                    </span>
+                  </>
+                ) : fotoKey === 0 ? (
+                  <span className="font-mono-micro text-mono-micro text-on-surface-variant px-space-sm text-center">
+                    Sin captura todavía — tocá ACTUALIZAR
+                  </span>
+                ) : fotoCamaraUrl ? (
+                  <img
+                    className="absolute inset-0 w-full h-full object-cover"
+                    alt="Foto de la cámara fija sobre el tablero"
+                    src={fotoCamaraUrl}
+                  />
+                ) : (
+                  <span className="font-mono-micro text-mono-micro text-on-surface-variant px-space-sm text-center">
+                    Capturando la foto…
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => manejarReconocerTablero()}
+                disabled={cargando === 'reconocer'}
+                className="w-full py-2 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface transition-colors font-mono-label text-mono-label flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                <span className="material-symbols-outlined text-[16px]">grid_view</span>
+                {cargando === 'reconocer' ? 'RECONOCIENDO…' : 'RECONOCER TABLERO (HU1)'}
+              </button>
+              <label
+                className={`w-full py-2 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface transition-colors font-mono-label text-mono-label flex items-center justify-center gap-1.5 cursor-pointer ${cargando === 'reconocer' ? 'opacity-50 pointer-events-none' : ''}`}
+                title="Subí una foto ya sacada (ej. de la galería del celular) en vez de usar la cámara en vivo"
+              >
+                <span className="material-symbols-outlined text-[16px]">upload</span>
+                SUBIR FOTO DEL TABLERO
+                <input type="file" accept="image/*" className="hidden" onChange={manejarSeleccionarFoto} />
+              </label>
+              {partidaId && !terminada && (
+                <button
+                  onClick={manejarMoverDesdeFoto}
+                  disabled={cargando === 'mover-foto' || demostracionDeOtraPartida}
+                  title={
+                    demostracionDeOtraPartida
+                      ? 'No disponible mientras tu facilitador transmite otra partida'
+                      : 'Mové una pieza en el tablero físico y tocá esto — detecta la jugada comparando la foto con la posición actual'
+                  }
+                  className="w-full py-2 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface transition-colors font-mono-label text-mono-label flex items-center justify-center gap-1.5 disabled:opacity-50"
+                >
+                  <span className="material-symbols-outlined text-[16px]">back_hand</span>
+                  {cargando === 'mover-foto' ? 'DETECTANDO…' : 'DETECTÉ UN MOVIMIENTO FÍSICO'}
+                </button>
+              )}
+              {fenReconocido && (
+                <div className="bg-surface-container-lowest p-2 rounded-lg flex flex-col gap-1.5">
+                  <span className="font-mono-micro text-mono-micro text-primary-fixed-dim break-all">
+                    FEN reconocido: {fenReconocido}
+                  </span>
+                  <button
+                    onClick={manejarUsarPosicionEscaneada}
+                    disabled={cargando === 'nueva'}
+                    className="w-full py-1.5 rounded-lg bg-primary text-on-primary font-mono-label text-mono-label flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">play_arrow</span>
+                    USAR ESTA POSICIÓN
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Paneles secundarios, plegados por defecto salvo RIVAL DIGITAL (se
+              usa para elegir rival antes de cada partida nueva) — así el panel
+              lateral no obliga a bajar hasta el final para llegar a lo que se
+              necesita en plena demo. Avatar y Cámara (arriba) quedan siempre
+              visibles a propósito; estos no. */}
+          <PanelPlegable
+            titulo="RIVAL DIGITAL"
+            icono="swords"
+            defaultAbierto
+            className="panel-entrada"
+            extra={
               <span className="text-[10px] text-primary font-mono font-bold">
                 {oponenteEnSelector === 'modelo' ? 'TURING · IA v5 AUTÓNOMA' : 'STOCKFISH 16'}
               </span>
-            </div>
-
+            }
+          >
             <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-surface-container-lowest border border-outline-variant/30">
               <button
                 type="button"
@@ -1039,141 +1215,14 @@ export default function SalaControl({
                 </span>
               </p>
             )}
-          </div>
-
-          {/* TRANSMISIÓN EN VIVO — el facilitador juega esta partida para mostrarle
-              a la clase cómo jugar; con esto prende que cualquier jugador la vea en
-              modo solo lectura (pantalla "Demostración en vivo"), sin compartir nada
-              a mano. Solo facilitador; solo funciona en una partida propia (el
-              backend devuelve 400 si no lo es). */}
-          {esFacilitador && (
-            <div className="panel-entrada bg-surface-container-low rounded-xl p-space-md shadow-xl flex flex-col gap-space-sm">
-              <div className="flex items-center justify-between">
-                <span className="font-mono-micro text-mono-micro uppercase tracking-wider text-on-surface-variant flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[13px] text-primary">sensors</span> TRANSMISIÓN EN VIVO
-                </span>
-              </div>
-              <InterruptorPermiso
-                id="permiso-demostracion"
-                etiqueta="Transmitir esta partida en vivo a los jugadores"
-                activo={esDemostracion}
-                cargando={cambiandoPermiso === 'es_demostracion'}
-                onCambiar={() => manejarTogglePermiso('es_demostracion', esDemostracion)}
-              />
-              {esDemostracion && (
-                <div className="bg-primary/10 text-primary font-mono-micro text-mono-micro px-2 py-1.5 rounded-lg text-center flex items-center justify-center gap-1.5">
-                  <span className="relative flex h-1.5 w-1.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary"></span>
-                  </span>
-                  Los jugadores ya pueden ver esta partida en vivo
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* CÁMARA FIJA / TABLERO FÍSICO — operación de hardware. El facilitador
-              siempre la ve; para el jugador depende del permiso de esta partida
-              (`permite_camara`), que el facilitador prende/apaga con el switch
-              de abajo — un jugador practicando desde el navegador por defecto no
-              tiene tablero físico ni cámara al lado. */}
-          {(esFacilitador || permiteCamara) && (
-            <div className="panel-entrada bg-surface-container-low rounded-xl p-space-md shadow-xl flex flex-col gap-space-sm relative overflow-hidden">
-              <div className="flex items-center justify-between">
-                <span className="font-mono-micro text-mono-micro uppercase tracking-wider text-on-surface-variant flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[13px] text-primary">videocam</span> CÁMARA FIJA
-                </span>
-                <button
-                  onClick={actualizarFoto}
-                  onPointerDown={manejarPulsacion}
-                  className="font-mono-micro text-mono-micro text-primary-fixed-dim px-1.5 py-0.5 rounded bg-primary/10 hover:bg-primary/20 transition-colors"
-                >
-                  ACTUALIZAR
-                </button>
-              </div>
-              {esFacilitador && (
-                <InterruptorPermiso
-                  id="permiso-camara"
-                  etiqueta="Permitir cámara al jugador"
-                  activo={permiteCamara}
-                  cargando={cambiandoPermiso === 'permite_camara'}
-                  onCambiar={() => manejarTogglePermiso('permite_camara', permiteCamara)}
-                />
-              )}
-              <div className="relative w-full aspect-[4/3] rounded-lg overflow-hidden bg-surface-container-lowest flex items-center justify-center">
-                {fotoKey === 0 ? (
-                  <span className="font-mono-micro text-mono-micro text-on-surface-variant px-space-sm text-center">
-                    Sin captura todavía — tocá ACTUALIZAR
-                  </span>
-                ) : (
-                  <img
-                    className="absolute inset-0 w-full h-full object-cover"
-                    alt="Foto de la cámara fija sobre el tablero"
-                    src={urlFotoCamara()}
-                    onError={() => setError('No se pudo obtener la foto de la cámara — ¿está conectada?')}
-                  />
-                )}
-              </div>
-              <button
-                onClick={() => manejarReconocerTablero()}
-                disabled={cargando === 'reconocer'}
-                className="w-full py-2 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface transition-colors font-mono-label text-mono-label flex items-center justify-center gap-1.5 disabled:opacity-50"
-              >
-                <span className="material-symbols-outlined text-[16px]">grid_view</span>
-                {cargando === 'reconocer' ? 'RECONOCIENDO…' : 'RECONOCER TABLERO (HU1)'}
-              </button>
-              <label
-                className={`w-full py-2 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface transition-colors font-mono-label text-mono-label flex items-center justify-center gap-1.5 cursor-pointer ${cargando === 'reconocer' ? 'opacity-50 pointer-events-none' : ''}`}
-                title="Subí una foto ya sacada (ej. de la galería del celular) en vez de usar la cámara en vivo"
-              >
-                <span className="material-symbols-outlined text-[16px]">upload</span>
-                SUBIR FOTO DEL TABLERO
-                <input type="file" accept="image/*" className="hidden" onChange={manejarSeleccionarFoto} />
-              </label>
-              {partidaId && !terminada && (
-                <button
-                  onClick={manejarMoverDesdeFoto}
-                  disabled={cargando === 'mover-foto' || demostracionDeOtraPartida}
-                  title={
-                    demostracionDeOtraPartida
-                      ? 'No disponible mientras tu facilitador transmite otra partida'
-                      : 'Mové una pieza en el tablero físico y tocá esto — detecta la jugada comparando la foto con la posición actual'
-                  }
-                  className="w-full py-2 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface transition-colors font-mono-label text-mono-label flex items-center justify-center gap-1.5 disabled:opacity-50"
-                >
-                  <span className="material-symbols-outlined text-[16px]">back_hand</span>
-                  {cargando === 'mover-foto' ? 'DETECTANDO…' : 'DETECTÉ UN MOVIMIENTO FÍSICO'}
-                </button>
-              )}
-              {fenReconocido && (
-                <div className="bg-surface-container-lowest p-2 rounded-lg flex flex-col gap-1.5">
-                  <span className="font-mono-micro text-mono-micro text-primary-fixed-dim break-all">
-                    FEN reconocido: {fenReconocido}
-                  </span>
-                  <button
-                    onClick={manejarUsarPosicionEscaneada}
-                    disabled={cargando === 'nueva'}
-                    className="w-full py-1.5 rounded-lg bg-primary text-on-primary font-mono-label text-mono-label flex items-center justify-center gap-1.5 disabled:opacity-50"
-                  >
-                    <span className="material-symbols-outlined text-[16px]">play_arrow</span>
-                    USAR ESTA POSICIÓN
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
+          </PanelPlegable>
 
           {/* ESTADO DEL BRAZO — honesto: no hay hardware real conectado todavía.
               Panel de operador del brazo robótico, solo facilitador — no depende
               de ningún permiso por partida, no es algo que se le pueda "regalar"
-              a un jugador. */}
+              a un jugador. Secundario: plegado por defecto. */}
           {esFacilitador && (
-            <div className="panel-entrada bg-surface-container-low rounded-xl p-space-md shadow-xl flex flex-col gap-space-sm">
-              <div className="flex items-center justify-between">
-                <span className="font-mono-micro text-mono-micro uppercase tracking-wider text-on-surface-variant flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[13px] text-primary">precision_manufacturing</span> BRAZO ROBÓTICO
-                </span>
-              </div>
+            <PanelPlegable titulo="BRAZO ROBÓTICO" icono="precision_manufacturing" className="panel-entrada">
               <div className="bg-surface-container-lowest p-3 rounded-lg flex items-center justify-between">
                 <span className="font-mono-micro text-mono-micro text-outline uppercase">Estado</span>
                 <span className="font-mono-micro text-mono-micro px-2 py-0.5 rounded bg-primary/10 text-primary uppercase font-medium">
@@ -1192,24 +1241,17 @@ export default function SalaControl({
                   SIMULADOR
                 </button>
               </div>
-            </div>
+            </PanelPlegable>
           )}
 
           {/* Ventana 3D en vivo (PyBullet) — aparte del panel de arriba: no es un
               ejecutor de movimientos, es solo una vista del tablero, así que el
               facilitador la puede habilitar para el jugador partida por partida
-              (`permite_simulacion_3d`). El facilitador siempre puede abrirla. */}
+              (`permite_simulacion_3d`, ver el switch en "CONTROLES PARA EL
+              JUGADOR" más abajo). El facilitador siempre puede abrirla.
+              Secundario: plegado por defecto. */}
           {(esFacilitador || permiteSimulacion3D) && (
-            <div className="panel-entrada bg-surface-container-low rounded-xl p-space-md shadow-xl flex flex-col gap-space-sm">
-              {esFacilitador && (
-                <InterruptorPermiso
-                  id="permiso-simulacion3d"
-                  etiqueta="Permitir simulación 3D al jugador"
-                  activo={permiteSimulacion3D}
-                  cargando={cambiandoPermiso === 'permite_simulacion_3d'}
-                  onCambiar={() => manejarTogglePermiso('permite_simulacion_3d', permiteSimulacion3D)}
-                />
-              )}
+            <PanelPlegable titulo="SIMULACIÓN 3D" icono="view_in_ar" className="panel-entrada">
               <button
                 onClick={manejarAbrirSimulacion3D}
                 disabled={!partidaId}
@@ -1228,7 +1270,48 @@ export default function SalaControl({
                   {avisoSimulacion3D}
                 </div>
               )}
-            </div>
+            </PanelPlegable>
+          )}
+
+          {/* CONTROLES PARA EL JUGADOR — todo lo que el facilitador prende/apaga
+              para que un JUGADOR lo vea en SU PROPIA pantalla (cámara,
+              simulación 3D, transmisión en vivo). Agrupados al fondo del panel
+              a propósito: son ajustes de antes/después de la clase, no algo
+              que se toque a cada rato en medio de una demo. Solo facilitador
+              — un jugador no tiene nada que configurar acá. */}
+          {esFacilitador && (
+            <PanelPlegable titulo="CONTROLES PARA EL JUGADOR" icono="tune" className="panel-entrada">
+              <InterruptorPermiso
+                id="permiso-camara"
+                etiqueta="Permitir cámara al jugador"
+                activo={permiteCamara}
+                cargando={cambiandoPermiso === 'permite_camara'}
+                onCambiar={() => manejarTogglePermiso('permite_camara', permiteCamara)}
+              />
+              <InterruptorPermiso
+                id="permiso-simulacion3d"
+                etiqueta="Permitir simulación 3D al jugador"
+                activo={permiteSimulacion3D}
+                cargando={cambiandoPermiso === 'permite_simulacion_3d'}
+                onCambiar={() => manejarTogglePermiso('permite_simulacion_3d', permiteSimulacion3D)}
+              />
+              <InterruptorPermiso
+                id="permiso-demostracion"
+                etiqueta="Transmitir esta partida en vivo a los jugadores"
+                activo={esDemostracion}
+                cargando={cambiandoPermiso === 'es_demostracion'}
+                onCambiar={() => manejarTogglePermiso('es_demostracion', esDemostracion)}
+              />
+              {esDemostracion && (
+                <div className="bg-primary/10 text-primary font-mono-micro text-mono-micro px-2 py-1.5 rounded-lg text-center flex items-center justify-center gap-1.5">
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary"></span>
+                  </span>
+                  Los jugadores ya pueden ver esta partida en vivo
+                </div>
+              )}
+            </PanelPlegable>
           )}
         </div>
 
