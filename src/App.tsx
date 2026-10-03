@@ -10,6 +10,7 @@ import Administracion from './paginas/Administracion/Administracion';
 import RegistroPartidas from './paginas/RegistroPartidas/RegistroPartidas';
 import Aprendizaje from './paginas/Aprendizaje/Aprendizaje';
 import PanelAprendizaje from './paginas/PanelAprendizaje/PanelAprendizaje';
+import Onboarding from './paginas/Onboarding/Onboarding';
 import DemostracionEnVivo from './paginas/DemostracionEnVivo/DemostracionEnVivo';
 import Monitoreo from './paginas/Monitoreo/Monitoreo';
 import ConfiguracionEnsenanza from './paginas/ConfiguracionEnsenanza/ConfiguracionEnsenanza';
@@ -267,6 +268,16 @@ export default function App() {
   return (
     <ProveedorRazonamiento>
     <div className="bg-surface-container-lowest font-body-lg text-on-surface antialiased selection:bg-primary-container selection:text-on-primary-container min-h-dvh">
+      {/* Tutorial de reglas básicas (HU12): solo para jugadores, una vez por usuario en este navegador. */}
+      {!esFacilitador && (
+        <Onboarding
+          usuario={usuario}
+          alVerPiezas={() => {
+            setPantallaActiva('panelAprendizaje');
+            setSeccionPanelAprendizaje('piezas');
+          }}
+        />
+      )}
       {isSidebarOpen && (
         <button
           type="button"

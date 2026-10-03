@@ -104,9 +104,9 @@ export default function GestionUsuarios() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-space-lg">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-space-lg">
         {/* Lista de usuarios */}
-        <section className="lg:col-span-1 flex flex-col gap-space-md bg-surface-container-low p-space-lg rounded-xl shadow-md">
+        <section className="xl:col-span-1 flex flex-col gap-space-md bg-surface-container-low p-space-lg rounded-xl shadow-md">
           <div className="flex items-center justify-between pb-space-xs border-b border-outline-variant/20">
             <span className="font-headline-sm text-headline-sm text-on-surface">Usuarios</span>
             <button
@@ -144,8 +144,8 @@ export default function GestionUsuarios() {
                     }`}
                     type="button"
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-space-sm flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center justify-between gap-space-xs">
+                      <div className="flex items-center gap-space-sm flex-1 min-w-[10rem]">
                         <div className="w-9 h-9 rounded-full bg-surface-bright flex items-center justify-center text-primary flex-shrink-0">
                           <span className="material-symbols-outlined text-[20px]">{usuario.rol === 'facilitador' ? 'admin_panel_settings' : 'person'}</span>
                         </div>
@@ -163,7 +163,7 @@ export default function GestionUsuarios() {
                         </span>
                       </div>
                     </div>
-                    <div className="flex items-center justify-between pt-space-2xs font-mono-micro text-mono-micro text-on-surface-variant">
+                    <div className="flex flex-wrap items-center justify-between gap-space-xs pt-space-2xs font-mono-micro text-mono-micro text-on-surface-variant">
                       <span>Creado: {fechaDesdeIso(usuario.creado_en)?.toLocaleDateString('es-ES') ?? usuario.creado_en}</span>
                       {usuario.nivel_estimado && (
                         <span className="flex items-center gap-space-2xs text-primary">
@@ -180,7 +180,7 @@ export default function GestionUsuarios() {
         </section>
 
         {/* Detalle de partidas del usuario seleccionado */}
-        <section className="lg:col-span-2 flex flex-col gap-space-md bg-surface-container-low p-space-lg rounded-xl shadow-md">
+        <section className="xl:col-span-2 flex flex-col gap-space-md bg-surface-container-low p-space-lg rounded-xl shadow-md">
           {usuarioSeleccionado ? (
             <>
               <div className="flex items-center justify-between pb-space-xs border-b border-outline-variant/20">
@@ -248,7 +248,7 @@ export default function GestionUsuarios() {
                               {estado.texto}
                             </span>
                           </div>
-                          <div className="flex items-center justify-between pt-space-2xs font-mono-micro text-mono-micro text-on-surface-variant">
+                          <div className="flex flex-wrap items-center justify-between gap-space-xs pt-space-2xs font-mono-micro text-mono-micro text-on-surface-variant">
                             <span>{fechaDesdeIso(partida.fecha)?.toLocaleString('es-ES') ?? partida.fecha}</span>
                           </div>
                         </div>

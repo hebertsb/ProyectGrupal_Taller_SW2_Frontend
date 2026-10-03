@@ -6,63 +6,13 @@ import PiezaModelo3D from '../../componentes/PiezaModelo3D';
 import FondoCapasScroll from '../../componentes/FondoCapasScroll';
 import ChatTuring from './ChatTuring';
 import TuNivel from './TuNivel';
+import CaminoAprendizaje from './CaminoAprendizaje';
+import { PIEZAS } from '../../contenido/piezas';
 
-/**
- * 6 piezas — letra en mayúscula para `rutaImagenPieza` (siempre el set blanco,
- * ilustrativo). `apodo` y `reglaEspecial` son contenido educativo fijo, redactado
- * a mano (no viene de ningún endpoint) — se muestran en el panel de detalle de
- * cada pieza, no en la tarjeta chica del selector, para no recargarla.
+/*
+ * `PIEZAS` (las 6 piezas con su apodo, regla especial y cómo se mueven) vive en
+ * `src/contenido/piezas.js`: lo comparten este panel y el onboarding (HU12).
  */
-const PIEZAS = [
-  {
-    tipo: 'rey',
-    nombre: 'Rey',
-    articulo: 'el',
-    letra: 'K',
-    apodo: 'El Monarca',
-    reglaEspecial: 'Se enroca una vez por partida: se pone a resguardo y de paso activa una torre.',
-  },
-  {
-    tipo: 'dama',
-    nombre: 'Dama',
-    articulo: 'la',
-    letra: 'Q',
-    apodo: 'La Soberana',
-    reglaEspecial: 'Es la pieza de mayor valor del tablero: se mueve como la torre y el alfil combinados.',
-  },
-  {
-    tipo: 'torre',
-    nombre: 'Torre',
-    articulo: 'la',
-    letra: 'R',
-    apodo: 'El Bastión',
-    reglaEspecial: 'Es la pieza que participa junto al rey en el enroque.',
-  },
-  {
-    tipo: 'alfil',
-    nombre: 'Alfil',
-    articulo: 'el',
-    letra: 'B',
-    apodo: 'El Francotirador',
-    reglaEspecial: 'Se queda toda la partida en casillas de un mismo color — nunca cambia de color de casilla.',
-  },
-  {
-    tipo: 'caballo',
-    nombre: 'Caballo',
-    articulo: 'el',
-    letra: 'N',
-    apodo: 'El Infiltrador',
-    reglaEspecial: 'Es la única pieza que puede saltar por encima de otras piezas.',
-  },
-  {
-    tipo: 'peon',
-    nombre: 'Peón',
-    articulo: 'el',
-    letra: 'P',
-    apodo: 'La Vanguardia',
-    reglaEspecial: 'Puede capturar "al paso" y se convierte en otra pieza (corona) al llegar a la última fila.',
-  },
-];
 
 /**
  * Estilo por `calidad` — el campo que ya devuelve el backend por jugada
@@ -152,6 +102,7 @@ function jugadaMasNotable(jugadas, rangoPorCalidad) {
 
 const SECCIONES = [
   { id: 'nivel', titulo: 'Tu nivel', icono: 'military_tech' },
+  { id: 'camino', titulo: 'Tu camino', icono: 'route' },
   { id: 'repaso', titulo: 'Repaso de tu partida', icono: 'history_edu' },
   { id: 'piezas', titulo: 'Aprendé cada pieza', icono: 'extension' },
   { id: 'resumen', titulo: 'Resumen del tutor', icono: 'menu_book' },
@@ -781,6 +732,10 @@ export default function PanelAprendizaje({
   const { narrar, detener, narrando, disponible: vozDisponible } = useNarracion();
 
   const rango = usuario?.rango_estimado || 'Intermedio';
+  // El camino de capítulos es para quien está aprendiendo las bases: principiantes
+  // y quienes todavía no se midieron. Intermedio y avanzado ven su análisis de partida.
+  const muestraCamino = !usuario?.rango_estimado || usuario.rango_estimado === 'Principiante';
+  const seccionesVisibles = muestraCamino ? SECCIONES : SECCIONES.filter((s) => s.id !== 'camino');
   const nombreCorto = usuario?.nombre?.trim().split(/\s+/)[0] || 'jugador';
   // Escalón de tamaño de fuente para el contenido de texto de las secciones
   // (repaso, resumen, descripciones de piezas) — no toca badges ni etiquetas
@@ -898,6 +853,8 @@ export default function PanelAprendizaje({
       icono: 'menu_book',
     },
   ];
+  // La insignia de las 6 piezas sigue el mismo criterio que el camino: solo para principiantes.
+  const insigniasVisibles = muestraCamino ? insignias : insignias.filter((i) => i.id !== 'seis-piezas');
 
   return (
     <div className="relative w-full px-space-lg py-space-lg flex flex-col gap-space-lg animate-in fade-in duration-500">
@@ -974,7 +931,7 @@ export default function PanelAprendizaje({
             {!sidebarColapsado && <span className="lg:hidden font-body-sm text-body-sm">Colapsar</span>}
           </button>
 
-          {SECCIONES.map((s) => (
+          {seccionesVisibles.map((s) => (
             <button
               key={s.id}
               type="button"
@@ -1007,6 +964,27 @@ export default function PanelAprendizaje({
           >
             <TuNivel usuario={usuario} alIrASalaControl={alIrASalaControl} claseTextoContenido={claseTextoContenido} />
           </SeccionAcordeon>
+
+          {/* 1b. Tu camino (solo principiantes y sin medir) */}
+          {muestraCamino && (
+            <SeccionAcordeon
+              id="camino"
+              titulo="Tu camino"
+              icono="route"
+              abierta={seccionAbierta === 'camino'}
+              onToggle={() => alternarSeccion('camino')}
+              innerRef={(el) => { refsSeccion.current.camino = el; }}
+            >
+              <CaminoAprendizaje
+                usuarioId={usuario?.id}
+                rango={usuario?.rango_estimado ?? null}
+                piezasVistas={piezasVistas}
+                alIrASeccion={manejarClickSeccionSidebar}
+                alIrASalaControl={alIrASalaControl}
+                claseTextoContenido={claseTextoContenido}
+              />
+            </SeccionAcordeon>
+          )}
 
           {/* 2. Repaso de tu partida */}
           <SeccionAcordeon
@@ -1208,7 +1186,7 @@ export default function PanelAprendizaje({
             innerRef={(el) => { refsSeccion.current.logros = el; }}
           >
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-space-xs">
-              {insignias.map((insignia) => (
+              {insigniasVisibles.map((insignia) => (
                 <div
                   key={insignia.id}
                   className={`flex flex-col items-center gap-space-2xs p-space-sm rounded-xl border text-center ${

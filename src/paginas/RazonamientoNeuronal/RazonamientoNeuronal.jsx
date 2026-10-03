@@ -572,7 +572,7 @@ export default function RazonamientoNeuronal() {
       {(!partidaId || partida) && !cargandoPartida && (
         <>
           {/* ===== KPIs del modelo ===== */}
-          <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 bg-surface-container/80 p-2.5 rounded-xl border border-outline-variant/30 shadow-lg">
+          <section className="grid grid-cols-2 md:grid-cols-3 2xl:grid-cols-6 gap-2 bg-surface-container/80 p-2.5 rounded-xl border border-outline-variant/30 shadow-lg">
             <div className="flex flex-col justify-center px-3 py-1.5 rounded-lg bg-surface-container-lowest border border-outline-variant/20">
               <div className="flex items-center justify-between">
                 <span className="font-mono-micro text-[9px] text-on-surface-variant uppercase">Turing</span>
@@ -608,7 +608,7 @@ export default function RazonamientoNeuronal() {
               <span className="font-mono-micro text-[9px] text-on-surface-variant uppercase">Dispositivo</span>
               <span className="font-mono-metric text-[13px] font-bold text-tertiary-container">{dispositivo}</span>
             </div>
-            <div className="flex items-center gap-1.5 justify-end col-span-2 sm:col-span-1 lg:col-span-1">
+            <div className="flex items-center gap-1.5 justify-end col-span-2 sm:col-span-1 2xl:col-span-1">
               <button
                 type="button"
                 onClick={() => fenActual && dispararInferencia?.(fenActual)}
@@ -648,9 +648,9 @@ export default function RazonamientoNeuronal() {
           )}
 
           {/* ===== Layout central de 3 columnas ===== */}
-          <section className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-stretch">
+          <section className="grid grid-cols-1 2xl:grid-cols-12 gap-3 items-stretch">
             {/* Columna izquierda: entrada posicional FEN */}
-            <div className="lg:col-span-3 flex flex-col gap-2.5 bg-surface-container/70 p-3 rounded-xl border border-outline-variant/30 shadow-md justify-between">
+            <div className="2xl:col-span-3 flex flex-col gap-2.5 bg-surface-container/70 p-3 rounded-xl border border-outline-variant/30 shadow-md justify-between">
               <div className="flex flex-col gap-1 border-b border-outline-variant/20 pb-2">
                 {/* Persistente mientras se está observando la partida de un estudiante — a
                     diferencia de `estudianteElegido` (que solo importa dentro del selector,
@@ -768,7 +768,7 @@ export default function RazonamientoNeuronal() {
             </div>
 
             {/* Columna central: cerebro de partículas — 100% real */}
-            <div className="lg:col-span-7 flex flex-col gap-2 bg-surface-container/90 p-3.5 rounded-xl border border-neon-cyan/40 shadow-[0_0_35px_rgba(0,229,255,0.15)] relative overflow-hidden">
+            <div className="2xl:col-span-7 flex flex-col gap-2 bg-surface-container/90 p-3.5 rounded-xl border border-neon-cyan/40 shadow-[0_0_35px_rgba(0,229,255,0.15)] relative overflow-hidden">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-outline-variant/30 pb-2">
                 <div className="flex items-center gap-2">
                   <div className="relative flex h-3 w-3">
@@ -874,7 +874,7 @@ export default function RazonamientoNeuronal() {
             </div>
 
             {/* Columna derecha: atención por bloque (real) + saliencia (real) */}
-            <div className="lg:col-span-2 flex flex-col gap-2.5 bg-surface-container/70 p-3 rounded-xl border border-outline-variant/30 shadow-md justify-between">
+            <div className="2xl:col-span-2 flex flex-col gap-2.5 bg-surface-container/70 p-3 rounded-xl border border-outline-variant/30 shadow-md justify-between">
               <div className="flex items-center justify-between border-b border-outline-variant/20 pb-2">
                 <div className="flex items-center gap-1.5">
                   <span className="material-symbols-outlined text-neon-purple text-[18px]">blur_on</span>
@@ -1095,9 +1095,9 @@ export default function RazonamientoNeuronal() {
           </section>
 
           {/* ===== Fila inferior: diagnóstico + terminal ===== */}
-          <section className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-stretch">
+          <section className="grid grid-cols-1 2xl:grid-cols-12 gap-3 items-stretch">
             {/* Diagnóstico Pedagógico — real */}
-            <div className="lg:col-span-7 flex flex-col justify-between p-3 rounded-xl bg-surface-container/70 border border-outline-variant/30 shadow-md">
+            <div className="2xl:col-span-7 flex flex-col justify-between p-3 rounded-xl bg-surface-container/70 border border-outline-variant/30 shadow-md">
               <div className="flex items-center justify-between border-b border-outline-variant/20 pb-2">
                 <div className="flex items-center gap-1.5">
                   <span className="material-symbols-outlined text-secondary text-[20px]">psychology</span>
@@ -1158,7 +1158,7 @@ export default function RazonamientoNeuronal() {
             </div>
 
             {/* Terminal & Logs — eventos reales del componente y del contexto compartido */}
-            <div className="lg:col-span-5 flex flex-col justify-between p-3 rounded-xl bg-surface-container/70 border border-outline-variant/30 shadow-md">
+            <div className="2xl:col-span-5 flex flex-col justify-between p-3 rounded-xl bg-surface-container/70 border border-outline-variant/30 shadow-md">
               <div className="flex items-center justify-between border-b border-outline-variant/20 pb-2">
                 <div className="flex items-center gap-1.5">
                   <span className="material-symbols-outlined text-outline text-[18px]">terminal</span>

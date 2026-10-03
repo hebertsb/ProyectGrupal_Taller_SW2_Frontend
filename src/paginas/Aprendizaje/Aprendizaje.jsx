@@ -84,7 +84,7 @@ function TarjetaPartidaAprendizaje({ partida, alSeleccionar, esFacilitador }) {
 
         <div className="flex-1 flex flex-col gap-3.5 min-w-0 justify-between">
           {/* Fila 1: ID de partida grande y Resultado destacado */}
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="font-mono text-base sm:text-lg font-bold tracking-tight text-white group-hover:text-cyan-300 transition-colors">
               #{partida.id.slice(0, 8)}
             </span>
@@ -108,13 +108,13 @@ function TarjetaPartidaAprendizaje({ partida, alSeleccionar, esFacilitador }) {
           </div>
 
           {/* Fila 3: Fecha, Jugadas y Alumno con mayor tamaño de texto y badges */}
-          <div className="flex items-center justify-between pt-2.5 border-t border-white/10 font-mono text-xs sm:text-sm text-slate-400">
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2.5 border-t border-white/10 font-mono text-xs sm:text-sm text-slate-400">
             <span className="flex items-center gap-1.5 text-slate-300">
               <span className="material-symbols-outlined text-[16px] text-slate-500">schedule</span>
               {fechaLegible(partida.creada_en)}
             </span>
 
-            <div className="flex items-center gap-2.5">
+            <div className="flex flex-wrap items-center gap-2.5">
               {esFacilitador && partida.usuario_nombre && (
                 <span className="flex items-center gap-1.5 text-primary font-semibold px-2.5 py-1 rounded-lg bg-surface-container border border-primary/20">
                   <span className="material-symbols-outlined text-[15px]">person</span>

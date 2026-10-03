@@ -1377,12 +1377,14 @@ export default function SalaControl({
           ) : (
             <div className="panel-entrada relative w-full max-w-[660px] flex items-center justify-center">
               {analisis && (
-                <div className="absolute -left-7 top-6 bottom-6 w-3 rounded-full bg-surface-container-high overflow-hidden shadow-inner flex flex-col justify-end p-0.5">
-                  <div
-                    className="w-full bg-gradient-to-t from-primary-container to-primary rounded-full transition-all duration-700 shadow-[0_0_8px_#00e5ff]"
-                    style={{ height: `${porcentajeVentaja}%` }}
-                  ></div>
-                  <span className="absolute -left-11 top-1/2 -translate-y-1/2 font-mono-micro text-mono-micro font-medium text-primary bg-surface-container-lowest/90 px-1 py-0.5 rounded shadow">
+                <div
+                  className="absolute -left-7 top-6 bottom-6 w-3 rounded-full bg-surface-container-high shadow-inner max-lg:left-0 max-lg:right-0 max-lg:top-[-0.75rem] max-lg:bottom-auto max-lg:h-2.5 max-lg:w-auto"
+                  style={{ '--pct': `${porcentajeVentaja}%` }}
+                >
+                  <div className="absolute inset-0.5 rounded-full overflow-hidden flex flex-col justify-end max-lg:flex-row max-lg:justify-start">
+                    <div className="w-full h-[var(--pct)] bg-gradient-to-t from-primary-container to-primary rounded-full transition-all duration-700 shadow-[0_0_8px_#00e5ff] max-lg:h-full max-lg:w-[var(--pct)]"></div>
+                  </div>
+                  <span className="absolute -left-11 top-1/2 -translate-y-1/2 max-lg:left-1/2 max-lg:-translate-x-1/2 font-mono-micro text-mono-micro font-medium text-primary bg-surface-container-lowest/90 px-1 py-0.5 rounded shadow">
                     {formatearEvaluacion(analisis)}
                   </span>
                 </div>
