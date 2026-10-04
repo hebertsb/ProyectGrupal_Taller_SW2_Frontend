@@ -5,6 +5,7 @@ import { clasificarJugada, caidaDeJugada, comoMejorarPorCategoria, ESTILO_CATEGO
 import { useRazonamiento } from '../../contexto/ContextoRazonamiento';
 import CerebroNeuronal from './CerebroNeuronal';
 import CerebroRed from './CerebroRed';
+import AnalisisRedPartida from './AnalisisRedPartida';
 
 const PRESETS_FEN = [
   { etiqueta: 'Siciliana', fen: 'r1bqk2r/pp2bppp/2n1p3/3p4/3P4/2PB1N2/P4PPP/RNBQ1RK1 w kq - 1 14' },
@@ -645,6 +646,16 @@ export default function RazonamientoNeuronal() {
             <div className="p-2.5 rounded-lg bg-error-container/30 border border-error/30 text-error font-body-sm text-[12px]">
               Modelo no disponible en este entorno — falta el checkpoint local. Entrená uno en la pestaña Aprendizaje o copiá el checkpoint a esta máquina.
             </div>
+          )}
+
+          {/* ===== Análisis de la red sobre la partida del estudiante (solo facilitador) ===== */}
+          {partidaId && partida && (
+            <AnalisisRedPartida
+              key={partidaId}
+              partidaId={partidaId}
+              terminada={Boolean(partida.terminada)}
+              alElegirJugada={(fen) => setFenActual(fen)}
+            />
           )}
 
           {/* ===== Layout central de 3 columnas ===== */}

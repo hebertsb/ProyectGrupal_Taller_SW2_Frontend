@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { descargarDatasetEntrenamiento, obtenerEstadoEntrenamiento } from '../../api/backend';
+import TuringPorNivel from './TuringPorNivel';
 import { fechaHoraLegible } from '../../formatoTiempo';
 
 gsap.registerPlugin(useGSAP);
@@ -314,6 +315,9 @@ export default function EntrenamientoModelo({ estadoCompartido = null, alActuali
               <AvisoError mensaje={mensajeError(error, 'No se pudo actualizar el estado.')} alReintentar={() => cargarEstado()} />
             )}
           </section>
+
+          {/* 1b. Cómo juega Turing por nivel, frente a Stockfish */}
+          <TuringPorNivel />
 
           {/* 2. Descarga */}
           <section className="entrenamiento-bloque bg-surface-container-low rounded-xl p-space-lg shadow-md flex flex-col gap-space-md">

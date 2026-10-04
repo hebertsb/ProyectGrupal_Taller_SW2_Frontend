@@ -8,6 +8,7 @@ import ChatTuring from './ChatTuring';
 import TuNivel from './TuNivel';
 import CaminoAprendizaje from './CaminoAprendizaje';
 import { PIEZAS } from '../../contenido/piezas';
+import { esDelJugador } from '../../aprendizaje';
 
 /*
  * `PIEZAS` (las 6 piezas con su apodo, regla especial y cómo se mueven) vive en
@@ -775,7 +776,9 @@ export default function PanelAprendizaje({
   // pareja y ninguna de las dos existe, se cae al criterio viejo (última jugada)
   // para no dejar la sección vacía — pero nunca se fabrica una segunda tarjeta.
   const tarjetasRepaso = useMemo(() => {
-    const jugadas = analisis?.jugadas ?? [];
+    // Solo las jugadas del estudiante: el repaso es sobre lo que él hizo y lo que debía hacer.
+    // Las de Turing o Stockfish no se le explican como propias.
+    const jugadas = (analisis?.jugadas ?? []).filter(esDelJugador);
     if (jugadas.length === 0) return [];
     const peor = jugadaMasNotable(jugadas, RANGO_PEOR);
     const mejor = jugadaMasNotable(jugadas, RANGO_MEJOR);
@@ -1156,7 +1159,7 @@ export default function PanelAprendizaje({
                 <div className="flex items-center gap-space-xs">
                   <span className="material-symbols-outlined text-secondary text-[22px]">insights</span>
                   <span className="font-mono-metric text-mono-metric font-bold text-secondary">
-                    {analisis.resumen.precision_global.toFixed(0)}% de precisión en tu última partida
+                    {(analisis.resumen.precision_jugador ?? analisis.resumen.precision_global).toFixed(0)}% de precisión en tus jugadas de la última partida
                   </span>
                 </div>
                 <div className="p-space-sm rounded-lg bg-surface-container-lowest border border-outline-variant/20 flex flex-col gap-space-2xs">

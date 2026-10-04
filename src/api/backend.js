@@ -39,6 +39,14 @@ export function obtenerPartida(partidaId) {
 }
 
 /**
+ * Análisis jugada por jugada de una partida con la red propia (solo facilitador):
+ * qué elegiría la red en cada posición frente a lo que se jugó. No usa Stockfish.
+ */
+export function analisisRedPartida(partidaId) {
+  return solicitarAuth(`/partida/${partidaId}/analisis-red`);
+}
+
+/**
  * Arma el `Error` de una respuesta HTTP fallida: usa el `detail` del backend
  * solo si es texto (un 422 de FastAPI manda una lista, que no sirve mostrar
  * tal cual) y conserva el `status` para que la UI distinga 404, 409, 403, etc.
@@ -560,6 +568,11 @@ export async function borrarHistorialTutor() {
  */
 export function obtenerEstadoEntrenamiento() {
   return solicitarAuth("/entrenamiento/estado");
+}
+
+/** Cómo juega Turing según el nivel de la partida, frente a Stockfish (solo facilitador). */
+export function obtenerTuringPorNivel() {
+  return solicitarAuth("/entrenamiento/turing-por-nivel");
 }
 
 /**

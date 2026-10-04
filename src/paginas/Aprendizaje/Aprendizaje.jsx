@@ -4,7 +4,8 @@ import { fechaDesdeIso } from '../../formatoTiempo';
 import {
   caidaDeJugada,
   clasificarJugada,
-  comoMejorarPorCategoria,
+  comoMejorarJugada,
+  esDelJugador,
   ESTILO_CATEGORIA,
   winPercent,
 } from '../../aprendizaje';
@@ -454,6 +455,35 @@ export default function Aprendizaje({
         </div>
       )}
 
+      {/* Resumen de la contraparte frente a Stockfish: solo lo ve el facilitador. */}
+      {esFacilitador && partidaId && !cargandoAnalisis && analisis?.resumen && (() => {
+        const r = analisis.resumen;
+        const pct = (v) => (v == null ? '—' : `${v.toFixed(1)}%`);
+        const conteo = r.conteo_contraparte ?? {};
+        return (
+          <section className="flex flex-col gap-2 bg-[#151722] border border-white/10 rounded-2xl p-space-sm sm:p-space-md">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-mono text-[11px] text-cyan-400 uppercase tracking-wider font-semibold">
+                {partidaSeleccionada?.tipo_oponente === 'modelo' ? 'Turing frente a Stockfish' : 'Resumen de la partida'} · nivel {partidaSeleccionada?.nivel}
+              </span>
+              <span className="font-mono text-[11px] text-slate-400">Estudiante: {pct(r.precision_jugador)}</span>
+            </div>
+            <p className="font-body-sm text-body-sm text-slate-200">
+              {partidaSeleccionada?.tipo_oponente === 'modelo' ? 'Turing' : 'Stockfish'}: <strong className="text-white">{pct(r.precision_contraparte)}</strong> de precisión. Jugó la mejor jugada de
+              Stockfish en <strong className="text-white">{r.coincidencias_contraparte ?? 0} de {r.total_jugadas_contraparte ?? 0}</strong> jugadas.
+            </p>
+            <div className="flex flex-wrap gap-2 font-mono text-[11px]">
+              <span className="px-2 py-0.5 rounded bg-rose-500/15 text-rose-300">Blunders: {conteo.blunder ?? 0}</span>
+              <span className="px-2 py-0.5 rounded bg-orange-500/15 text-orange-300">Errores: {conteo.error ?? 0}</span>
+              <span className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-300">Imprecisiones: {conteo.imprecision ?? 0}</span>
+              <span className="px-2 py-0.5 rounded bg-white/5 text-slate-300">
+                Estudiante: {r.coincidencias_jugador ?? 0} de {r.total_jugadas_jugador ?? 0} con la mejor jugada
+              </span>
+            </div>
+          </section>
+        );
+      })()}
+
       {partidaId && !cargandoAnalisis && analisis && jugadas.length > 0 && (
         <>
           <div className="grid grid-cols-1 xl:grid-cols-12 gap-space-md w-full items-start">
@@ -491,6 +521,9 @@ export default function Aprendizaje({
                         </span>
                         <span className={`font-mono text-sm ${activa ? 'text-cyan-300 font-bold' : 'text-white'}`}>
                           {jugada.jugada_san}
+                        </span>
+                        <span className="font-mono text-[10px] text-slate-500">
+                          {esDelJugador(jugada) ? 'vos' : 'contraparte'}
                         </span>
                       </span>
                       <span className={`flex items-center gap-1 font-mono text-[11px] px-2 py-0.5 rounded-full ${estilo.fondo} ${estilo.texto}`}>
@@ -530,7 +563,19 @@ export default function Aprendizaje({
                       ¿Qué ocurrió?
                     </span>
                     <p className="font-body-sm text-body-sm text-slate-200 leading-relaxed">
-                      {jugadaActual.jugada_san === jugadaActual.mejor_jugada_motor ? (
+                      {!esDelJugador(jugadaActual) ? (
+                        // Jugada de la contraparte: no se le dice al estudiante que la jugó él.
+                        jugadaActual.jugada_san === jugadaActual.mejor_jugada_motor ? (
+                          <>
+                            La contraparte jugó <strong className="text-white font-mono">{jugadaActual.jugada_san}</strong>, la mejor opción según el motor de evaluación.
+                          </>
+                        ) : (
+                          <>
+                            La contraparte jugó <strong className="text-white font-mono">{jugadaActual.jugada_san}</strong>; la opción más fuerte según el motor era{' '}
+                            <strong className="text-emerald-300 font-mono">{jugadaActual.mejor_jugada_motor}</strong>.
+                          </>
+                        )
+                      ) : jugadaActual.jugada_san === jugadaActual.mejor_jugada_motor ? (
                         <>
                           Jugaste <strong className="text-white font-mono">{jugadaActual.jugada_san}</strong> — la mejor jugada posible en esta posición según el motor de evaluación.
                         </>
@@ -560,7 +605,7 @@ export default function Aprendizaje({
                       <span className="material-symbols-outlined text-[14px]">psychology</span>
                       ¿Cómo mejorar?
                     </span>
-                    <p className="font-body-sm text-body-sm text-slate-200 leading-relaxed">{comoMejorarPorCategoria(categoriaActual)}</p>
+                    <p className="font-body-sm text-body-sm text-slate-200 leading-relaxed">{comoMejorarJugada(jugadaActual, categoriaActual)}</p>
                   </div>
                 </div>
               )}
