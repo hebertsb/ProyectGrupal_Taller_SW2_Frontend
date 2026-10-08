@@ -44,33 +44,14 @@ const DURACION_VUELO_PIEZA = 0.28; // segundos — deslizamiento contenido, no u
 // - Stockfish ("Skill Level"): 0-20.
 // - Turing: 0-18. Fue entrenado con partidas de maestros, por eso su techo es
 //   "Maestro" (18); los niveles 19 y 20 solo existen en Stockfish.
-// Se agrupan por franja de dificultad para que elegir el nivel sea más legible
-// que un número suelto.
-const NIVELES_STOCKFISH_POR_CATEGORIA = [
-  { etiqueta: 'Principiante', desde: 0, hasta: 6 },
-  { etiqueta: 'Intermedio', desde: 7, hasta: 13 },
-  { etiqueta: 'Avanzado', desde: 14, hasta: NIVEL_MAX_STOCKFISH },
-];
-
-const NIVELES_TURING_POR_CATEGORIA = [
-  { etiqueta: 'Principiante', desde: 0, hasta: 6 },
-  { etiqueta: 'Intermedio', desde: 7, hasta: 13 },
-  { etiqueta: 'Avanzado', desde: 14, hasta: NIVEL_MAX_MODELO - 1 },
-  { etiqueta: 'Maestro', desde: NIVEL_MAX_MODELO, hasta: NIVEL_MAX_MODELO },
-];
+// El slider arranca en 0 (como la escala de Stockfish) para no quitar el nivel más bajo.
+const NIVEL_MINIMO_SLIDER = 0;
 
 function categoriaDeNivel(n, esTuring = false) {
   if (n <= 6) return 'Principiante';
   if (n <= 13) return 'Intermedio';
   if (esTuring && n >= NIVEL_MAX_MODELO) return 'Maestro';
   return 'Avanzado';
-}
-
-function etiquetaOpcionNivel(valor, etiquetaCategoria, esTuring) {
-  if (esTuring && valor === NIVEL_MAX_MODELO) {
-    return `Nivel ${valor} (Maestro · máximo de Turing)`;
-  }
-  return `Nivel ${valor} (${etiquetaCategoria})`;
 }
 
 /**
@@ -149,6 +130,8 @@ export default function SalaControl({
   const [fenReconocido, setFenReconocido] = useState(null);
   const [cargando, setCargando] = useState(null);
   const [error, setError] = useState(null);
+  // Rechazo del backend al crear la partida (400): se muestra junto al botón NUEVA PARTIDA.
+  const [errorCreacion, setErrorCreacion] = useState(null);
   // Foto de la cámara fija ya pedida con el token (object URL). Se renueva con cada ACTUALIZAR.
   const [fotoCamaraUrl, setFotoCamaraUrl] = useState(null);
   const urlFotoCamaraRef = useRef(null);
@@ -238,8 +221,12 @@ export default function SalaControl({
   const nivelEnSelector = selectoresBloqueados
     ? nivelSegunOponente(nivelMostrado, oponenteEnSelector)
     : nivelSeleccionado;
-  const gruposDeNiveles =
-    oponenteEnSelector === 'modelo' ? NIVELES_TURING_POR_CATEGORIA : NIVELES_STOCKFISH_POR_CATEGORIA;
+  const maximoNivelSlider = oponenteEnSelector === 'modelo' ? NIVEL_MAX_MODELO : NIVEL_MAX_STOCKFISH;
+  // Turing se adapta al nivel del perfil del estudiante. Si lo cambiaron a mano, se avisa en pantalla.
+  const nivelPerfilTuring =
+    !esFacilitador && usuario?.nivel_estimado != null ? nivelSegunOponente(usuario.nivel_estimado, 'modelo') : null;
+  const nivelTuringElegidoAMano =
+    oponenteEnSelector === 'modelo' && nivelPerfilTuring !== null && nivelEnSelector !== nivelPerfilTuring;
   const nivelPendienteDeAplicar =
     Boolean(partidaId) && configPartida != null && !seleccionBloqueada && configPartida.nivel !== nivelSeleccionado;
   const motivoBloqueoSeleccion = diagnosticoPendiente
@@ -662,6 +649,7 @@ export default function SalaControl({
 
   async function manejarNuevaPartida(oponenteDeseado, esDiagnostico = diagnosticoPendiente, nivelBase = nivel) {
     setError(null);
+    setErrorCreacion(null);
     setCargando('nueva');
     try {
       const op = esDiagnostico ? 'motor' : oponenteDeseado !== undefined ? oponenteDeseado : tipoOponente;
@@ -688,7 +676,14 @@ export default function SalaControl({
       dispararInferencia?.(partida.fen); // posición nueva disponible — no bloquea la UI de la partida
       await actualizarAnalisis(partida.fen, nivelPartida);
     } catch (err) {
-      setError(err.message);
+      if (err.status === 400) {
+        // El backend solo responde 400 cuando rechaza el rival o la posición (ver ruta_partida.crear).
+        setErrorCreacion(
+          `No se pudo crear la partida: el servidor rechazó la configuración elegida (${err.message}). Probá con otro rival o nivel.`
+        );
+      } else {
+        setError(err.message);
+      }
     } finally {
       setCargando(null);
     }
@@ -1540,32 +1535,30 @@ export default function SalaControl({
                 </div>
               </div>
               <div className="flex items-center gap-space-xs flex-wrap w-full sm:w-auto min-w-0">
-                <div className="flex items-center gap-1.5 bg-surface-container-high/70 px-2 py-1 rounded-lg border border-outline-variant/30 min-w-0 max-w-full">
-                  <label className="font-mono-micro text-[10px] text-outline uppercase font-semibold" htmlFor="nivelSelect">
+                <div className="flex items-center gap-2 bg-surface-container-high/70 px-2 py-1 rounded-lg border border-outline-variant/30 min-w-0 max-w-full">
+                  <label className="font-mono-micro text-[10px] text-outline uppercase font-semibold whitespace-nowrap" htmlFor="nivelSlider">
                     Nivel {oponenteEnSelector === 'modelo' ? 'IA' : 'Motor'}
                   </label>
-                  <select
-                    id="nivelSelect"
+                  <input
+                    id="nivelSlider"
+                    type="range"
+                    min={NIVEL_MINIMO_SLIDER}
+                    max={maximoNivelSlider}
+                    step={1}
                     value={nivelEnSelector}
                     onChange={(evento) => setNivel(Number(evento.target.value))}
                     disabled={seleccionBloqueada}
+                    aria-valuetext={`Nivel ${nivelEnSelector}, ${categoriaDeNivel(nivelEnSelector, oponenteEnSelector === 'modelo')}`}
                     aria-describedby={notasNivelId}
                     title={seleccionBloqueada ? motivoBloqueoSeleccion : undefined}
-                    className="min-w-0 max-w-full bg-surface-container-high rounded px-2 py-0.5 font-mono-label text-mono-label text-on-surface focus:outline-none focus:ring-1 focus:ring-primary focus-visible:ring-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {gruposDeNiveles.map((categoria) => (
-                      <optgroup key={categoria.etiqueta} label={categoria.etiqueta}>
-                        {Array.from(
-                          { length: categoria.hasta - categoria.desde + 1 },
-                          (_, indice) => categoria.desde + indice
-                        ).map((valor) => (
-                          <option key={valor} value={valor}>
-                            {etiquetaOpcionNivel(valor, categoria.etiqueta, oponenteEnSelector === 'modelo')}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
+                    className="w-28 sm:w-40 min-w-0 accent-primary-container cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                  />
+                  <span className="font-mono-metric text-mono-metric text-on-surface font-semibold tabular-nums min-w-[2ch] text-right">
+                    {nivelEnSelector}
+                  </span>
+                  <span className="font-mono-micro text-[10px] text-outline uppercase whitespace-nowrap">
+                    {categoriaDeNivel(nivelEnSelector, oponenteEnSelector === 'modelo')}
+                  </span>
                 </div>
                 {oponenteEnSelector === 'modelo' && (
                   <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono text-primary bg-primary/10 px-2 py-1 rounded border border-primary/20">
@@ -1594,6 +1587,12 @@ export default function SalaControl({
             </div>
 
             <div id={notasNivelId} className="flex flex-col gap-1 px-space-xs font-mono-micro text-[10px] text-outline leading-relaxed">
+              {errorCreacion && (
+                <p role="alert" className="flex items-start gap-1 text-error">
+                  <span className="material-symbols-outlined text-[13px] shrink-0" aria-hidden="true">error</span>
+                  <span>{errorCreacion}</span>
+                </p>
+              )}
               {seleccionBloqueada && (
                 <p className="flex items-start gap-1">
                   <span className="material-symbols-outlined text-[13px] shrink-0" aria-hidden="true">lock</span>
@@ -1604,6 +1603,15 @@ export default function SalaControl({
                 <p className="flex items-start gap-1">
                   <span className="material-symbols-outlined text-[13px] shrink-0" aria-hidden="true">info</span>
                   <span>El nivel elegido se aplica en la próxima partida (NUEVA PARTIDA).</span>
+                </p>
+              )}
+              {nivelTuringElegidoAMano && (
+                <p className="flex items-start gap-1">
+                  <span className="material-symbols-outlined text-[13px] shrink-0" aria-hidden="true">tune</span>
+                  <span>
+                    Nivel elegido a mano: tu perfil está en el nivel {nivelPerfilTuring}. Turing vuelve a ese nivel
+                    cuando tu perfil se recalibra.
+                  </span>
                 </p>
               )}
               {oponenteEnSelector === 'modelo' && (
