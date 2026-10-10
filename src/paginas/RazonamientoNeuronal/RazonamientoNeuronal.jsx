@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { listarUsuarios, historialPartidasUsuario, obtenerPartida, estadoModelo } from '../../api/backend';
-import { fenAMatriz, rutaImagenPieza, POSICION_INICIAL_FEN } from '../../ajedrez';
+import { fenAMatriz, flechaDeUci, rutaImagenPieza, POSICION_INICIAL_FEN } from '../../ajedrez';
 import { clasificarJugada, caidaDeJugada, comoMejorarPorCategoria, ESTILO_CATEGORIA } from '../../aprendizaje';
 import { useRazonamiento } from '../../contexto/ContextoRazonamiento';
 import CerebroNeuronal from './CerebroNeuronal';
@@ -126,23 +126,6 @@ function colorSaliencia(valor, alfa = 1) {
   const r = Math.round(255 * v);
   const g = Math.round(255 * (1 - v));
   return `rgba(${r}, ${g}, 0, ${alfa})`;
-}
-
-/**
- * Convierte una jugada UCI ("e7e5") en las coordenadas de una flecha sobre el tablero, en un
- * lienzo de 8x8 con las blancas abajo (x: columna a-h, y: fila 8 arriba → 1 abajo), centradas
- * en cada casilla. Con las blancas abajo, la flecha de las negras baja y la de las blancas sube.
- * Devuelve `null` si la jugada no es válida (por ejemplo, el backend viejo sin UCI).
- */
-function flechaDeUci(uci) {
-  if (typeof uci !== 'string' || !/^[a-h][1-8][a-h][1-8]/.test(uci)) return null;
-  const centro = (letra, numero) => ({
-    x: 'abcdefgh'.indexOf(letra) + 0.5,
-    y: 8 - Number(numero) + 0.5,
-  });
-  const origen = centro(uci[0], uci[1]);
-  const destino = centro(uci[2], uci[3]);
-  return { x1: origen.x, y1: origen.y, x2: destino.x, y2: destino.y };
 }
 
 /** Top-N casillas por saliencia real (índice en orden chess.SQUARES: a1..h1,a2..h2,...,a8..h8). */

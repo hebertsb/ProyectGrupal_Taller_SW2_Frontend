@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { analisisCompletoPartida, listarPartidas } from '../../api/backend';
 import { fechaDesdeIso } from '../../formatoTiempo';
+import TableroSoloLectura from '../../componentes/TableroSoloLectura';
 import {
   caidaDeJugada,
   clasificarJugada,
@@ -484,6 +485,37 @@ export default function Aprendizaje({
         );
       })()}
 
+      {/* Resumen de las jugadas del estudiante: cuántas fueron de cada calidad. Lo ven todos. */}
+      {partidaId && !cargandoAnalisis && analisis?.resumen?.conteo_jugador && (() => {
+        const r = analisis.resumen;
+        const c = r.conteo_jugador;
+        const fichas = [
+          { clave: 'mejores', etiqueta: 'Mejores', valor: (c.brillante ?? 0) + (c.mejor ?? 0), clase: 'bg-primary-container/20 text-primary' },
+          { clave: 'buenas', etiqueta: 'Buenas', valor: (c.excelente ?? 0) + (c.buena ?? 0), clase: 'bg-white/5 text-slate-200' },
+          { clave: 'inexactitudes', etiqueta: 'Inexactitudes', valor: c.imprecision ?? 0, clase: 'bg-amber-500/15 text-amber-300' },
+          { clave: 'errores', etiqueta: 'Errores', valor: c.error ?? 0, clase: 'bg-orange-500/15 text-orange-300' },
+          { clave: 'blunders', etiqueta: 'Blunders', valor: c.blunder ?? 0, clase: 'bg-rose-500/15 text-rose-300' },
+        ];
+        return (
+          <section className="flex flex-col gap-2 bg-[#151722] border border-white/10 rounded-2xl p-space-sm sm:p-space-md" aria-label="Resumen de las jugadas del estudiante">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-mono text-[11px] text-cyan-400 uppercase tracking-wider font-semibold">
+                {esFacilitador ? 'Jugadas del estudiante' : 'Tus jugadas'}
+              </span>
+              {r.precision_jugador != null && (
+                <span className="font-mono text-[11px] text-slate-400">Precisión: {r.precision_jugador.toFixed(1)}%</span>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2 font-mono text-[11px]">
+              {fichas.map((f) => (
+                <span key={f.clave} className={`px-2 py-0.5 rounded ${f.clase}`}>{f.etiqueta}: {f.valor}</span>
+              ))}
+            </div>
+            {r.consejo_tutor && <p className="font-body-sm text-body-sm text-slate-200">{r.consejo_tutor}</p>}
+          </section>
+        );
+      })()}
+
       {partidaId && !cargandoAnalisis && analisis && jugadas.length > 0 && (
         <>
           <div className="grid grid-cols-1 xl:grid-cols-12 gap-space-md w-full items-start">
@@ -570,6 +602,38 @@ export default function Aprendizaje({
                     >
                       {ESTILO_CATEGORIA[categoriaActual].etiqueta}
                     </span>
+                  </div>
+
+                  {/* El tablero justo antes y justo después de la jugada, con flechas */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-space-sm">
+                    <figure className="flex flex-col items-center gap-1.5 m-0">
+                      <figcaption className="font-mono text-[11px] text-cyan-400 uppercase tracking-wider font-semibold">
+                        Antes de la jugada
+                      </figcaption>
+                      <TableroSoloLectura
+                        fen={jugadaActual.fen_antes}
+                        tamano="chico"
+                        className="max-w-[300px]"
+                        flechas={[
+                          { uci: jugadaActual.jugada_uci, color: '#ffffff', punteada: true },
+                          ...(jugadaActual.mejor_jugada_uci && jugadaActual.mejor_jugada_uci !== jugadaActual.jugada_uci
+                            ? [{ uci: jugadaActual.mejor_jugada_uci, color: '#76ff03' }]
+                            : []),
+                        ]}
+                      />
+                    </figure>
+                    <figure className="flex flex-col items-center gap-1.5 m-0">
+                      <figcaption className="font-mono text-[11px] text-cyan-400 uppercase tracking-wider font-semibold">
+                        Después de la jugada
+                      </figcaption>
+                      <TableroSoloLectura fen={jugadaActual.fen_despues} tamano="chico" className="max-w-[300px]" />
+                    </figure>
+                    <ul className="sm:col-span-2 flex flex-wrap justify-center gap-x-4 gap-y-1 font-mono text-[10px] text-slate-400 uppercase" aria-label="Leyenda de las flechas">
+                      <li className="flex items-center gap-1"><span className="w-4 border-t-2 border-dashed border-white" aria-hidden="true" />Jugada hecha</li>
+                      {jugadaActual.mejor_jugada_uci && jugadaActual.mejor_jugada_uci !== jugadaActual.jugada_uci && (
+                        <li className="flex items-center gap-1"><span className="w-4 border-t-2 border-neon-lime" aria-hidden="true" />Mejor jugada del motor</li>
+                      )}
+                    </ul>
                   </div>
 
                   {/* Qué */}
@@ -672,10 +736,18 @@ function CurvaEfectividad({ jugadas, plySeleccionado, onSeleccionar }) {
   const paso = jugadas.length > 1 ? (ancho - paddingX * 2) / (jugadas.length - 1) : 0;
 
   const puntos = jugadas.map((jugada, indice) => {
-    const wp = winPercent(jugada.evaluacion_cp, jugada.mate_en);
+    // `evaluacion_cp` y `mate_en` vienen desde quien movió: se pasan al punto de vista de las
+    // blancas (el estudiante) para que la curva no salte arriba y abajo en cada turno.
+    // `mate_en === 0` es la jugada que DIO el mate (el tablero ya está en mate): para quien movió es
+    // victoria segura. `winPercent` lo leería como mate recibido, así que se resuelve acá.
+    const dioMate = jugada.mate_en === 0;
+    const delQueMovio = dioMate ? 100 : winPercent(jugada.evaluacion_cp, jugada.mate_en);
+    const wp = jugada.color === 'blanco' ? delQueMovio : 100 - delQueMovio;
+    const mateDelQueMovio = dioMate ? 1 : jugada.mate_en;
+    const mateBlancas = mateDelQueMovio == null ? null : jugada.color === 'blanco' ? mateDelQueMovio : -mateDelQueMovio;
     const x = jugadas.length > 1 ? paddingX + indice * paso : ancho / 2;
     const y = alto - (wp / 100) * alto;
-    return { x, y, wp, jugada, categoria: clasificarJugada(jugada) };
+    return { x, y, wp, mateBlancas, jugada, categoria: clasificarJugada(jugada) };
   });
 
   const lineaPath = puntos.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
@@ -687,6 +759,7 @@ function CurvaEfectividad({ jugadas, plySeleccionado, onSeleccionar }) {
         <span className="font-mono-micro text-mono-micro uppercase tracking-wider text-slate-300 flex items-center gap-1.5 font-bold">
           <span className="material-symbols-outlined text-[16px] text-primary">show_chart</span>
           Curva de efectividad táctica
+          <span className="font-normal normal-case text-slate-400">(ventaja de las blancas, tu lado)</span>
         </span>
         <div className="flex items-center gap-space-md font-mono text-[11px] text-slate-400 flex-wrap">
           <span className="flex items-center gap-1.5">
@@ -712,7 +785,7 @@ function CurvaEfectividad({ jugadas, plySeleccionado, onSeleccionar }) {
               y={0}
               width={anchoFranja}
               height={alto}
-              className={p.jugada.mate_en > 0 ? 'fill-primary/20' : 'fill-error/20'}
+              className={p.mateBlancas > 0 ? 'fill-primary/20' : 'fill-error/20'}
             />
           )
         )}

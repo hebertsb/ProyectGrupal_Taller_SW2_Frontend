@@ -1,5 +1,6 @@
+import { useId } from 'react';
 import './TableroSoloLectura.css';
-import { claseDePieza, fenAMatriz, nombreCasilla, rutaImagenPieza } from '../ajedrez';
+import { claseDePieza, fenAMatriz, flechaDeUci, nombreCasilla, rutaImagenPieza } from '../ajedrez';
 
 // Ajustes de tamaño — "grande" es el tablero de una sola partida (Demostración
 // en Vivo, vista grande de Monitoreo); "chico" es la miniatura de la grilla de
@@ -31,8 +32,16 @@ const VARIANTES = {
  * aparte — `SalaControl.jsx` sigue con su propio tablero inline porque maneja
  * selección de casilla, destinos válidos, etc., que esto no necesita.
  */
-export default function TableroSoloLectura({ fen, tamano = 'grande', className = '' }) {
+/**
+ * `flechas`: lista opcional de `{ uci, color, punteada }` que se dibujan encima del tablero (jugada
+ * real, mejor jugada, etc.). Una jugada con `uci` inválido o vacío se omite sin romper nada.
+ */
+export default function TableroSoloLectura({ fen, tamano = 'grande', className = '', flechas = [] }) {
   const matriz = fen ? fenAMatriz(fen) : null;
+  const idBase = useId().replace(/:/g, '');
+  const flechasValidas = flechas
+    .map((flecha, indice) => ({ ...flecha, trazo: flechaDeUci(flecha.uci), id: `punta-${idBase}-${indice}` }))
+    .filter((flecha) => flecha.trazo);
   const variante = VARIANTES[tamano] ?? VARIANTES.grande;
 
   return (
@@ -71,6 +80,25 @@ export default function TableroSoloLectura({ fen, tamano = 'grande', className =
                   );
                 })
               )}
+            {flechasValidas.length > 0 && (
+              <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 8 8" aria-hidden="true">
+                <defs>
+                  {flechasValidas.map((flecha) => (
+                    <marker key={flecha.id} id={flecha.id} markerWidth="4" markerHeight="4" refX="2.6" refY="2" orient="auto">
+                      <path d="M0,0 L4,2 L0,4 z" fill={flecha.color} />
+                    </marker>
+                  ))}
+                </defs>
+                {flechasValidas.map((flecha) => (
+                  <line
+                    key={flecha.id}
+                    x1={flecha.trazo.x1} y1={flecha.trazo.y1} x2={flecha.trazo.x2} y2={flecha.trazo.y2}
+                    stroke={flecha.color} strokeWidth="0.18" strokeLinecap="round" opacity="0.95"
+                    strokeDasharray={flecha.punteada ? '0.3 0.2' : undefined} markerEnd={`url(#${flecha.id})`}
+                  />
+                ))}
+              </svg>
+            )}
           </div>
 
           <div

@@ -217,3 +217,20 @@ export function casillasIlustrativas(tipoPieza, fila, columna) {
   }
   return resultado;
 }
+
+/**
+ * Convierte una jugada UCI ("e7e5") en las coordenadas de una flecha sobre el tablero, en un
+ * lienzo de 8x8 con las blancas abajo (x: columna a-h, y: fila 8 arriba → 1 abajo), centradas
+ * en cada casilla. Con las blancas abajo, la flecha de las negras baja y la de las blancas sube.
+ * Devuelve `null` si la jugada no es válida (por ejemplo, el backend viejo sin UCI).
+ */
+export function flechaDeUci(uci) {
+  if (typeof uci !== 'string' || !/^[a-h][1-8][a-h][1-8]/.test(uci)) return null;
+  const centro = (letra, numero) => ({
+    x: 'abcdefgh'.indexOf(letra) + 0.5,
+    y: 8 - Number(numero) + 0.5,
+  });
+  const origen = centro(uci[0], uci[1]);
+  const destino = centro(uci[2], uci[3]);
+  return { x1: origen.x, y1: origen.y, x2: destino.x, y2: destino.y };
+}
