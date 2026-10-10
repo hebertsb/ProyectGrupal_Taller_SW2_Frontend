@@ -128,6 +128,23 @@ function colorSaliencia(valor, alfa = 1) {
   return `rgba(${r}, ${g}, 0, ${alfa})`;
 }
 
+/**
+ * Convierte una jugada UCI ("e7e5") en las coordenadas de una flecha sobre el tablero, en un
+ * lienzo de 8x8 con las blancas abajo (x: columna a-h, y: fila 8 arriba → 1 abajo), centradas
+ * en cada casilla. Con las blancas abajo, la flecha de las negras baja y la de las blancas sube.
+ * Devuelve `null` si la jugada no es válida (por ejemplo, el backend viejo sin UCI).
+ */
+function flechaDeUci(uci) {
+  if (typeof uci !== 'string' || !/^[a-h][1-8][a-h][1-8]/.test(uci)) return null;
+  const centro = (letra, numero) => ({
+    x: 'abcdefgh'.indexOf(letra) + 0.5,
+    y: 8 - Number(numero) + 0.5,
+  });
+  const origen = centro(uci[0], uci[1]);
+  const destino = centro(uci[2], uci[3]);
+  return { x1: origen.x, y1: origen.y, x2: destino.x, y2: destino.y };
+}
+
 /** Top-N casillas por saliencia real (índice en orden chess.SQUARES: a1..h1,a2..h2,...,a8..h8). */
 function casillasCalientes(saliencia, cantidad = 3) {
   return saliencia
@@ -164,6 +181,9 @@ export default function RazonamientoNeuronal() {
   // con la lista completa de partidas jugadas en cada reload. El botón "Elegir partida
   // jugada" (icono history, más abajo) lo vuelve a abrir cuando el usuario lo pide.
   const [mostrarSelector, setMostrarSelector] = useState(false);
+  // Jugada que se jugó de verdad en la posición elegida de la lista (se guarda junto con su FEN
+  // para dejar de mostrarla apenas cambia la posición por otro camino).
+  const [jugadaReal, setJugadaReal] = useState(null);
   // Panel "Candidatas de Turing" — arranca expandido para que la defensa lo vea completo
   // de entrada; el usuario lo puede colapsar a la barra resumen para no alargar la pantalla.
   const [candidatasAbiertas, setCandidatasAbiertas] = useState(true);
@@ -389,6 +409,16 @@ export default function RazonamientoNeuronal() {
   const latenciaMs = inferenciaVigente?.latencia_ms ?? null;
   const latenciaFormateada = latenciaMs !== null ? `${latenciaMs.toFixed(1)} ms` : estaAnalizando ? '…' : '—';
   const top1 = candidatas[0] ?? null;
+  // Flechas sobre el tablero: la jugada de Turing (verde) y, si es distinta, la que Stockfish
+  // habría jugado (ámbar, solo comparación — nunca decide).
+  const flechaTuring = flechaDeUci(inferenciaVigente?.jugada_elegida_uci);
+  const uciStockfish = inferenciaVigente?.comparacion_stockfish?.jugada_motor_uci;
+  const flechaStockfish =
+    uciStockfish && uciStockfish !== inferenciaVigente?.jugada_elegida_uci ? flechaDeUci(uciStockfish) : null;
+  // La jugada que de verdad se hizo en la partida (blanca). Si coincide con la de la red, la flecha
+  // verde ya la muestra y no se repite.
+  const uciReal = jugadaReal?.fen === fenActual ? jugadaReal.uci : null;
+  const flechaReal = uciReal && uciReal !== inferenciaVigente?.jugada_elegida_uci ? flechaDeUci(uciReal) : null;
   const sumaProbabilidades = candidatas.reduce((acc, c) => acc + (c.probabilidad ?? 0), 0);
   const calientes = casillasCalientes(saliencia, 3);
   const cmp = inferenciaVigente?.comparacion_stockfish ?? null;
@@ -657,7 +687,10 @@ export default function RazonamientoNeuronal() {
               key={partidaId}
               partidaId={partidaId}
               terminada={Boolean(partida.terminada)}
-              alElegirJugada={(fen) => setFenActual(fen)}
+              alElegirJugada={(fen, uci) => {
+                setFenActual(fen);
+                setJugadaReal({ fen, uci });
+              }}
             />
           )}
 
@@ -731,8 +764,62 @@ export default function RazonamientoNeuronal() {
                       })
                     )}
                   </div>
+                  {/* Flechas de la jugada, encima del tablero: mismo recuadro que la grilla (inset-1 = p-1). */}
+                  {(flechaTuring || flechaStockfish || flechaReal) && (
+                    <svg
+                      className="absolute inset-1 pointer-events-none"
+                      viewBox="0 0 8 8"
+                      role="img"
+                      aria-label="Flechas de la jugada elegida por Turing y la de Stockfish"
+                    >
+                      <defs>
+                        <marker id="punta-turing" markerWidth="4" markerHeight="4" refX="2.6" refY="2" orient="auto">
+                          <path d="M0,0 L4,2 L0,4 z" fill="#76ff03" />
+                        </marker>
+                        <marker id="punta-stockfish" markerWidth="4" markerHeight="4" refX="2.6" refY="2" orient="auto">
+                          <path d="M0,0 L4,2 L0,4 z" fill="#ff9100" />
+                        </marker>
+                        <marker id="punta-real" markerWidth="4" markerHeight="4" refX="2.6" refY="2" orient="auto">
+                          <path d="M0,0 L4,2 L0,4 z" fill="#ffffff" />
+                        </marker>
+                      </defs>
+                      {flechaReal && (
+                        <line
+                          x1={flechaReal.x1} y1={flechaReal.y1} x2={flechaReal.x2} y2={flechaReal.y2}
+                          stroke="#ffffff" strokeWidth="0.14" strokeDasharray="0.3 0.2" strokeLinecap="round"
+                          opacity="0.95" markerEnd="url(#punta-real)"
+                        />
+                      )}
+                      {flechaStockfish && (
+                        <line
+                          x1={flechaStockfish.x1} y1={flechaStockfish.y1} x2={flechaStockfish.x2} y2={flechaStockfish.y2}
+                          stroke="#ff9100" strokeWidth="0.16" strokeLinecap="round" opacity="0.85" markerEnd="url(#punta-stockfish)"
+                        />
+                      )}
+                      {flechaTuring && (
+                        <line
+                          x1={flechaTuring.x1} y1={flechaTuring.y1} x2={flechaTuring.x2} y2={flechaTuring.y2}
+                          stroke="#76ff03" strokeWidth="0.2" strokeLinecap="round" opacity="0.95" markerEnd="url(#punta-turing)"
+                        />
+                      )}
+                    </svg>
+                  )}
                 </div>
               </div>
+
+              {(flechaTuring || flechaStockfish || flechaReal) && (
+                <ul className="flex flex-wrap justify-center gap-x-3 gap-y-1 font-mono-micro text-[9px] text-on-surface-variant uppercase" aria-label="Leyenda de las flechas del tablero">
+                  {flechaReal && (
+                    <li className="flex items-center gap-1"><span className="w-3 border-t-2 border-dashed border-white" aria-hidden="true" />Jugada real</li>
+                  )}
+                  {flechaTuring && (
+                    <li className="flex items-center gap-1"><span className="w-3 border-t-2 border-neon-lime" aria-hidden="true" />Elige la red</li>
+                  )}
+                  {flechaStockfish && (
+                    <li className="flex items-center gap-1"><span className="w-3 border-t-2 border-neon-orange" aria-hidden="true" />Stockfish</li>
+                  )}
+                </ul>
+              )}
 
               <div className="flex flex-col gap-1.5 mt-1">
                 <div className="flex items-center justify-between">

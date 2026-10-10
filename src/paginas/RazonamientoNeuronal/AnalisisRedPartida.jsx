@@ -64,7 +64,7 @@ export default function AnalisisRedPartida({ partidaId, terminada = true, alEleg
 
   function elegirJugada(jugada) {
     setNumeroSeleccionada(jugada.numero);
-    alElegirJugada?.(jugada.fen_antes);
+    alElegirJugada?.(jugada.fen_antes, jugada.jugada_uci);
   }
 
   return (
