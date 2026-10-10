@@ -7,10 +7,13 @@ import CerebroNeuronal from './CerebroNeuronal';
 import CerebroRed from './CerebroRed';
 import AnalisisRedPartida from './AnalisisRedPartida';
 
+// Las tres posiciones quedan con NEGRAS a mover a propósito: en Sala de Control el jugador
+// siempre abre con blancas, así que Turing (cuando es el rival) solo le toca responder con
+// negras — estos ejemplos muestran al modelo en ese mismo rol, no genérico.
 const PRESETS_FEN = [
-  { etiqueta: 'Siciliana', fen: 'r1bqk2r/pp2bppp/2n1p3/3p4/3P4/2PB1N2/P4PPP/RNBQ1RK1 w kq - 1 14' },
-  { etiqueta: 'Española', fen: 'r1bqk1nr/pppp1ppp/2n5/4p3/1bB1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4' },
-  { etiqueta: 'Final Torres', fen: '4r1k1/5ppp/8/8/8/8/4RPPP/6K1 w - - 0 1' },
+  { etiqueta: 'Siciliana', fen: 'rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2' },
+  { etiqueta: 'Española', fen: 'r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3' },
+  { etiqueta: 'Final Torres', fen: '4r1k1/5ppp/8/8/8/8/4RPPP/6K1 b - - 0 1' },
 ];
 
 /** Leyenda del cerebro — cada color mapea a un dato REAL, nada conceptual. */
