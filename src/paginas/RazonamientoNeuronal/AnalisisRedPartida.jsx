@@ -4,6 +4,28 @@ import { analisisRedPartida } from '../../api/backend';
 /** Nombre con el que se muestra quién juega las negras (la contraparte). */
 const NOMBRE_CONTRAPARTE = { modelo: 'Turing', motor: 'Stockfish' };
 
+/**
+ * Etiqueta de color con el nombre de quien jugó la jugada: cian para el dueño de la partida
+ * (estudiante o facilitador) y fucsia para el rival (Turing o Stockfish).
+ */
+function EtiquetaQuienJugo({ esDelEstudiante, nombre }) {
+  return (
+    <span
+      className={`flex items-center gap-1 min-w-0 max-w-36 px-1.5 py-0.5 rounded-full border font-mono-micro text-[10px] font-semibold ${
+        esDelEstudiante
+          ? 'bg-neon-cyan/15 text-neon-cyan border-neon-cyan/40'
+          : 'bg-neon-purple/15 text-neon-purple border-neon-purple/40'
+      }`}
+      title={`Jugó ${nombre}`}
+    >
+      <span className="material-symbols-outlined text-[12px] shrink-0" aria-hidden="true">
+        {esDelEstudiante ? 'person' : 'psychology'}
+      </span>
+      <span className="truncate">{nombre}</span>
+    </span>
+  );
+}
+
 const porcentajeLegible = (valor) => (valor == null ? '—' : `${valor.toFixed(1)}%`);
 const probabilidadLegible = (valor) => (valor == null ? '—' : `${(valor * 100).toFixed(1)}%`);
 
@@ -40,7 +62,13 @@ function Resumen({ resumen, terminada }) {
  * jugada lleva la pantalla a esa posición: el mapa de activación y las candidatas
  * muestran lo que procesó la red ahí.
  */
-export default function AnalisisRedPartida({ partidaId, terminada = true, alElegirJugada = null }) {
+export default function AnalisisRedPartida({
+  partidaId,
+  terminada = true,
+  alElegirJugada = null,
+  nombreDueno = null,
+  rolDueno = null,
+}) {
   const [datos, setDatos] = useState(null);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState(null);
@@ -88,6 +116,13 @@ export default function AnalisisRedPartida({ partidaId, terminada = true, alEleg
         )}
       </div>
 
+      {nombreDueno && (
+        <p className="font-body-sm text-[12px] text-on-surface">
+          Partida de <strong>{nombreDueno}</strong>
+          {rolDueno ? ` (${rolDueno})` : ''}: las jugadas con etiqueta cian son suyas y las fucsia son del rival.
+        </p>
+      )}
+
       <p className="font-mono-micro text-[10px] text-outline">
         La red decide sola: acá se compara su elección con la jugada real. Stockfish no interviene.
       </p>
@@ -131,7 +166,7 @@ export default function AnalisisRedPartida({ partidaId, terminada = true, alEleg
                     type="button"
                     onClick={() => elegirJugada(jugada)}
                     aria-pressed={seleccionada}
-                    className={`w-full grid grid-cols-[2.5rem_1fr_auto] items-center gap-2 px-2.5 py-1.5 rounded-lg text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
+                    className={`w-full grid grid-cols-[2.5rem_1fr_auto] max-sm:grid-cols-[2.5rem_1fr] items-center gap-2 px-2.5 py-1.5 rounded-lg text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
                       seleccionada
                         ? 'bg-neon-cyan/15 border border-neon-cyan/50'
                         : 'bg-surface-container-lowest border border-outline-variant/20 hover:bg-surface-container-high'
@@ -140,14 +175,19 @@ export default function AnalisisRedPartida({ partidaId, terminada = true, alEleg
                     <span className="font-mono-micro text-[11px] text-outline">
                       {jugada.numero}.{jugada.color === 'negras' ? '..' : ''}
                     </span>
-                    <span className="font-mono-metric text-[12px] text-on-surface truncate">
-                      {jugada.jugada}{' '}
-                      <span className="text-outline">
-                        {jugada.quien === 'jugador' ? '· vos' : `· ${NOMBRE_CONTRAPARTE[jugada.quien] ?? jugada.quien}`}
-                      </span>
+                    <span className="flex items-center gap-1.5 min-w-0">
+                      <span className="font-mono-metric text-[12px] text-on-surface shrink-0">{jugada.jugada}</span>
+                      <EtiquetaQuienJugo
+                        esDelEstudiante={jugada.quien === 'jugador'}
+                        nombre={
+                          jugada.quien === 'jugador'
+                            ? nombreDueno ?? 'Estudiante'
+                            : NOMBRE_CONTRAPARTE[jugada.quien] ?? jugada.quien
+                        }
+                      />
                     </span>
-                    <span className="flex items-center gap-2">
-                      <span className="font-mono-micro text-[10px] text-outline truncate max-w-[9rem]">
+                    <span className="flex items-center gap-2 max-sm:col-start-2">
+                      <span className="font-mono-micro text-[10px] text-outline truncate max-w-36">
                         red: {jugada.red_elige ?? '—'} ({probabilidadLegible(jugada.probabilidad_red)})
                       </span>
                       <span

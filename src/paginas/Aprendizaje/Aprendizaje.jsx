@@ -502,6 +502,12 @@ export default function Aprendizaje({
                   const categoria = clasificarJugada(jugada);
                   const estilo = ESTILO_CATEGORIA[categoria];
                   const activa = indice === plySeleccionado;
+                  // Quién jugó: el nombre del estudiante o el del rival (Turing o Stockfish), bien visible.
+                  const juegaElEstudiante = esDelJugador(jugada);
+                  const nombreRival = partidaSeleccionada?.tipo_oponente === 'modelo' ? 'Turing' : 'Stockfish';
+                  const nombreQuien = juegaElEstudiante
+                    ? partidaSeleccionada?.usuario_nombre ?? usuario?.nombre ?? 'Estudiante'
+                    : nombreRival;
                   return (
                     <button
                       key={jugada.numero_ply}
@@ -514,7 +520,7 @@ export default function Aprendizaje({
                           : 'bg-transparent border-transparent hover:bg-white/5 text-slate-300'
                       }`}
                     >
-                      <span className="flex items-center gap-space-xs">
+                      <span className="flex items-center flex-wrap min-w-0 gap-x-space-xs gap-y-1">
                         <span className="font-mono text-xs text-slate-400 w-9">
                           {Math.ceil(jugada.numero_ply / 2)}
                           {jugada.color === 'blanco' ? '.' : '...'}
@@ -522,8 +528,18 @@ export default function Aprendizaje({
                         <span className={`font-mono text-sm ${activa ? 'text-cyan-300 font-bold' : 'text-white'}`}>
                           {jugada.jugada_san}
                         </span>
-                        <span className="font-mono text-[10px] text-slate-500">
-                          {esDelJugador(jugada) ? 'vos' : 'contraparte'}
+                        <span
+                          className={`flex items-center gap-1 max-w-36 font-mono text-[11px] font-semibold px-2 py-0.5 rounded-full border ${
+                            juegaElEstudiante
+                              ? 'bg-cyan-500/20 text-cyan-200 border-cyan-400/40'
+                              : 'bg-fuchsia-500/20 text-fuchsia-200 border-fuchsia-400/40'
+                          }`}
+                          title={`Jugó ${nombreQuien}`}
+                        >
+                          <span className="material-symbols-outlined text-[13px] shrink-0" aria-hidden="true">
+                            {juegaElEstudiante ? 'person' : nombreRival === 'Turing' ? 'psychology' : 'smart_toy'}
+                          </span>
+                          <span className="truncate">{nombreQuien}</span>
                         </span>
                       </span>
                       <span className={`flex items-center gap-1 font-mono text-[11px] px-2 py-0.5 rounded-full ${estilo.fondo} ${estilo.texto}`}>

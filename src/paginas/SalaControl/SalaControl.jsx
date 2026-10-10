@@ -35,6 +35,7 @@ import {
   turnoDeFen,
 } from '../../ajedrez';
 import { NIVEL_DIAGNOSTICO, NIVEL_MAX_MODELO, NIVEL_MAX_STOCKFISH } from '../../nivelJugador';
+import { CATEGORIAS, clasificarJugada, comoMejorarPorCategoria, ESTILO_CATEGORIA, winPercent } from '../../aprendizaje';
 
 gsap.registerPlugin(useGSAP);
 
@@ -132,6 +133,8 @@ export default function SalaControl({
   const [error, setError] = useState(null);
   // Rechazo del backend al crear la partida (400): se muestra junto al botón NUEVA PARTIDA.
   const [errorCreacion, setErrorCreacion] = useState(null);
+  // Calidad real de la última jugada del jugador (brillante … blunder), calculada por el backend.
+  const [calidadEnVivo, setCalidadEnVivo] = useState(null);
   // Foto de la cámara fija ya pedida con el token (object URL). Se renueva con cada ACTUALIZAR.
   const [fotoCamaraUrl, setFotoCamaraUrl] = useState(null);
   const urlFotoCamaraRef = useRef(null);
@@ -256,6 +259,16 @@ export default function SalaControl({
   const matriz = fen ? fenAMatriz(fen) : null;
   const turnoActual = fen ? turnoDeFen(fen) : 'w';
   const porcentajeVentaja = calcularPorcentajeBarra(analisis);
+  const categoriaCalidadEnVivo = calidadEnVivo ? clasificarJugada({ calidad: calidadEnVivo.calidad }) : null;
+  const estiloCalidadEnVivo = categoriaCalidadEnVivo ? ESTILO_CATEGORIA[categoriaCalidadEnVivo] : null;
+  // Con pérdida, el texto del servidor suele elogiar la idea de la jugada (ej. "buena ocupación
+  // central") y contradice la etiqueta: ahí se usa el consejo por categoría, que no se contradice.
+  const jugadaConPerdida = [CATEGORIAS.INEXACTITUD, CATEGORIAS.ERROR, CATEGORIAS.BLUNDER].includes(
+    categoriaCalidadEnVivo
+  );
+  const textoCalidadEnVivo = jugadaConPerdida
+    ? comoMejorarPorCategoria(categoriaCalidadEnVivo)
+    : calidadEnVivo?.explicacion;
 
   // --- Capa de animación (GSAP) — solo presentación, no toca el estado de
   // arriba. `raizRef` acota los selectores de texto (".panel-entrada") a esta
@@ -515,9 +528,12 @@ export default function SalaControl({
     }
   }, [esFacilitador, permiteSimulacion3D, vistaTablero]);
 
-  async function actualizarAnalisis(fenActual, nivelAnalisis = nivelSeleccionado) {
+  // El análisis de la barra y de la jugada sugerida siempre corre a fuerza máxima: con el nivel
+  // de la partida (Skill Level bajo) Stockfish evalúa mal y la barra y la sugerencia no sirven.
+  // El nivel de la partida solo regula cómo juega el rival, no cómo se mide la posición.
+  async function actualizarAnalisis(fenActual) {
     try {
-      const datos = await analizarPosicion(fenActual, nivelAnalisis);
+      const datos = await analizarPosicion(fenActual, NIVEL_MAX_STOCKFISH);
       setAnalisis(datos);
       if (typeof datos.evaluacion_cp === 'number') {
         setEvaluacionesHistorial((previas) => [...previas.slice(-9), datos.evaluacion_cp]);
@@ -548,6 +564,7 @@ export default function SalaControl({
       setTerminada(partida.terminada);
       setResultado(partida.resultado);
       setJugadas(partida.jugadas);
+      setCalidadEnVivo(null);
       setCasillaOrigen(null);
       setDestinosValidos([]);
       setEvaluacionesHistorial([]);
@@ -557,7 +574,7 @@ export default function SalaControl({
       setUsuarioIdPartida(partida.usuario_id ?? null);
       setUsuarioNombrePartida(partida.usuario_nombre ?? null);
       if (!partida.terminada) {
-        await actualizarAnalisis(partida.fen, partida.nivel);
+        await actualizarAnalisis(partida.fen);
       }
     } catch (err) {
       onPartidaActivaChange?.(null);
@@ -665,6 +682,7 @@ export default function SalaControl({
       setTerminada(false);
       setResultado(null);
       setJugadas(partida.jugadas);
+      setCalidadEnVivo(null);
       setCasillaOrigen(null);
       setDestinosValidos([]);
       setEvaluacionesHistorial([]);
@@ -674,7 +692,7 @@ export default function SalaControl({
       setUsuarioIdPartida(partida.usuario_id ?? null);
       setUsuarioNombrePartida(partida.usuario_nombre ?? null);
       dispararInferencia?.(partida.fen); // posición nueva disponible — no bloquea la UI de la partida
-      await actualizarAnalisis(partida.fen, nivelPartida);
+      await actualizarAnalisis(partida.fen);
     } catch (err) {
       if (err.status === 400) {
         // El backend solo responde 400 cuando rechaza el rival o la posición (ver ruta_partida.crear).
@@ -777,6 +795,7 @@ export default function SalaControl({
       setTerminada(datos.terminada);
       setResultado(datos.resultado);
       setJugadas(datos.jugadas);
+      setCalidadEnVivo(datos.retroalimentacion_en_vivo ?? null);
       dispararInferencia?.(datos.fen); // jugada real aplicada — dispara la inferencia del modelo propio sin bloquear
       if (!datos.terminada) {
         await actualizarAnalisis(datos.fen);
@@ -864,6 +883,7 @@ export default function SalaControl({
       setTerminada(false);
       setResultado(null);
       setJugadas(partida.jugadas);
+      setCalidadEnVivo(null);
       setCasillaOrigen(null);
       setDestinosValidos([]);
       setEvaluacionesHistorial([]);
@@ -1380,7 +1400,7 @@ export default function SalaControl({
                     <div className="w-full h-[var(--pct)] bg-gradient-to-t from-primary-container to-primary rounded-full transition-all duration-700 shadow-[0_0_8px_#00e5ff] max-lg:h-full max-lg:w-[var(--pct)]"></div>
                   </div>
                   <span className="absolute -left-11 top-1/2 -translate-y-1/2 max-lg:left-1/2 max-lg:-translate-x-1/2 font-mono-micro text-mono-micro font-medium text-primary bg-surface-container-lowest/90 px-1 py-0.5 rounded shadow">
-                    {formatearEvaluacion(analisis)}
+                    {etiquetaBarra(analisis)}
                   </span>
                 </div>
               )}
@@ -1524,6 +1544,30 @@ export default function SalaControl({
               />
             )}
 
+            {estiloCalidadEnVivo && (
+              <div
+                role="status"
+                aria-live="polite"
+                className={`flex items-start gap-space-sm p-space-sm rounded-xl border border-outline-variant/30 ${estiloCalidadEnVivo.fondo}`}
+              >
+                <span className={`material-symbols-outlined text-[22px] shrink-0 ${estiloCalidadEnVivo.texto}`} aria-hidden="true">
+                  {estiloCalidadEnVivo.icono}
+                </span>
+                <div className="flex flex-col gap-0.5 min-w-0">
+                  <span className={`font-mono-micro text-mono-micro uppercase font-semibold ${estiloCalidadEnVivo.texto}`}>
+                    Tu jugada: {estiloCalidadEnVivo.etiqueta}
+                    {calidadEnVivo.perdida_cp > 0 ? ` · perdiste ${(calidadEnVivo.perdida_cp / 100).toFixed(1)} peones` : ''}
+                  </span>
+                  <p className="font-body-sm text-body-sm text-on-surface break-words">{textoCalidadEnVivo}</p>
+                  {jugadaConPerdida && calidadEnVivo.mejor_alternativa && (
+                    <span className="font-mono-micro text-mono-micro text-outline">
+                      Mejor era: <strong className="text-on-surface">{calidadEnVivo.mejor_alternativa}</strong>
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-between gap-space-md p-space-sm rounded-xl bg-surface-container-low shadow-xl flex-wrap">
               <div className="flex items-center gap-space-sm pl-space-xs">
                 <span className="w-2 h-2 rounded-full bg-primary-container"></span>
@@ -1646,7 +1690,7 @@ export default function SalaControl({
             <div className="grid grid-cols-3 gap-2 pt-1">
               <div className="bg-surface-container-lowest p-2.5 rounded-lg flex flex-col">
                 <span className="font-mono-micro text-mono-micro text-outline uppercase">VENTAJA</span>
-                <span className="font-mono-metric text-mono-metric text-primary font-medium mt-0.5">{formatearEvaluacion(analisis)}</span>
+                <span className="font-mono-metric text-mono-metric text-primary font-medium mt-0.5">{formatearEvaluacionLarga(analisis)}</span>
               </div>
               <div className="bg-surface-container-lowest p-2.5 rounded-lg flex flex-col">
                 <span className="font-mono-micro text-mono-micro text-outline uppercase">PROF.</span>
@@ -1813,12 +1857,25 @@ function InterruptorPermiso({ id, etiqueta, activo, cargando, onCambiar }) {
   );
 }
 
+/** Ancho de la barra (0-100): la probabilidad de ganar (Win%, fórmula de Lichess); un mate la llena o la vacía. */
 function calcularPorcentajeBarra(analisis) {
   if (!analisis) return 50;
-  if (analisis.mate_en != null) return analisis.mate_en > 0 ? 95 : 5;
-  const cp = analisis.evaluacion_cp ?? 0;
-  const acotado = Math.max(-800, Math.min(800, cp));
-  return 50 + (acotado / 800) * 45;
+  return winPercent(analisis.evaluacion_cp ?? 0, analisis.mate_en ?? null);
+}
+
+/** Texto de la etiqueta de la barra: el Win% redondeado, o `M3` si hay mate forzado (cabe en el chip). */
+function etiquetaBarra(analisis) {
+  if (!analisis) return '—';
+  if (analisis.mate_en != null) return `M${Math.abs(analisis.mate_en)}`;
+  return `${Math.round(calcularPorcentajeBarra(analisis))}%`;
+}
+
+/** Evaluación en palabras donde hay espacio (panel de Stockfish): "MATE en 3" en vez del número. */
+function formatearEvaluacionLarga(analisis) {
+  if (analisis?.mate_en != null) {
+    return analisis.mate_en > 0 ? `MATE en ${analisis.mate_en}` : `Mate rival en ${Math.abs(analisis.mate_en)}`;
+  }
+  return formatearEvaluacion(analisis);
 }
 
 function formatearEvaluacion(analisis) {

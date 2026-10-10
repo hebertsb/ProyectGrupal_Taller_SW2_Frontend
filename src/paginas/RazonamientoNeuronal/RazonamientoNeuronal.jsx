@@ -409,6 +409,14 @@ export default function RazonamientoNeuronal() {
   const latenciaMs = inferenciaVigente?.latencia_ms ?? null;
   const latenciaFormateada = latenciaMs !== null ? `${latenciaMs.toFixed(1)} ms` : estaAnalizando ? '…' : '—';
   const top1 = candidatas[0] ?? null;
+  // De quién es la partida que se está mirando: la lista de estudiantes (rol jugador) ya está
+  // cargada; si el dueño no está ahí, es el facilitador. Sin lista no se afirma nada.
+  const rolDuenoPartida =
+    partida?.usuario_id == null || estudiantes.length === 0
+      ? null
+      : estudiantes.some((e) => e.id === partida.usuario_id)
+        ? 'Estudiante'
+        : 'Facilitador';
   // Flechas sobre el tablero: la jugada de Turing (verde) y, si es distinta, la que Stockfish
   // habría jugado (ámbar, solo comparación — nunca decide).
   const flechaTuring = flechaDeUci(inferenciaVigente?.jugada_elegida_uci);
@@ -686,6 +694,8 @@ export default function RazonamientoNeuronal() {
             <AnalisisRedPartida
               key={partidaId}
               partidaId={partidaId}
+              nombreDueno={partida.usuario_nombre ?? null}
+              rolDueno={rolDuenoPartida}
               terminada={Boolean(partida.terminada)}
               alElegirJugada={(fen, uci) => {
                 setFenActual(fen);
@@ -712,6 +722,17 @@ export default function RazonamientoNeuronal() {
                     <span className="font-mono-micro text-[10px] text-secondary uppercase tracking-wide truncate">
                       Analizando partida de: <strong className="text-on-surface">{partida.usuario_nombre}</strong>
                     </span>
+                    {rolDuenoPartida && (
+                      <span
+                        className={`shrink-0 px-1.5 py-0.5 rounded-full border font-mono-micro text-[10px] font-semibold uppercase ${
+                          rolDuenoPartida === 'Facilitador'
+                            ? 'bg-neon-orange/15 text-neon-orange border-neon-orange/40'
+                            : 'bg-neon-cyan/15 text-neon-cyan border-neon-cyan/40'
+                        }`}
+                      >
+                        {rolDuenoPartida}
+                      </span>
+                    )}
                   </div>
                 )}
                 <div className="flex items-center justify-between">
