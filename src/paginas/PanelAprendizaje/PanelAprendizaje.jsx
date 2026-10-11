@@ -114,6 +114,9 @@ const SECCIONES = [
   { id: 'proximamente', titulo: 'Próximamente', icono: 'lock' },
 ];
 
+/** Secciones que muestran datos del análisis completo de la última partida. */
+const SECCIONES_CON_ANALISIS = ['repaso', 'resumen', 'logros'];
+
 const BOTONES_PROXIMAMENTE = [
   { titulo: 'Invitar a un amigo', icono: 'person_add' },
   { titulo: 'Buscar rival de mi nivel', icono: 'search' },
@@ -763,15 +766,26 @@ export default function PanelAprendizaje({
   );
   const ultimaPartidaId = partidasJugadas[0]?.id ?? null;
 
+  // El análisis con Stockfish es lo más pesado del panel y solo lo usan "Repaso", "Resumen" y
+  // "Logros" (la insignia del repaso): se pide recién cuando se abre una de esas secciones, no al
+  // entrar, para no frenar al resto (por ejemplo "Tu camino"). Una vez pedido para una partida y un
+  // rango, no se repite aunque se cierre y se vuelva a abrir.
+  const necesitaAnalisis = SECCIONES_CON_ANALISIS.includes(seccionAbierta);
+  const analisisPedidoRef = useRef(null);
   useEffect(() => {
-    if (!ultimaPartidaId) return;
+    if (!ultimaPartidaId || !necesitaAnalisis) return;
+    const clave = `${ultimaPartidaId}|${rango}`;
+    if (analisisPedidoRef.current === clave) return;
+    analisisPedidoRef.current = clave;
     setCargandoAnalisis(true);
     setErrorAnalisis(null);
     analisisCompletoPartida(ultimaPartidaId, rango)
       .then(setAnalisis)
       .catch((err) => setErrorAnalisis(err))
       .finally(() => setCargandoAnalisis(false));
-  }, [ultimaPartidaId, rango]);
+  }, [ultimaPartidaId, rango, necesitaAnalisis]);
+  // Entre abrir la sección y que arranque el pedido no hay un cuadro "vacío": ya figura como cargando.
+  const analizando = cargandoAnalisis || (necesitaAnalisis && Boolean(ultimaPartidaId) && !analisis && !errorAnalisis);
 
   // Hasta 2 jugadas destacadas para repasar: la peor (si hubo alguna con margen
   // de mejora real) y la mejor (si hubo alguna sobresaliente). Si la partida fue
@@ -1019,13 +1033,13 @@ export default function PanelAprendizaje({
               </p>
             )}
 
-            {ultimaPartidaId && cargandoAnalisis && <CargandoInline texto="Turing está repasando tu partida…" />}
+            {ultimaPartidaId && analizando && <CargandoInline texto="Turing está repasando tu partida…" />}
 
-            {ultimaPartidaId && !cargandoAnalisis && errorAnalisis && (
+            {ultimaPartidaId && !analizando && errorAnalisis && (
               <AvisoError mensaje={errorAnalisis.message || 'No se pudo analizar tu última partida.'} />
             )}
 
-            {ultimaPartidaId && !cargandoAnalisis && !errorAnalisis && (
+            {ultimaPartidaId && !analizando && !errorAnalisis && (
               <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-lg bg-surface-container-high/60 border border-outline-variant/30 font-mono-micro text-mono-micro">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-bold text-primary flex items-center gap-1">
@@ -1045,7 +1059,7 @@ export default function PanelAprendizaje({
               </div>
             )}
 
-            {ultimaPartidaId && !cargandoAnalisis && !errorAnalisis && tarjetasRepaso.length > 0 && (
+            {ultimaPartidaId && !analizando && !errorAnalisis && tarjetasRepaso.length > 0 && (
               <div className="flex flex-col gap-space-sm">
                 {tarjetasRepaso.map((jugada) => (
                   <TarjetaJugada
@@ -1164,8 +1178,8 @@ export default function PanelAprendizaje({
                 Jugá una partida para que Turing te arme un resumen con consejos.
               </p>
             )}
-            {ultimaPartidaId && cargandoAnalisis && <CargandoInline texto="Armando tu resumen…" />}
-            {ultimaPartidaId && !cargandoAnalisis && errorAnalisis && (
+            {ultimaPartidaId && analizando && <CargandoInline texto="Armando tu resumen…" />}
+            {ultimaPartidaId && !analizando && errorAnalisis && (
               <AvisoError mensaje={errorAnalisis.message || 'No se pudo armar el resumen de tu partida.'} />
             )}
             {analisis?.resumen && (

@@ -5,6 +5,8 @@ import { rutaImagenPieza } from '../../ajedrez';
 
 /** Cuántas partidas recientes se revisan para los capítulos de captura y jaque. */
 const PARTIDAS_A_REVISAR = 20;
+/** Cuántas partidas se piden juntas al buscar la captura y el jaque (de la más reciente a la más vieja). */
+const LOTE_DE_PARTIDAS = 4;
 
 /**
  * Capítulos del camino para jugadores principiantes. Los de tablero, piezas,
@@ -408,18 +410,34 @@ export default function CaminoAprendizaje({
     historialPartidasPropio(PARTIDAS_A_REVISAR, 0)
       .then(async (historial) => {
         const jugadas = (historial?.partidas ?? []).filter((p) => p.cantidad_jugadas > 0);
-        const detalles = await Promise.allSettled(jugadas.map((p) => obtenerPartida(p.id)));
         if (cancelado) return;
         setPartidas(jugadas);
-        setJugadasPorPartida(
-          detalles.filter((d) => d.status === 'fulfilled').map((d) => d.value?.jugadas ?? []),
-        );
+        if (jugadas.length === 0) {
+          setCargando(false);
+          return;
+        }
+        // Las jugadas se piden de a pocas partidas, de la más reciente a la más vieja, y se corta apenas el
+        // camino tiene lo que busca (una captura y un jaque): casi siempre alcanza con el primer lote, en vez
+        // de pedir las 20 partidas juntas. El camino se muestra al terminar el primer lote.
+        const acumuladas = [];
+        for (let desde = 0; desde < jugadas.length; desde += LOTE_DE_PARTIDAS) {
+          const lote = jugadas.slice(desde, desde + LOTE_DE_PARTIDAS);
+          const detalles = await Promise.allSettled(lote.map((p) => obtenerPartida(p.id)));
+          if (cancelado) return;
+          detalles.forEach((d) => {
+            if (d.status === 'fulfilled') acumuladas.push(d.value?.jugadas ?? []);
+          });
+          setJugadasPorPartida([...acumuladas]);
+          if (desde === 0) setCargando(false);
+          if (acumuladas.some(hizoCaptura) && acumuladas.some(dioJaque)) break;
+        }
+        if (!cancelado) setCargando(false);
       })
       .catch((err) => {
-        if (!cancelado) setError(err);
-      })
-      .finally(() => {
-        if (!cancelado) setCargando(false);
+        if (!cancelado) {
+          setError(err);
+          setCargando(false);
+        }
       });
     return () => {
       cancelado = true;
@@ -469,9 +487,13 @@ export default function CaminoAprendizaje({
 
   if (cargando) {
     return (
-      <div className="animate-pulse flex flex-col gap-space-md" aria-busy="true" aria-label="Armando tu camino">
-        <div className="h-32 rounded-3xl bg-surface-container" />
-        <div className="h-24 rounded-2xl bg-surface-container" />
+      <div className="flex flex-col gap-space-sm" aria-busy="true" aria-label="Armando tu camino">
+        <div className="flex items-center gap-2 text-on-surface-variant">
+          <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin motion-reduce:animate-none" />
+          <span className="font-mono-micro text-mono-micro">Armando tu camino…</span>
+        </div>
+        <div className="h-32 rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-md animate-pulse motion-reduce:animate-none" />
+        <div className="h-24 rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-md animate-pulse motion-reduce:animate-none" />
       </div>
     );
   }
