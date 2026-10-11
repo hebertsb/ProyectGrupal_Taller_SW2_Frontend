@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { login as loginApi, loginGoogle, registro as registroApi } from '../../api/backend';
+import CampoCodigoInvitacion from './CampoCodigoInvitacion';
 
 export default function Login({ onLoginSuccess }) {
   const [modo, setModo] = useState('login'); // 'login' | 'registro'
@@ -8,6 +9,16 @@ export default function Login({ onLoginSuccess }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [claveFacilitador, setClaveFacilitador] = useState('');
+  // Una cuenta nueva (con Google o con correo) que quiere ser facilitador necesita un código de invitación.
+  // En "iniciar sesión" el campo solo aparece si el servidor lo pidió: un facilitador que ya existe no lo necesita.
+  const [codigoRequerido, setCodigoRequerido] = useState(false);
+  const codigoRef = useRef(null);
+  // Resultado de verificar el código mientras se escribe: 'incompleto' | 'verificando' | 'valido' | 'invalido' | ...
+  const [estadoCodigo, setEstadoCodigo] = useState('incompleto');
+  // Para crear una cuenta de facilitador con correo hay que tener el código ya verificado (si no se pudo
+  // verificar por un error de red, se deja avanzar: el servidor lo vuelve a comprobar al registrar).
+  const faltaCodigoVerificado =
+    modo === 'registro' && rolEsperado === 'facilitador' && estadoCodigo !== 'valido' && estadoCodigo !== 'error';
   const [mostrarPassword, setMostrarPassword] = useState(false);
   // Las credenciales de prueba van abiertas solo en pantallas anchas y altas; en el resto quedan
   // plegadas para que la tarjeta entre completa sin desplazarse.
@@ -34,6 +45,19 @@ export default function Login({ onLoginSuccess }) {
     }
   }, [rolEsperado, claveFacilitador]);
 
+  /** Si el servidor rechazó por falta de código de invitación, se muestra el campo y se lleva el foco ahí. */
+  const pedirCodigoSiHaceFalta = (err) => {
+    if (!String(err?.message ?? '').startsWith('Código de invitación')) return false;
+    setCodigoRequerido(true);
+    setError(
+      claveFacilitador.trim()
+        ? err.message
+        : 'Para crear una cuenta nueva de facilitador necesitás un código de invitación. Pedile uno a un facilitador y escribilo abajo.'
+    );
+    setTimeout(() => codigoRef.current?.focus(), 50);
+    return true;
+  };
+
   // Manejar respuesta de Google OAuth
   const manejarRespuestaGoogle = async (response) => {
     setError(null);
@@ -45,7 +69,7 @@ export default function Login({ onLoginSuccess }) {
       const data = await loginGoogle(response.credential, rolEsperado, claveFacilitador || null);
       ejecutarSecuenciaExito(data);
     } catch (err) {
-      setError(err.message || 'Error al autenticar con cuenta de Google');
+      if (!pedirCodigoSiHaceFalta(err)) setError(err.message || 'Error al autenticar con cuenta de Google');
       setCargando(false);
       setProgresoTrack(0);
     }
@@ -80,7 +104,7 @@ export default function Login({ onLoginSuccess }) {
         const data = await loginGoogle(mockCredential, rolEsperado, claveFacilitador || null);
         ejecutarSecuenciaExito(data);
       } catch (err) {
-        setError(err.message || 'Error en autenticación Google');
+        if (!pedirCodigoSiHaceFalta(err)) setError(err.message || 'Error en autenticación Google');
         setCargando(false);
         setProgresoTrack(0);
       }
@@ -136,7 +160,7 @@ export default function Login({ onLoginSuccess }) {
 
       ejecutarSecuenciaExito(data);
     } catch (err) {
-      setError(err.message || 'Error al procesar la autenticación');
+      if (!pedirCodigoSiHaceFalta(err)) setError(err.message || 'Error al procesar la autenticación');
       setCargando(false);
       setProgresoTrack(0);
     }
@@ -147,7 +171,7 @@ export default function Login({ onLoginSuccess }) {
     setEmail(correo);
     setPassword(clave);
     setRolEsperado(rol);
-    if (rol === 'facilitador') setClaveFacilitador('admin123');
+    setClaveFacilitador('');
     setError(null);
   };
 
@@ -480,26 +504,25 @@ export default function Login({ onLoginSuccess }) {
               </div>
 
               {/* Clave de Seguridad de Facilitador (cuando aplica) */}
-              {rolEsperado === 'facilitador' && (
+              {rolEsperado === 'facilitador' && (modo === 'registro' || codigoRequerido) && (
                 <div className="p-2.5 rounded-lg bg-cyan-950/30 border border-[#00e5ff]/30">
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-[10px] font-mono tracking-wide text-[#00e5ff]">
-                      PIN DE SEGURIDAD FACILITADOR
-                    </label>
-                    <span className="text-[9px] text-slate-400 font-mono">Por defecto: admin123</span>
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="flex items-center gap-1 text-[10px] font-mono tracking-wide text-[#00e5ff]">
+                      <span className="material-symbols-outlined text-[14px]" aria-hidden="true">key</span>
+                      CÓDIGO DE INVITACIÓN DE FACILITADOR
+                    </span>
+                    <span className="text-[9px] text-slate-400 font-mono text-right">Te lo da un facilitador</span>
                   </div>
-                  <div className="relative rounded-lg shadow-sm">
-                    <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-[#00e5ff]">
-                      <span className="material-symbols-outlined text-[16px]">key</span>
-                    </div>
-                    <input
-                      type="password"
-                      value={claveFacilitador}
-                      onChange={(e) => setClaveFacilitador(e.target.value)}
-                      placeholder="Ingresa clave de laboratorio (admin123)"
-                      className="block w-full pl-8 pr-3 py-1.5 bg-[#080b12] border border-[#00e5ff]/30 rounded text-xs text-white placeholder-slate-600 font-mono focus:outline-none focus:ring-1 focus:ring-[#00e5ff]"
-                    />
-                  </div>
+                  <CampoCodigoInvitacion
+                    ref={codigoRef}
+                    value={claveFacilitador}
+                    onChange={setClaveFacilitador}
+                    onEstado={setEstadoCodigo}
+                  />
+                  <p className="mt-1.5 mb-0 text-[10px] leading-snug text-slate-400">
+                    Sirve una sola vez y vence a los pocos minutos. Es solo para crear una cuenta nueva de facilitador,
+                    con correo o con Google.
+                  </p>
                 </div>
               )}
 
@@ -521,7 +544,8 @@ export default function Login({ onLoginSuccess }) {
               <div className="pt-1">
                 <button
                   type="submit"
-                  disabled={cargando}
+                  disabled={cargando || faltaCodigoVerificado}
+                  title={faltaCodigoVerificado ? 'Primero escribí un código de invitación válido' : undefined}
                   className={`relative w-full overflow-hidden group py-3 px-4 rounded-xl text-black font-semibold text-xs uppercase tracking-widest transition-all duration-200 shadow-[0_0_20px_rgba(0,229,255,0.45)] hover:shadow-[0_0_28px_rgba(0,229,255,0.7)] active:scale-[0.99] flex items-center justify-center cursor-pointer ${
                     loginExitoso
                       ? 'bg-emerald-400 shadow-[0_0_24px_rgba(16,185,129,0.7)]'

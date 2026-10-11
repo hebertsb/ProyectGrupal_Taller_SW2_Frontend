@@ -669,7 +669,7 @@ export default function App() {
                 <span className="font-mono-micro text-mono-micro text-on-surface-variant">Cargando gestión de usuarios...</span>
               </div>
             }>
-              <GestionUsuarios />
+              <GestionUsuarios usuarioActual={usuario} />
             </Suspense>
           )}
           {pantallaActiva === 'registro' && (

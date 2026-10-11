@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { listarUsuarios, historialPartidasUsuario } from '../../api/backend';
 import { fechaDesdeIso } from '../../formatoTiempo';
+import ModalEditarUsuario from './ModalEditarUsuario';
+import ModalEliminarUsuario from './ModalEliminarUsuario';
+import PanelInvitaciones from './PanelInvitaciones';
 
 function roleBadge(rol) {
   return rol === 'facilitador'
@@ -14,8 +17,41 @@ function estadoBadge(activo) {
     : { texto: 'INACTIVO', clase: 'bg-error-container text-error font-medium' };
 }
 
-export default function GestionUsuarios() {
+/** Botones de Editar y Eliminar de un usuario. `compacto` los muestra solo con ícono en pantallas chicas. */
+function AccionesUsuario({ usuario, esPropio, alEditar, alEliminar }) {
+  const base =
+    'flex items-center justify-center gap-1 px-space-sm py-space-2xs rounded-lg font-mono-label text-mono-label transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary min-h-9';
+  return (
+    <div className="flex items-center gap-space-xs">
+      <button
+        type="button"
+        onClick={() => alEditar(usuario)}
+        aria-label={`Editar a ${usuario.nombre}`}
+        className={`${base} bg-surface-container-high hover:bg-surface-bright text-on-surface`}
+      >
+        <span className="material-symbols-outlined text-[16px] text-primary" aria-hidden="true">edit</span>
+        <span>Editar</span>
+      </button>
+      <button
+        type="button"
+        onClick={() => alEliminar(usuario)}
+        disabled={esPropio}
+        title={esPropio ? 'No podés eliminar tu propia cuenta' : undefined}
+        aria-label={`Eliminar a ${usuario.nombre}`}
+        className={`${base} bg-error/10 hover:bg-error/20 text-error disabled:opacity-40 disabled:cursor-not-allowed`}
+      >
+        <span className="material-symbols-outlined text-[16px]" aria-hidden="true">delete</span>
+        <span>Eliminar</span>
+      </button>
+    </div>
+  );
+}
+
+export default function GestionUsuarios({ usuarioActual = null }) {
   const [usuarios, setUsuarios] = useState([]);
+  const [usuarioEditando, setUsuarioEditando] = useState(null);
+  const [usuarioEliminando, setUsuarioEliminando] = useState(null);
+  const [aviso, setAviso] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
   const [usuarioSeleccionado, setUsuarioSeleccionado] = useState(null);
@@ -58,6 +94,23 @@ export default function GestionUsuarios() {
     setUsuarioSeleccionado(usuario);
     setPaginaActual(0);
     await cargarPartidasUsuario(usuario.id);
+  };
+
+  const guardarEdicion = (actualizado) => {
+    setUsuarios((lista) => lista.map((u) => (u.id === actualizado.id ? { ...u, ...actualizado } : u)));
+    setUsuarioSeleccionado((actual) => (actual?.id === actualizado.id ? { ...actual, ...actualizado } : actual));
+    setUsuarioEditando(null);
+    setAviso({ tipo: 'ok', texto: `Se guardaron los cambios de ${actualizado.nombre}.` });
+  };
+
+  const confirmarEliminacion = (usuario, resultado) => {
+    setUsuarios((lista) => lista.filter((u) => u.id !== usuario.id));
+    if (usuarioSeleccionado?.id === usuario.id) cerrarDetalle();
+    setUsuarioEliminando(null);
+    setAviso({
+      tipo: 'ok',
+      texto: `Se eliminó a ${usuario.nombre} con ${resultado.partidas} ${resultado.partidas === 1 ? 'partida' : 'partidas'}.`,
+    });
   };
 
   const cerrarDetalle = () => {
@@ -104,6 +157,23 @@ export default function GestionUsuarios() {
         </div>
       )}
 
+      {aviso && (
+        <div
+          role="status"
+          className="flex items-center justify-between gap-space-sm px-space-md py-space-sm rounded-xl bg-primary/10 border border-primary/30 text-on-surface font-body-sm text-body-sm"
+        >
+          <span className="flex items-center gap-space-xs min-w-0">
+            <span className="material-symbols-outlined text-[18px] text-primary shrink-0" aria-hidden="true">check_circle</span>
+            <span className="min-w-0 break-words">{aviso.texto}</span>
+          </span>
+          <button type="button" onClick={() => setAviso(null)} aria-label="Cerrar aviso" className="shrink-0 text-on-surface-variant hover:text-on-surface">
+            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">close</span>
+          </button>
+        </div>
+      )}
+
+      <PanelInvitaciones />
+
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-space-lg">
         {/* Lista de usuarios */}
         <section className="xl:col-span-1 flex flex-col gap-space-md bg-surface-container-low p-space-lg rounded-xl shadow-md">
@@ -133,15 +203,19 @@ export default function GestionUsuarios() {
             <div className="flex flex-col gap-space-2xs overflow-y-auto max-h-[60vh]">
               {usuarios.map((usuario) => {
                 const activo = estadoBadge(usuario.activo !== false);
+                const esPropio = usuarioActual?.id === usuario.id;
                 return (
-                  <button
+                  <div
                     key={usuario.id}
-                    onClick={() => seleccionarUsuario(usuario)}
                     className={`group flex flex-col gap-space-sm p-space-md rounded-xl bg-surface-container hover:bg-surface-container-high transition-all ${
                       usuarioSeleccionado?.id === usuario.id
                         ? 'ring-2 ring-primary ring-offset-2 ring-offset-surface-container-low'
                         : ''
                     }`}
+                  >
+                  <button
+                    onClick={() => seleccionarUsuario(usuario)}
+                    className="flex flex-col gap-space-sm text-left w-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded-lg"
                     type="button"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-space-xs">
@@ -173,6 +247,13 @@ export default function GestionUsuarios() {
                       )}
                     </div>
                   </button>
+                  <AccionesUsuario
+                    usuario={usuario}
+                    esPropio={esPropio}
+                    alEditar={setUsuarioEditando}
+                    alEliminar={setUsuarioEliminando}
+                  />
+                  </div>
                 );
               })}
             </div>
@@ -200,7 +281,13 @@ export default function GestionUsuarios() {
                     <span className="font-mono-micro text-mono-micro text-on-surface-variant">{usuarioSeleccionado.email}</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-space-xs">
+                <div className="flex flex-wrap items-center justify-end gap-space-xs">
+                  <AccionesUsuario
+                    usuario={usuarioSeleccionado}
+                    esPropio={usuarioActual?.id === usuarioSeleccionado.id}
+                    alEditar={setUsuarioEditando}
+                    alEliminar={setUsuarioEliminando}
+                  />
                   <span className={`font-mono-micro text-mono-micro tracking-wide uppercase px-space-xs py-space-2xs rounded-full font-medium ${roleBadge(usuarioSeleccionado.rol)}`}>
                     {usuarioSeleccionado.rol.toUpperCase()}
                   </span>
@@ -293,6 +380,22 @@ export default function GestionUsuarios() {
           )}
         </section>
       </div>
+
+      {usuarioEditando && (
+        <ModalEditarUsuario
+          usuario={usuarioEditando}
+          esPropio={usuarioActual?.id === usuarioEditando.id}
+          alCerrar={() => setUsuarioEditando(null)}
+          alGuardar={guardarEdicion}
+        />
+      )}
+      {usuarioEliminando && (
+        <ModalEliminarUsuario
+          usuario={usuarioEliminando}
+          alCerrar={() => setUsuarioEliminando(null)}
+          alEliminar={confirmarEliminacion}
+        />
+      )}
     </div>
   );
 }

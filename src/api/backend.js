@@ -486,6 +486,53 @@ export function listarUsuarios() {
   return solicitarAuth("/auth/usuarios");
 }
 
+/** Edita a un usuario (solo facilitadores). `campos` lleva solo lo que cambió. */
+export function editarUsuario(usuarioId, campos) {
+  return solicitarAuth(`/auth/usuarios/${usuarioId}`, { method: "PATCH", body: JSON.stringify(campos) });
+}
+
+/**
+ * Genera un código de invitación para un nuevo facilitador (un solo uso, vence a los `minutos`). El código
+ * viene en la respuesta una única vez: el servidor solo guarda su hash.
+ */
+export function generarCodigoFacilitador(minutos = 15, para = null) {
+  return solicitarAuth("/auth/codigos-facilitador", {
+    method: "POST",
+    body: JSON.stringify({ minutos, para }),
+  });
+}
+
+/**
+ * Comprueba un código de invitación SIN gastarlo (no requiere sesión): `{ valido, segundos_restantes }`.
+ * Responde 429 si ese cliente ya probó demasiados códigos incorrectos.
+ */
+export function verificarCodigoFacilitador(codigo) {
+  return solicitar("/auth/codigos-facilitador/verificar", { body: JSON.stringify({ codigo }) });
+}
+
+/** Códigos de invitación generados, con su estado (vigente, usado, vencido), sin su valor. */
+export function listarCodigosFacilitador() {
+  return solicitarAuth("/auth/codigos-facilitador");
+}
+
+/** Anula un código que todavía no se usó. */
+export async function anularCodigoFacilitador(codigoId) {
+  const token = localStorage.getItem("access_token");
+  const respuesta = await fetch(`/auth/codigos-facilitador/${codigoId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!respuesta.ok) {
+    const detalle = await respuesta.json().catch(() => null);
+    throw new Error(detalle?.detail ?? `Error ${respuesta.status}`);
+  }
+}
+
+/** Elimina a un usuario y todo lo suyo (solo facilitadores). No se puede deshacer. */
+export function eliminarUsuario(usuarioId) {
+  return solicitarAuth(`/auth/usuarios/${usuarioId}`, { method: "DELETE" });
+}
+
 export function historialPartidasUsuario(usuarioId, limit = 10, offset = 0) {
   return solicitarAuth(
     `/auth/usuarios/${usuarioId}/historial-partidas?limit=${limit}&offset=${offset}`,
