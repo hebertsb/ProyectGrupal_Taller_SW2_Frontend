@@ -5,6 +5,7 @@ import { fechaHoraLegible as fechaLegible } from '../../formatoTiempo';
 import PiezaModelo3D from '../../componentes/PiezaModelo3D';
 import FondoCapasScroll from '../../componentes/FondoCapasScroll';
 import ChatTuring from './ChatTuring';
+import EstadisticasPersonales from './EstadisticasPersonales';
 import TuNivel from './TuNivel';
 import CaminoAprendizaje from './CaminoAprendizaje';
 import { PIEZAS } from '../../contenido/piezas';
@@ -105,6 +106,7 @@ const SECCIONES = [
   { id: 'nivel', titulo: 'Tu nivel', icono: 'military_tech' },
   { id: 'camino', titulo: 'Tu camino', icono: 'route' },
   { id: 'repaso', titulo: 'Repaso de tu partida', icono: 'history_edu' },
+  { id: 'estadisticas', titulo: 'Tus estadísticas', icono: 'monitoring' },
   { id: 'piezas', titulo: 'Aprendé cada pieza', icono: 'extension' },
   { id: 'resumen', titulo: 'Resumen del tutor', icono: 'menu_book' },
   { id: 'turing', titulo: 'Preguntale a Turing', icono: 'forum' },
@@ -1061,6 +1063,18 @@ export default function PanelAprendizaje({
           </SeccionAcordeon>
 
           {/* 3. Aprendé cada pieza */}
+          {/* Tus estadísticas (HU14) */}
+          <SeccionAcordeon
+            id="estadisticas"
+            titulo="Tus estadísticas"
+            icono="monitoring"
+            abierta={seccionAbierta === 'estadisticas'}
+            onToggle={() => alternarSeccion('estadisticas')}
+            innerRef={(el) => { refsSeccion.current.estadisticas = el; }}
+          >
+            <EstadisticasPersonales />
+          </SeccionAcordeon>
+
           <SeccionAcordeon
             id="piezas"
             titulo="Aprendé cada pieza"

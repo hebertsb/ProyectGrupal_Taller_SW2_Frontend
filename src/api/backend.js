@@ -465,6 +465,15 @@ export function historialPartidasPropio(limit = 10, offset = 0) {
 }
 
 /**
+ * Estadísticas personales del usuario logueado (HU14): partidas, victorias, precisión, racha,
+ * errores más frecuentes, partidas por rival y progreso por semana. Calculadas al vuelo en el
+ * backend (`GET /usuario/estadisticas`), nada se guarda aparte.
+ */
+export function obtenerEstadisticasPropias() {
+  return solicitarAuth("/usuario/estadisticas");
+}
+
+/**
  * Videos por pieza que el facilitador autenticado ya subió — Configuración
  * de Enseñanza. Dict `tipo_pieza -> url`; una pieza ausente significa que
  * se usa el video por defecto del sistema, no que hubo un error.
