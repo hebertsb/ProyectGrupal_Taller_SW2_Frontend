@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { formatearReloj } from './useRelojAjedrez';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { tiempoRelativo } from '../../formatoTiempo';
@@ -102,6 +103,17 @@ export default function ModalRetomarPartida({ partida, alRetomar, alEmpezarNueva
     { etiqueta: 'Rival', valor: rival, icono: partida?.tipo_oponente === 'modelo' ? 'psychology' : 'smart_toy' },
     { etiqueta: 'Dificultad', valor: describirNivel(partida), icono: 'signal_cellular_alt' },
   ];
+  // Con reloj, también se ve cuánto tiempo le queda a cada uno: la partida sigue con el reloj donde se quedó.
+  if (partida?.control_tiempo_ms > 0) {
+    datos.push({
+      etiqueta: 'Reloj (quedó detenido)',
+      valor: `Vos ${formatearReloj(partida.tiempo_blancas_ms ?? partida.control_tiempo_ms)} · ${rival} ${formatearReloj(
+        partida.tiempo_negras_ms ?? partida.control_tiempo_ms
+      )}`,
+      icono: 'timer',
+      anchoCompleto: true,
+    });
+  }
 
   return (
     // Sin cierre por clic en el fondo: la persona tiene que elegir una de las dos opciones.
@@ -139,7 +151,10 @@ export default function ModalRetomarPartida({ partida, alRetomar, alEmpezarNueva
 
         <dl className="retomar-partida-bloque grid grid-cols-2 gap-space-xs">
           {datos.map((dato) => (
-            <div key={dato.etiqueta} className="bg-surface-container-lowest rounded-lg p-space-sm flex flex-col gap-1 min-w-0">
+            <div
+              key={dato.etiqueta}
+              className={`bg-surface-container-lowest rounded-lg p-space-sm flex flex-col gap-1 min-w-0 ${dato.anchoCompleto ? 'col-span-2' : ''}`}
+            >
               <dt className="font-mono-micro text-mono-micro uppercase text-on-surface-variant flex items-center gap-1">
                 <span className="material-symbols-outlined text-[14px]" aria-hidden="true">
                   {dato.icono}

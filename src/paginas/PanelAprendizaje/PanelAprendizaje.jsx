@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { analisisCompletoPartida, historialPartidasPropio } from '../../api/backend';
 import { casillasIlustrativas, rutaImagenPieza } from '../../ajedrez';
-import { fechaHoraLegible as fechaLegible } from '../../formatoTiempo';
+import { fechaHoraLegible as fechaLegible, formatearDuracion } from '../../formatoTiempo';
 import PiezaModelo3D from '../../componentes/PiezaModelo3D';
 import FondoCapasScroll from '../../componentes/FondoCapasScroll';
 import ChatTuring from './ChatTuring';
@@ -9,7 +9,7 @@ import EstadisticasPersonales from './EstadisticasPersonales';
 import TuNivel from './TuNivel';
 import CaminoAprendizaje from './CaminoAprendizaje';
 import { PIEZAS } from '../../contenido/piezas';
-import { esDelJugador } from '../../aprendizaje';
+import { clasificarJugada, esDelJugador, notaDeTiempoDeJugada } from '../../aprendizaje';
 
 /*
  * `PIEZAS` (las 6 piezas con su apodo, regla especial y cómo se mueven) vive en
@@ -276,10 +276,11 @@ function textoNarrableDeJugada(jugada) {
  * Maneja su propio `terminoAbierto` (no se comparte entre tarjetas) porque
  * puede haber dos tarjetas visibles a la vez.
  */
-function TarjetaJugada({ jugada, claseTextoContenido, narrar, detener, narrando, vozDisponible }) {
+function TarjetaJugada({ jugada, tiempoMedioMs, claseTextoContenido, narrar, detener, narrando, vozDisponible }) {
   const [terminoAbierto, setTerminoAbierto] = useState(null);
   const estilo = ESTILO_CALIDAD[jugada.calidad] ?? ESTILO_CALIDAD.buena;
   const terminos = terminosDeJugada(jugada);
+  const notaTiempo = notaDeTiempoDeJugada(jugada, clasificarJugada(jugada), tiempoMedioMs);
 
   function narrarEsta() {
     if (narrando) {
@@ -301,7 +302,14 @@ function TarjetaJugada({ jugada, claseTextoContenido, narrar, detener, narrando,
         <span className="font-mono-label text-mono-label text-on-surface-variant">
           Jugada {jugada.numero_ply} · {jugada.jugada_san}
         </span>
+        {jugada.tiempo_ms != null && (
+          <span className="flex items-center gap-1 font-mono-micro text-mono-micro text-on-surface-variant" title="Tiempo que tardaste en esta jugada">
+            <span className="material-symbols-outlined text-[14px]" aria-hidden="true">timer</span>
+            Tardaste {formatearDuracion(jugada.tiempo_ms)}
+          </span>
+        )}
       </div>
+      {notaTiempo && <p className={`${claseTextoContenido} text-on-surface-variant m-0`}>{notaTiempo}</p>}
 
       {/* Principio ajedrecístico como título, la explicación completa como desarrollo debajo — separados visualmente. */}
       <div className="p-space-sm rounded-lg bg-surface-container-lowest border border-outline-variant/20 flex flex-col gap-space-2xs">
@@ -1065,6 +1073,7 @@ export default function PanelAprendizaje({
                   <TarjetaJugada
                     key={jugada.numero_ply}
                     jugada={jugada}
+                    tiempoMedioMs={analisis?.resumen?.tiempo_medio_jugador_ms}
                     claseTextoContenido={claseTextoContenido}
                     narrar={narrar}
                     detener={detener}
@@ -1190,6 +1199,13 @@ export default function PanelAprendizaje({
                     {(analisis.resumen.precision_jugador ?? analisis.resumen.precision_global).toFixed(0)}% de precisión en tus jugadas de la última partida
                   </span>
                 </div>
+                {analisis.resumen.tiempo_medio_jugador_ms != null && (
+                  <p className="flex items-center gap-1.5 font-mono-micro text-mono-micro text-on-surface-variant m-0">
+                    <span className="material-symbols-outlined text-[16px]" aria-hidden="true">timer</span>
+                    Partida de {formatearDuracion(analisis.resumen.duracion_ms)} · pensaste en promedio{' '}
+                    {formatearDuracion(analisis.resumen.tiempo_medio_jugador_ms)} por jugada
+                  </p>
+                )}
                 <div className="p-space-sm rounded-lg bg-surface-container-lowest border border-outline-variant/20 flex flex-col gap-space-2xs">
                   <span className="font-mono-micro text-mono-micro text-primary uppercase tracking-wider font-semibold flex items-center gap-1">
                     <span className="material-symbols-outlined text-[16px]">lightbulb</span>

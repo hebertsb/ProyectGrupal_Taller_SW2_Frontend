@@ -262,6 +262,7 @@ function calcularFacetaEmocional({
 export default function AvatarAgente3D({
   pensando = false,
   tipoOponente = 'modelo',
+  nivel = null, // nivel con el que juega el rival (opcional): se muestra en la etiqueta
   evaluacionCp = 0,
   mateEn = null,
   ultimoMovimiento = null,
@@ -352,7 +353,8 @@ export default function AvatarAgente3D({
         </div>
 
         <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950/60 text-[#00e5ff] border border-[#00e5ff]/30 font-semibold shrink-0">
-          {tipoOponente === 'modelo' ? 'IA v5 AUTÓNOMA' : 'STOCKFISH 16'}
+          {tipoOponente === 'modelo' ? 'IA v5' : 'STOCKFISH'}
+          {nivel != null ? ` · NIVEL ${nivel}` : tipoOponente === 'modelo' ? ' AUTÓNOMA' : ' 16'}
         </span>
       </div>
 

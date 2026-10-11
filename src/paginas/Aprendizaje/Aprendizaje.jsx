@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { analisisCompletoPartida, listarPartidas } from '../../api/backend';
-import { fechaDesdeIso } from '../../formatoTiempo';
+import { fechaDesdeIso, formatearDuracion } from '../../formatoTiempo';
 import TableroSoloLectura from '../../componentes/TableroSoloLectura';
 import {
   caidaDeJugada,
@@ -8,6 +8,7 @@ import {
   comoMejorarJugada,
   esDelJugador,
   ESTILO_CATEGORIA,
+  notaDeTiempoDeJugada,
   winPercent,
 } from '../../aprendizaje';
 
@@ -511,6 +512,21 @@ export default function Aprendizaje({
                 <span key={f.clave} className={`px-2 py-0.5 rounded ${f.clase}`}>{f.etiqueta}: {f.valor}</span>
               ))}
             </div>
+            {(r.duracion_ms != null || r.tiempo_medio_jugador_ms != null) && (
+              <div className="flex flex-wrap gap-2 font-mono text-[11px]" aria-label="Tiempo de la partida">
+                {r.control_tiempo_ms > 0 && (
+                  <span className="px-2 py-0.5 rounded bg-white/5 text-slate-300">Reloj: {formatearDuracion(r.control_tiempo_ms)} por lado</span>
+                )}
+                {r.duracion_ms != null && (
+                  <span className="px-2 py-0.5 rounded bg-white/5 text-slate-300">Duración: {formatearDuracion(r.duracion_ms)}</span>
+                )}
+                {r.tiempo_medio_jugador_ms != null && (
+                  <span className="px-2 py-0.5 rounded bg-white/5 text-slate-300">
+                    {esFacilitador ? 'Tiempo medio del estudiante' : 'Tu tiempo medio'} por jugada: {formatearDuracion(r.tiempo_medio_jugador_ms)}
+                  </span>
+                )}
+              </div>
+            )}
             {r.consejo_tutor && <p className="font-body-sm text-body-sm text-slate-200">{r.consejo_tutor}</p>}
           </section>
         );
@@ -574,9 +590,17 @@ export default function Aprendizaje({
                           <span className="truncate">{nombreQuien}</span>
                         </span>
                       </span>
-                      <span className={`flex items-center gap-1 font-mono text-[11px] px-2 py-0.5 rounded-full ${estilo.fondo} ${estilo.texto}`}>
-                        <span className="material-symbols-outlined text-[13px]">{estilo.icono}</span>
-                        {estilo.etiqueta}
+                      <span className="flex items-center gap-space-xs shrink-0">
+                        {jugada.tiempo_ms != null && (
+                          <span className="flex items-center gap-0.5 font-mono text-[10px] text-slate-400" title="Tiempo que tardó esta jugada">
+                            <span className="material-symbols-outlined text-[12px]" aria-hidden="true">timer</span>
+                            {formatearDuracion(jugada.tiempo_ms)}
+                          </span>
+                        )}
+                        <span className={`flex items-center gap-1 font-mono text-[11px] px-2 py-0.5 rounded-full ${estilo.fondo} ${estilo.texto}`}>
+                          <span className="material-symbols-outlined text-[13px]">{estilo.icono}</span>
+                          {estilo.etiqueta}
+                        </span>
                       </span>
                     </button>
                   );
@@ -603,6 +627,20 @@ export default function Aprendizaje({
                       {ESTILO_CATEGORIA[categoriaActual].etiqueta}
                     </span>
                   </div>
+
+                  {jugadaActual.tiempo_ms != null && (
+                    <p className="flex flex-wrap items-center gap-x-2 gap-y-1 font-body-sm text-body-sm text-slate-200 m-0">
+                      <span className="flex items-center gap-1 font-mono text-[11px] text-cyan-300 uppercase tracking-wider font-semibold">
+                        <span className="material-symbols-outlined text-[14px]" aria-hidden="true">timer</span>
+                        {esDelJugador(jugadaActual) ? 'Tardaste' : 'Tardó'} {formatearDuracion(jugadaActual.tiempo_ms)}
+                      </span>
+                      {notaDeTiempoDeJugada(jugadaActual, categoriaActual, analisis?.resumen?.tiempo_medio_jugador_ms) && (
+                        <span className="text-slate-300">
+                          {notaDeTiempoDeJugada(jugadaActual, categoriaActual, analisis?.resumen?.tiempo_medio_jugador_ms)}
+                        </span>
+                      )}
+                    </p>
+                  )}
 
                   {/* El tablero justo antes y justo después de la jugada, con flechas */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-space-sm">

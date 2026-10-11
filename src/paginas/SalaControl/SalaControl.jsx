@@ -8,6 +8,8 @@ import { useRazonamiento } from '../../contexto/ContextoRazonamiento';
 import AvisoNivelCalculado, { EstadoCalibracionPartida } from './AvisoNivelCalculado';
 import ModalRetomarPartida from './ModalRetomarPartida';
 import PanelPlegable from './PanelPlegable';
+import RelojAjedrez from './RelojAjedrez';
+import { useRelojAjedrez } from './useRelojAjedrez';
 import {
   abrirSimulacion3D,
   actualizarPermisosPartida,
@@ -15,6 +17,7 @@ import {
   backendEnLinea,
   calibrarPartida,
   crearPartida,
+  guardarRelojPartida,
   moverPartida,
   moverPartidaDesdeFoto,
   obtenerJugadasLegales,
@@ -23,8 +26,9 @@ import {
   obtenerUrlFotoCamara,
   obtenerUrlGrillaDebug,
   reconocerTablero,
+  terminarPartidaPorTiempo,
 } from '../../api/backend';
-import {
+import { aplicarJugadaUciAFen,
   claseDePieza,
   detectarMovimientosVisuales,
   esPromocionDePeon,
@@ -40,6 +44,25 @@ import { CATEGORIAS, clasificarJugada, comoMejorarPorCategoria, ESTILO_CATEGORIA
 gsap.registerPlugin(useGSAP);
 
 const DURACION_VUELO_PIEZA = 0.28; // segundos — deslizamiento contenido, no un efecto largo
+/** Pausa entre tu jugada y la respuesta del rival: se ve primero la tuya y después la suya, como en una partida real. */
+const PAUSA_ANTES_DE_LA_RESPUESTA_MS = 800;
+
+// Controles de tiempo ofrecidos, en minutos por lado (0 = sin reloj).
+const OPCIONES_RELOJ_MIN = [0, 3, 5, 10, 15];
+const RELOJ_POR_DEFECTO_MIN = 10;
+const CLAVE_RELOJ_MIN = 'reloj_minutos';
+const INTERVALO_GUARDADO_RELOJ_MS = 5000;
+
+function leerRelojGuardado() {
+  try {
+    const guardado = Number(localStorage.getItem(CLAVE_RELOJ_MIN));
+    if (localStorage.getItem(CLAVE_RELOJ_MIN) !== null && OPCIONES_RELOJ_MIN.includes(guardado)) return guardado;
+  } catch {
+    // Sin almacenamiento: se usa el valor por defecto.
+  }
+  return RELOJ_POR_DEFECTO_MIN;
+}
+const esperar = (ms) => new Promise((resolver) => setTimeout(resolver, ms));
 
 // La escala del selector depende del rival (constantes en ../../nivelJugador):
 // - Stockfish ("Skill Level"): 0-20.
@@ -96,6 +119,9 @@ export default function SalaControl({
 }) {
   const { dispararInferencia } = useRazonamiento() ?? {};
   const [partidaId, setPartidaId] = useState(null);
+  // Siempre apunta a la partida abierta ahora: una respuesta que llega tarde la compara contra esto.
+  const partidaVigenteRef = useRef(null);
+  partidaVigenteRef.current = partidaId;
   const [fen, setFen] = useState(null);
   // Selección de rival y nivel para la PRÓXIMA partida: 'modelo' (Turing) o 'motor' (Stockfish).
   // Lo que se muestra de la partida ya creada sale de `configPartida` (ver más abajo).
@@ -109,6 +135,10 @@ export default function SalaControl({
   // arrancar con un nivel de jugador cualquiera.
   const nivelInicial = esFacilitador ? 20 : (usuario?.nivel_estimado ?? (diagnosticoPendiente ? NIVEL_DIAGNOSTICO : 5));
   const [nivel, setNivel] = useState(nivelInicial);
+  // Control de tiempo de la próxima partida, en minutos por lado (0 = sin reloj). Se recuerda entre sesiones.
+  const [relojMin, setRelojMin] = useState(leerRelojGuardado);
+  // Lo que le queda a cada lado al abrir o reanudar la partida (viene del servidor: el reloj es parte de la partida).
+  const [relojInicial, setRelojInicial] = useState(null);
   const [terminada, setTerminada] = useState(false);
   const [resultado, setResultado] = useState(null);
   const [vistaTablero, setVistaTablero] = useState('2d'); // '2d' (táctil estándar) o '3d' (gemelo digital Dobot CR5AS)
@@ -217,6 +247,75 @@ export default function SalaControl({
   const partidaEnCurso = Boolean(partidaId) && !terminada && jugadas.length > 0;
   const selectoresBloqueados = partidaEnCurso || viendoPartidaAjena;
   const seleccionBloqueada = selectoresBloqueados || diagnosticoPendiente;
+  // El reloj es parte de la partida (control de tiempo y tiempo restante viven en el servidor): al reanudarla
+  // sigue donde se quedó y no corre mientras el jugador estuvo fuera. No corre en la partida de diagnóstico
+  // (la presión de tiempo distorsionaría la medición de nivel): esa partida se crea sin reloj.
+  const controlRelojMs = configPartida?.controlTiempoMs ?? 0;
+  const {
+    tiempos: tiemposReloj,
+    agotado: relojAgotado,
+    ajustar: ajustarReloj,
+    instantanea: instantaneaReloj,
+  } = useRelojAjedrez({
+    partidaId,
+    controlMs: controlRelojMs,
+    inicial: relojInicial,
+    enMarcha: partidaEnCurso && !viendoPartidaAjena && !demostracionDeOtraPartida,
+    turno: fen ? turnoDeFen(fen) : null,
+  });
+  // En una partida terminada no hay jugada que sugerir: el análisis que quedaba era el de la posición anterior al final.
+  useEffect(() => {
+    if (terminada) setAnalisis(null);
+  }, [terminada]);
+  const ultimaAgotadaReportadaRef = useRef(null);
+  useEffect(() => {
+    if (!relojAgotado || !partidaId || terminada) return;
+    const clave = `${partidaId}:${relojAgotado}`;
+    if (ultimaAgotadaReportadaRef.current === clave) return;
+    ultimaAgotadaReportadaRef.current = clave;
+    terminarPartidaPorTiempo(partidaId, relojAgotado)
+      .then((datos) => {
+        if (partidaVigenteRef.current !== partidaId) return;
+        setTerminada(datos.terminada);
+        setResultado(datos.resultado);
+      })
+      .catch((err) => {
+        ultimaAgotadaReportadaRef.current = null;
+        setError(err.message || 'No se pudo registrar que se acabó el tiempo.');
+      });
+  }, [relojAgotado, partidaId, terminada]);
+
+  // Se guarda en la partida lo que le queda a cada lado: cada pocos segundos mientras corre, al ocultar o
+  // cerrar la pestaña y al salir de esta pantalla. Así, al reanudar, el reloj vuelve al tiempo en que se dejó.
+  const relojEnVivoRef = useRef(null);
+  relojEnVivoRef.current = {
+    partidaId,
+    activo: controlRelojMs > 0 && partidaEnCurso && !viendoPartidaAjena && !demostracionDeOtraPartida,
+    instantanea: instantaneaReloj,
+  };
+  useEffect(() => {
+    const guardar = (alCerrar) => {
+      const reloj = relojEnVivoRef.current;
+      if (!reloj?.activo) return;
+      const { tiempos } = reloj.instantanea();
+      guardarRelojPartida(reloj.partidaId, { blancasMs: tiempos.blancas, negrasMs: tiempos.negras }, alCerrar)?.catch(
+        () => {} // el próximo guardado lo reintenta
+      );
+    };
+    const intervalo = setInterval(() => guardar(false), INTERVALO_GUARDADO_RELOJ_MS);
+    const alCambiarVisibilidad = () => {
+      if (document.visibilityState === 'hidden') guardar(true);
+    };
+    const alCerrarPestana = () => guardar(true);
+    document.addEventListener('visibilitychange', alCambiarVisibilidad);
+    window.addEventListener('pagehide', alCerrarPestana);
+    return () => {
+      clearInterval(intervalo);
+      document.removeEventListener('visibilitychange', alCambiarVisibilidad);
+      window.removeEventListener('pagehide', alCerrarPestana);
+      guardar(true); // al salir de la Sala de Control con la partida a medias
+    };
+  }, []);
   const oponenteMostrado = configPartida?.tipoOponente ?? tipoOponenteSeleccionado;
   const nivelMostrado = configPartida?.nivel ?? nivelSeleccionado;
   // Qué muestra el selector: con la partida en curso, la configuración de esa partida; si no, la selección.
@@ -458,6 +557,12 @@ export default function SalaControl({
     const intervalo = setInterval(async () => {
       try {
         const datos = await obtenerPartida(partidaId);
+        if (datos.control_tiempo_ms) {
+          ajustarReloj({
+            blancas: datos.tiempo_blancas_ms ?? datos.control_tiempo_ms,
+            negras: datos.tiempo_negras_ms ?? datos.control_tiempo_ms,
+          });
+        }
         if (datos.fen !== fenActualRef.current) {
           setFen(datos.fen);
           setTerminada(datos.terminada);
@@ -543,6 +648,17 @@ export default function SalaControl({
     }
   }
 
+  /** El control de tiempo y lo que le queda a cada lado salen de la partida (servidor), no de la selección de la pantalla. */
+  function datosDeRelojDe(partida) {
+    const control = partida.control_tiempo_ms ?? 0;
+    return {
+      controlTiempoMs: control,
+      relojInicial: control
+        ? { blancas: partida.tiempo_blancas_ms ?? control, negras: partida.tiempo_negras_ms ?? control }
+        : null,
+    };
+  }
+
   async function cargarPartidaExistente(id) {
     setError(null);
     setCargando('nueva');
@@ -560,7 +676,9 @@ export default function SalaControl({
           setTipoOponente(partida.tipo_oponente);
         }
       }
-      setConfigPartida({ tipoOponente: partida.tipo_oponente ?? tipoOponente, nivel: partida.nivel });
+      const { controlTiempoMs, relojInicial: relojDeLaPartida } = datosDeRelojDe(partida);
+      setRelojInicial(relojDeLaPartida);
+      setConfigPartida({ tipoOponente: partida.tipo_oponente ?? tipoOponente, nivel: partida.nivel, controlTiempoMs });
       setTerminada(partida.terminada);
       setResultado(partida.resultado);
       setJugadas(partida.jugadas);
@@ -671,14 +789,20 @@ export default function SalaControl({
     try {
       const op = esDiagnostico ? 'motor' : oponenteDeseado !== undefined ? oponenteDeseado : tipoOponente;
       const nivelPartida = esDiagnostico ? NIVEL_DIAGNOSTICO : nivelSegunOponente(nivelBase, op);
-      const partida = await crearPartida(nivelPartida, null, op);
+      const controlTiempoMs = esDiagnostico ? 0 : relojMin * 60_000;
+      const partida = await crearPartida(nivelPartida, null, op, controlTiempoMs);
+      setRelojInicial(datosDeRelojDe(partida).relojInicial);
       setPartidaId(partida.id);
       onPartidaActivaChange?.(partida.id);
       setFen(partida.fen);
       // En el diagnóstico el rival es forzado: no se toca la selección, así al terminarlo el
       // jugador sigue con el rival que tenía elegido (Turing por defecto).
       if (!esDiagnostico) setTipoOponente(partida.tipo_oponente || op);
-      setConfigPartida({ tipoOponente: partida.tipo_oponente || op, nivel: partida.nivel ?? nivelPartida });
+      setConfigPartida({
+        tipoOponente: partida.tipo_oponente || op,
+        nivel: partida.nivel ?? nivelPartida,
+        controlTiempoMs: partida.control_tiempo_ms ?? 0,
+      });
       setTerminada(false);
       setResultado(null);
       setJugadas(partida.jugadas);
@@ -787,23 +911,82 @@ export default function SalaControl({
     setDestinosValidos([]);
 
     const jugadaUci = origen + casilla + (esPromocionDePeon(fen, origen, casilla) ? 'q' : '');
+    const fenAntesDeLaJugada = fen;
+    // Cuánto tardó en decidir esta jugada y cuánto le queda en el reloj, medido justo al jugarla. La primera
+    // jugada de la partida no se mide: el reloj todavía no empezó a correr.
+    const { gastadoMs, tiempos: relojAlJugar } = instantaneaReloj();
+    const tiemposDeLaJugada = {
+      tiempoJugadaMs: jugadas.length > 0 ? gastadoMs : null,
+      relojBlancasMs: controlRelojMs ? relojAlJugar.blancas : null,
+    };
     setError(null);
     setCargando('mover');
     try {
-      const datos = await moverPartida(partidaId, jugadaUci);
-      setFen(datos.fen);
-      setTerminada(datos.terminada);
-      setResultado(datos.resultado);
-      setJugadas(datos.jugadas);
-      setCalidadEnVivo(datos.retroalimentacion_en_vivo ?? null);
+      // Tu jugada se dibuja al instante; el servidor la confirma (y responde el rival) después.
+      setFen(aplicarJugadaUciAFen(fenAntesDeLaJugada, jugadaUci));
+      const tuJugadaSeVioEnMs = performance.now();
+      const datos = await moverPartida(partidaId, jugadaUci, tiemposDeLaJugada);
+      const sigueVigente = await mostrarJugadaYRespuesta(datos, partidaId, tuJugadaSeVioEnMs);
+      if (!sigueVigente) return;
       dispararInferencia?.(datos.fen); // jugada real aplicada — dispara la inferencia del modelo propio sin bloquear
       if (!datos.terminada) {
         await actualizarAnalisis(datos.fen);
       }
     } catch (err) {
+      setFen(fenAntesDeLaJugada); // el servidor no la aceptó: se vuelve al tablero de antes
       setError(err.message);
     } finally {
       setCargando(null);
+    }
+  }
+
+  /**
+   * Muestra el resultado de una jugada en dos tiempos cuando el rival respondió: primero el tablero con
+   * SOLO la jugada del jugador (y su calificación), una pausa mientras "piensa" el rival, y recién entonces
+   * su respuesta. Si no hubo respuesta (la partida terminó con tu jugada) se muestra todo de una vez.
+   * El backend manda las dos jugadas juntas; `fen_tras_jugada` es el tablero entre ambas.
+   */
+  async function mostrarJugadaYRespuesta(datos, partidaDeEstaJugada, tuJugadaSeVioEnMs = performance.now()) {
+    const hayRespuesta = Boolean(datos.jugada_motor) && Boolean(datos.fen_tras_jugada);
+    if (hayRespuesta) {
+      setFen(datos.fen_tras_jugada);
+      setJugadas(datos.jugadas.slice(0, -1));
+      setCalidadEnVivo(datos.retroalimentacion_en_vivo ?? null);
+      // La pausa cuenta desde que se vio tu jugada: si el servidor tardó, el rival ya "pensó" y responde enseguida.
+      await esperar(Math.max(0, PAUSA_ANTES_DE_LA_RESPUESTA_MS - (performance.now() - tuJugadaSeVioEnMs)));
+      // Si mientras tanto se empezó o se abrió otra partida, esta respuesta ya no corresponde.
+      if (partidaVigenteRef.current !== partidaDeEstaJugada) return false;
+    }
+    setFen(datos.fen);
+    setTerminada(datos.terminada);
+    setResultado(datos.resultado);
+    setJugadas(datos.jugadas);
+    setCalidadEnVivo(datos.retroalimentacion_en_vivo ?? null);
+    // El rival descuenta lo que tardó en decidir: el servidor es quien lo midió.
+    if (datos.reloj) ajustarReloj({ blancas: datos.reloj.blancas_ms, negras: datos.reloj.negras_ms });
+    return true;
+  }
+
+  /**
+   * Cambia el control de tiempo. Se recuerda para las próximas partidas y, si todavía no se jugó ninguna
+   * jugada, también se aplica a la partida abierta (después de la primera jugada queda fijo).
+   */
+  async function manejarCambioDeReloj(minutos) {
+    setRelojMin(minutos);
+    try {
+      localStorage.setItem(CLAVE_RELOJ_MIN, String(minutos));
+    } catch {
+      // La elección vale igual para esta sesión.
+    }
+    if (!partidaId || terminada || jugadas.length > 0 || viendoPartidaAjena || diagnosticoPendiente) return;
+    const controlTiempoMs = minutos * 60_000;
+    try {
+      await guardarRelojPartida(partidaId, { controlTiempoMs });
+      if (partidaVigenteRef.current !== partidaId) return;
+      setRelojInicial(controlTiempoMs ? { blancas: controlTiempoMs, negras: controlTiempoMs } : null);
+      setConfigPartida((config) => (config ? { ...config, controlTiempoMs } : config));
+    } catch (err) {
+      setError(err.message);
     }
   }
 
@@ -872,13 +1055,20 @@ export default function SalaControl({
     setError(null);
     setCargando('nueva');
     try {
-      const partida = await crearPartida(nivelSeleccionado, fenReconocido, tipoOponenteSeleccionado);
+      const partida = await crearPartida(
+        nivelSeleccionado,
+        fenReconocido,
+        tipoOponenteSeleccionado,
+        diagnosticoPendiente ? 0 : relojMin * 60_000
+      );
+      setRelojInicial(datosDeRelojDe(partida).relojInicial);
       setPartidaId(partida.id);
       onPartidaActivaChange?.(partida.id);
       setFen(partida.fen);
       setConfigPartida({
         tipoOponente: partida.tipo_oponente || tipoOponenteSeleccionado,
         nivel: partida.nivel ?? nivelSeleccionado,
+        controlTiempoMs: partida.control_tiempo_ms ?? 0,
       });
       setTerminada(false);
       setResultado(null);
@@ -908,12 +1098,10 @@ export default function SalaControl({
     setCargando('mover-foto');
     try {
       const datos = await moverPartidaDesdeFoto(partidaId);
-      setFen(datos.fen);
-      setTerminada(datos.terminada);
-      setResultado(datos.resultado);
-      setJugadas(datos.jugadas);
       setCasillaOrigen(null);
       setDestinosValidos([]);
+      const sigueVigente = await mostrarJugadaYRespuesta(datos, partidaId);
+      if (!sigueVigente) return;
       dispararInferencia?.(datos.fen); // jugada real detectada por cámara — misma inferencia que un movimiento manual
       if (!datos.terminada) {
         await actualizarAnalisis(datos.fen);
@@ -1018,7 +1206,14 @@ export default function SalaControl({
           ) : (
             <div className="flex items-center gap-space-xs font-mono-metric text-mono-metric">
               <span className="text-on-surface-variant font-mono-micro text-mono-micro uppercase">TURNO:</span>
-              <span className="text-primary font-medium">{turnoActual === 'w' ? 'BLANCAS (VOS)' : 'NEGRAS (MOTOR)'}</span>
+              {turnoActual === 'w' ? (
+                <span className="text-primary font-medium">BLANCAS (VOS)</span>
+              ) : (
+                <span className="flex items-center gap-1.5 text-tertiary font-medium" role="status">
+                  <span className="w-2 h-2 rounded-full bg-tertiary motion-safe:animate-pulse" aria-hidden="true" />
+                  NEGRAS ({oponenteMostrado === 'modelo' ? 'TURING' : 'STOCKFISH'} PENSANDO…)
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -1057,6 +1252,7 @@ export default function SalaControl({
           <AvatarAgente3D
             pensando={cargando === 'mover' || cargando === 'mover-foto'}
             tipoOponente={oponenteMostrado}
+            nivel={nivelSegunOponente(nivelMostrado, oponenteMostrado)}
             evaluacionCp={analisis?.evaluacion_cp ?? 0}
             mateEn={analisis?.mate_en ?? null}
             ultimoMovimiento={jugadas.length > 0 ? jugadas[jugadas.length - 1] : null}
@@ -1174,7 +1370,7 @@ export default function SalaControl({
             className="panel-entrada"
             extra={
               <span className="text-[10px] text-primary font-mono font-bold">
-                {oponenteEnSelector === 'modelo' ? 'TURING · IA v5 AUTÓNOMA' : 'STOCKFISH 16'}
+                {oponenteEnSelector === 'modelo' ? 'TURING' : 'STOCKFISH'} · NIVEL {nivelEnSelector}
               </span>
             }
           >
@@ -1381,6 +1577,18 @@ export default function SalaControl({
             </div>
           )}
 
+          {controlRelojMs > 0 && (
+            <div className="w-full max-w-[660px] mb-2">
+              <RelojAjedrez
+                nombre={oponenteMostrado === 'modelo' ? 'Turing IA' : 'Stockfish'}
+                icono="smart_toy"
+                ms={tiemposReloj.negras}
+                activo={partidaEnCurso && turnoDeFen(fen) === 'b'}
+                agotado={relojAgotado === 'negras'}
+              />
+            </div>
+          )}
+
           {vistaTablero === '3d' && (esFacilitador || permiteSimulacion3D) ? (
             <div className="w-full max-w-[660px] aspect-square rounded-2xl overflow-hidden shadow-2xl">
               <SimuladorBrazoTablero3D
@@ -1467,6 +1675,18 @@ export default function SalaControl({
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {controlRelojMs > 0 && (
+            <div className="w-full max-w-[660px] mt-2">
+              <RelojAjedrez
+                nombre="Vos"
+                icono="person"
+                ms={tiemposReloj.blancas}
+                activo={partidaEnCurso && turnoDeFen(fen) === 'w'}
+                agotado={relojAgotado === 'blancas'}
+              />
             </div>
           )}
 
@@ -1603,6 +1823,25 @@ export default function SalaControl({
                   <span className="font-mono-micro text-[10px] text-outline uppercase whitespace-nowrap">
                     {categoriaDeNivel(nivelEnSelector, oponenteEnSelector === 'modelo')}
                   </span>
+                </div>
+                <div className="flex items-center gap-2 bg-surface-container-high/70 px-2 py-1 rounded-lg border border-outline-variant/30 min-w-0 max-w-full">
+                  <label className="font-mono-micro text-[10px] text-outline uppercase font-semibold whitespace-nowrap" htmlFor="relojSelector">
+                    Reloj
+                  </label>
+                  <select
+                    id="relojSelector"
+                    value={diagnosticoPendiente ? 0 : selectoresBloqueados ? Math.round(controlRelojMs / 60_000) : relojMin}
+                    onChange={(evento) => manejarCambioDeReloj(Number(evento.target.value))}
+                    disabled={seleccionBloqueada}
+                    title={diagnosticoPendiente ? 'La partida de diagnóstico se juega sin reloj.' : seleccionBloqueada ? motivoBloqueoSeleccion : undefined}
+                    className="bg-transparent font-mono-metric text-mono-metric text-on-surface font-semibold cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
+                  >
+                    {OPCIONES_RELOJ_MIN.map((minutos) => (
+                      <option key={minutos} value={minutos} className="bg-surface-container-high text-on-surface">
+                        {minutos === 0 ? 'Sin reloj' : `${minutos} min`}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 {oponenteEnSelector === 'modelo' && (
                   <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono text-primary bg-primary/10 px-2 py-1 rounded border border-primary/20">

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { casillasIlustrativas, rutaImagenPieza } from '../../ajedrez';
 import { PIEZAS } from '../../contenido/piezas';
@@ -83,7 +83,7 @@ function MiniTableroPieza({ pieza, reducir }) {
 
   return (
     <div className="flex flex-col items-center gap-3">
-      <div className="grid grid-cols-8 w-full max-w-[17rem] aspect-square rounded-lg overflow-hidden border border-outline-variant/40">
+      <div className="grid grid-cols-8 grid-rows-8 w-[min(100%,24rem,44dvh)] aspect-square rounded-lg overflow-hidden border border-outline-variant/40">
         {casillasDelTablero().map(([f, c]) => {
           const oscura = (f + c) % 2 === 1;
           const marcada = esMarcada([f, c]);
@@ -94,21 +94,21 @@ function MiniTableroPieza({ pieza, reducir }) {
               type="button"
               onClick={() => tocar([f, c])}
               aria-label={`Casilla fila ${8 - f}, columna ${'abcdefgh'[c]}${marcada ? ', marcada' : ''}`}
-              className={`relative flex items-center justify-center ${oscura ? 'bg-[#8b5e3c]' : 'bg-[#e8d5b0]'} ${
+              className={`relative flex items-center justify-center min-h-0 min-w-0 ${oscura ? 'bg-[#8b5e3c]' : 'bg-[#e8d5b0]'} ${
                 marcada ? 'ring-2 ring-inset ring-primary-container' : ''
               }`}
             >
               {marcada && (
                 <span
                   aria-hidden="true"
-                  className="absolute w-2 h-2 rounded-full bg-primary-container/90"
+                  className="absolute w-3 h-3 rounded-full bg-primary-container/90"
                 />
               )}
               {esCentro && (
                 <img
                   src={rutaImagenPieza(pieza.letra)}
                   alt=""
-                  className={`w-[80%] h-[80%] ${reducir ? '' : 'drop-shadow-[0_2px_2px_rgba(0,0,0,0.5)]'}`}
+                  className={`w-[94%] h-[94%] scale-[1.2] ${reducir ? '' : 'drop-shadow-[0_2px_2px_rgba(0,0,0,0.5)]'}`}
                 />
               )}
             </button>
@@ -128,8 +128,15 @@ function MiniTableroPieza({ pieza, reducir }) {
 }
 
 /** Puzzle de una jugada: la torre blanca tiene que dar jaque al rey negro. */
+const CASILLA_INICIAL_TORRE = [7, 0]; // a1
+/** Cuánto se queda la torre en una casilla que no da jaque antes de volver a a1. */
+const MS_ANTES_DE_VOLVER = 1100;
+
 function PuzzleJaque({ onResuelto }) {
-  const [torre] = useState([7, 0]); // a1
+  const reducir = useReducedMotion();
+  const [torre, setTorre] = useState(CASILLA_INICIAL_TORRE);
+  const [volviendo, setVolviendo] = useState(false); // la torre está de paso en una casilla sin jaque
+  const temporizador = useRef(null);
   const reyNegro = [0, 4]; // e8
   const [seleccionada, setSeleccionada] = useState(false);
   const [mensaje, setMensaje] = useState('Tocá la torre blanca y después la casilla a la que la movés para dar jaque.');
@@ -144,8 +151,11 @@ function PuzzleJaque({ onResuelto }) {
   const daJaque = ([f, c]) => f === reyNegro[0] || c === reyNegro[1];
   const esDestino = (casilla) => destinos.some((d) => mismaCasilla(d, casilla));
 
+  // Si se cierra la tarjeta con la torre de paso, no queda un temporizador colgado.
+  useEffect(() => () => clearTimeout(temporizador.current), []);
+
   function tocar(casilla) {
-    if (resuelto) return;
+    if (resuelto || volviendo) return;
     if (!seleccionada) {
       if (mismaCasilla(casilla, torre)) {
         setSeleccionada(true);
@@ -164,19 +174,26 @@ function PuzzleJaque({ onResuelto }) {
       setMensaje('La torre no llega ahí en una jugada. Probá con una casilla marcada en celeste.');
       return;
     }
+    setTorre(casilla); // la torre viaja hasta la casilla que elegiste
+    setSeleccionada(false);
     if (daJaque(casilla)) {
       setResuelto(true);
-      setSeleccionada(false);
       setMensaje('¡Jaque! Muy bien: la torre llegó a la misma línea que el rey y lo ataca.');
       onResuelto();
     } else {
-      setMensaje('Esa jugada no da jaque: la torre se mueve, pero el rey negro no queda atacado. Probá otra.');
+      setVolviendo(true);
+      setMensaje('Esa jugada no da jaque: la torre llega, pero el rey negro no queda atacado. Vuelve a su lugar: probá otra.');
+      temporizador.current = setTimeout(() => {
+        setTorre(CASILLA_INICIAL_TORRE);
+        setVolviendo(false);
+        setMensaje('Tocá la torre blanca y después la casilla a la que la movés para dar jaque.');
+      }, MS_ANTES_DE_VOLVER);
     }
   }
 
   return (
     <div className="flex flex-col items-center gap-3">
-      <div className="grid grid-cols-8 w-full max-w-[17rem] aspect-square rounded-lg overflow-hidden border border-outline-variant/40">
+      <div className="grid grid-cols-8 grid-rows-8 w-[min(100%,24rem,44dvh)] aspect-square rounded-lg overflow-hidden border border-outline-variant/40">
         {casillasDelTablero().map(([f, c]) => {
           const oscura = (f + c) % 2 === 1;
           const marcada = seleccionada && esDestino([f, c]);
@@ -188,15 +205,23 @@ function PuzzleJaque({ onResuelto }) {
               type="button"
               onClick={() => tocar([f, c])}
               aria-label={`Casilla fila ${8 - f}, columna ${'abcdefgh'[c]}`}
-              className={`relative flex items-center justify-center ${oscura ? 'bg-[#8b5e3c]' : 'bg-[#e8d5b0]'} ${
+              className={`relative flex items-center justify-center min-h-0 min-w-0 ${oscura ? 'bg-[#8b5e3c]' : 'bg-[#e8d5b0]'} ${
                 marcada ? 'ring-2 ring-inset ring-primary-container' : ''
-              }`}
+              } ${esRey && resuelto ? 'ring-4 ring-inset ring-error bg-error/40' : ''}`}
             >
               {marcada && (
-                <span aria-hidden="true" className="absolute w-2 h-2 rounded-full bg-primary-container/90" />
+                <span aria-hidden="true" className="absolute w-3 h-3 rounded-full bg-primary-container/90" />
               )}
-              {esTorre && <img src={rutaImagenPieza('R')} alt="" className="w-[80%] h-[80%]" />}
-              {esRey && <img src={rutaImagenPieza('k')} alt="" className="w-[80%] h-[80%]" />}
+              {esTorre && (
+                <motion.img
+                  layoutId="torre-onboarding"
+                  transition={reducir ? { duration: 0 } : { type: 'spring', stiffness: 220, damping: 26 }}
+                  src={rutaImagenPieza('R')}
+                  alt=""
+                  className="w-[94%] h-[94%] scale-[1.2]"
+                />
+              )}
+              {esRey && <img src={rutaImagenPieza('k')} alt="" className="w-[94%] h-[94%] scale-[1.2]" />}
             </button>
           );
         })}

@@ -234,3 +234,42 @@ export function flechaDeUci(uci) {
   const destino = centro(uci[2], uci[3]);
   return { x1: origen.x, y1: origen.y, x2: destino.x, y2: destino.y };
 }
+
+/**
+ * Aplica una jugada UCI ("e2e4", "e7e8q") a un FEN y devuelve el FEN resultante, solo para DIBUJAR
+ * la jugada del jugador al instante mientras el servidor la confirma. No valida que sea legal: eso lo
+ * hace el backend, y si la rechaza la pantalla vuelve al tablero anterior. Resuelve las jugadas
+ * especiales (enroque, captura al paso, coronación) y pasa el turno; no actualiza derechos de enroque,
+ * contadores ni casilla de captura al paso, que acá no se usan.
+ */
+export function aplicarJugadaUciAFen(fen, uci) {
+  if (typeof fen !== 'string' || typeof uci !== 'string' || !/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(uci)) return fen;
+  const [colocacion, turno, ...resto] = fen.split(' ');
+  const tablero = colocacion.split('/').map((fila) =>
+    [...fila].flatMap((caracter) => (/\d/.test(caracter) ? Array(Number(caracter)).fill('') : [caracter]))
+  );
+  const aCoordenadas = (casilla) => [8 - Number(casilla[1]), 'abcdefgh'.indexOf(casilla[0])];
+  const [filaOrigen, colOrigen] = aCoordenadas(uci.slice(0, 2));
+  const [filaDestino, colDestino] = aCoordenadas(uci.slice(2, 4));
+  const pieza = tablero[filaOrigen][colOrigen];
+  if (!pieza) return fen;
+
+  const esPeon = pieza.toLowerCase() === 'p';
+  const esRey = pieza.toLowerCase() === 'k';
+  // Captura al paso: un peón se mueve en diagonal a una casilla vacía y se lleva al peón que quedó al lado.
+  if (esPeon && colOrigen !== colDestino && !tablero[filaDestino][colDestino]) tablero[filaOrigen][colDestino] = '';
+  // Enroque: el rey se mueve dos columnas y la torre salta al otro lado.
+  if (esRey && Math.abs(colDestino - colOrigen) === 2) {
+    const [colTorre, colTorreDestino] = colDestino > colOrigen ? [7, colDestino - 1] : [0, colDestino + 1];
+    tablero[filaOrigen][colTorreDestino] = tablero[filaOrigen][colTorre];
+    tablero[filaOrigen][colTorre] = '';
+  }
+  tablero[filaOrigen][colOrigen] = '';
+  const coronacion = uci[4];
+  tablero[filaDestino][colDestino] = coronacion ? (pieza === pieza.toUpperCase() ? coronacion.toUpperCase() : coronacion) : pieza;
+
+  const nuevaColocacion = tablero
+    .map((fila) => fila.reduce((texto, celda) => (celda === '' ? (/\d$/.test(texto) ? texto.slice(0, -1) + (Number(texto.slice(-1)) + 1) : texto + '1') : texto + celda), ''))
+    .join('/');
+  return [nuevaColocacion, turno === 'w' ? 'b' : 'w', ...resto].join(' ');
+}

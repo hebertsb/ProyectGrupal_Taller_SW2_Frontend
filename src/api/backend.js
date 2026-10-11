@@ -25,10 +25,12 @@ async function solicitar(endpoint, opciones = {}) {
   return respuesta.json();
 }
 
-export function crearPartida(nivel, fenInicial, tipoOponente = "modelo") {
+/** `controlTiempoMs`: tiempo de reloj de cada lado para toda la partida (0 = sin reloj). */
+export function crearPartida(nivel, fenInicial, tipoOponente = "modelo", controlTiempoMs = 0) {
   const cuerpo = {
     nivel,
     tipo_oponente: tipoOponente,
+    control_tiempo_ms: controlTiempoMs,
   };
   if (fenInicial) cuerpo.fen_inicial = fenInicial;
   return solicitar("/partida", { body: JSON.stringify(cuerpo) });
@@ -85,9 +87,47 @@ export function listarPartidas() {
   return solicitar("/partida", { method: "GET" });
 }
 
-export function moverPartida(partidaId, jugada) {
-  return solicitar(`/partida/${partidaId}/mover`, {
-    body: JSON.stringify({ jugada }),
+/**
+ * `tiempos`: lo que mide la pantalla de la jugada — `tiempoJugadaMs` (cuánto tardó en decidirla, o
+ * `null` si no se midió) y `relojBlancasMs` (lo que le queda en el reloj).
+ */
+export function moverPartida(partidaId, jugada, tiempos = {}) {
+  const cuerpo = { jugada };
+  if (tiempos.tiempoJugadaMs != null) cuerpo.tiempo_jugada_ms = Math.round(tiempos.tiempoJugadaMs);
+  if (tiempos.relojBlancasMs != null) cuerpo.reloj_blancas_ms = Math.round(tiempos.relojBlancasMs);
+  return solicitar(`/partida/${partidaId}/mover`, { body: JSON.stringify(cuerpo) });
+}
+
+/**
+ * Guarda en la partida lo que le queda a cada lado en el reloj (o, antes de la primera jugada, cambia
+ * el control de tiempo). Con `alCerrar` usa `keepalive` para que el pedido salga aunque se cierre la
+ * pestaña; ese caso no espera ni devuelve respuesta.
+ */
+export function guardarRelojPartida(partidaId, { blancasMs, negrasMs, controlTiempoMs } = {}, alCerrar = false) {
+  const cuerpo = {};
+  if (blancasMs != null) cuerpo.blancas_ms = Math.round(blancasMs);
+  if (negrasMs != null) cuerpo.negras_ms = Math.round(negrasMs);
+  if (controlTiempoMs != null) cuerpo.control_tiempo_ms = controlTiempoMs;
+  if (alCerrar) {
+    const token = localStorage.getItem("access_token");
+    fetch(`/partida/${partidaId}/reloj`, {
+      method: "PUT",
+      keepalive: true,
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify(cuerpo),
+    }).catch(() => {});
+    return Promise.resolve(null);
+  }
+  return solicitar(`/partida/${partidaId}/reloj`, { method: "PUT", body: JSON.stringify(cuerpo) });
+}
+
+/**
+ * Informa que a un lado ("blancas" = el jugador, "negras" = el rival) se le acabó el reloj: la partida
+ * termina y gana el otro. El reloj corre en la pantalla; el servidor solo registra el resultado.
+ */
+export function terminarPartidaPorTiempo(partidaId, lado) {
+  return solicitar(`/partida/${partidaId}/tiempo-agotado`, {
+    body: JSON.stringify({ lado }),
   });
 }
 
