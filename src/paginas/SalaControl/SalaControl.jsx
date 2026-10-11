@@ -133,6 +133,10 @@ export default function SalaControl({
   // El facilitador no tiene nivel de jugador — ignora `nivel_estimado` por completo (no solo como
   // fallback con `??`): una cuenta de facilitador con ese campo poblado por datos viejos no debe
   // arrancar con un nivel de jugador cualquiera.
+  // El diagnóstico se completa con varias partidas (una sola mide demasiado al azar): hasta entonces el nivel es provisional.
+  const partidasDiagnostico = usuario?.partidas_diagnostico ?? 3;
+  const partidasCalibradas = usuario?.partidas_calibradas ?? 0;
+  const numeroDePartidaDiagnostico = Math.min(partidasCalibradas + 1, partidasDiagnostico);
   const nivelInicial = esFacilitador ? 20 : (usuario?.nivel_estimado ?? (diagnosticoPendiente ? NIVEL_DIAGNOSTICO : 5));
   const [nivel, setNivel] = useState(nivelInicial);
   // Control de tiempo de la próxima partida, en minutos por lado (0 = sin reloj). Se recuerda entre sesiones.
@@ -332,7 +336,7 @@ export default function SalaControl({
   const nivelPendienteDeAplicar =
     Boolean(partidaId) && configPartida != null && !seleccionBloqueada && configPartida.nivel !== nivelSeleccionado;
   const motivoBloqueoSeleccion = diagnosticoPendiente
-    ? `Partida de diagnóstico: el rival (Stockfish) y el nivel (${NIVEL_DIAGNOSTICO}) son fijos.`
+    ? `Partida de diagnóstico ${numeroDePartidaDiagnostico} de ${partidasDiagnostico}: el rival (Stockfish) y el nivel (${NIVEL_DIAGNOSTICO}) son fijos.`
     : viendoPartidaAjena
       ? 'Solo lectura: es la partida de otra persona.'
       : 'El rival y el nivel quedan fijos mientras dura la partida. Se pueden cambiar al terminarla.';
@@ -1182,7 +1186,9 @@ export default function SalaControl({
                 <span className="text-secondary font-mono-micro px-2 py-0.5 rounded bg-secondary/10 font-medium">
                   PERFIL:{' '}
                   {diagnosticoPendiente
-                    ? 'SIN MEDIR'
+                    ? partidasCalibradas > 0 && usuario.rango_estimado
+                      ? `PROVISIONAL (${usuario.rango_estimado.toUpperCase()})`
+                      : 'SIN MEDIR'
                     : usuario.rango_estimado
                       ? usuario.rango_estimado.toUpperCase()
                       : `NIVEL ${usuario.nivel_estimado ?? 5}`}
@@ -1235,11 +1241,13 @@ export default function SalaControl({
           </span>
           <div className="flex flex-col gap-space-2xs min-w-0">
             <h2 id="titulo-partida-diagnostico" className="font-headline-sm text-headline-sm text-on-surface">
-              Partida de diagnóstico
+              Partida de diagnóstico {numeroDePartidaDiagnostico} de {partidasDiagnostico}
             </h2>
             <p className="font-body-sm text-body-sm text-on-surface-variant">
-              Juega tu primera partida contra Stockfish (nivel {NIVEL_DIAGNOSTICO}): al terminarla el sistema mide tu
-              nivel comparando tus jugadas con las de Stockfish, y Turing y tus próximas partidas se ajustan a él.
+              Para medir tu nivel con fiabilidad se juegan {partidasDiagnostico} partidas contra Stockfish (nivel{' '}
+              {NIVEL_DIAGNOSTICO}): una sola depende demasiado del azar. Al terminar cada una el sistema compara tus
+              jugadas con las de Stockfish y te muestra un nivel provisional; al completar las {partidasDiagnostico}{' '}
+              queda confirmado, y Turing y tus próximas partidas se ajustan a él.
             </p>
           </div>
         </section>

@@ -86,6 +86,11 @@ export default function AvisoNivelCalculado({ resultado, alCerrar, alVerProgreso
   );
 
   const esDiagnostico = Boolean(resultado?.es_diagnostico);
+  // Las primeras partidas son de diagnóstico: hasta la última el nivel es provisional.
+  const numeroDiagnostico = resultado?.partida_diagnostico ?? null;
+  const totalDiagnostico = resultado?.partidas_diagnostico ?? 3;
+  const esProvisional = esDiagnostico && numeroDiagnostico != null && numeroDiagnostico < totalDiagnostico;
+  const partidasQueFaltan = totalDiagnostico - (numeroDiagnostico ?? totalDiagnostico);
   const nivel = typeof resultado?.nivel === 'number' ? resultado.nivel : null;
   const rango = resultado?.rango ?? null;
   const cambio = describirCambioNivel(resultado);
@@ -94,8 +99,18 @@ export default function AvisoNivelCalculado({ resultado, alCerrar, alVerProgreso
   const partidasConsideradas = resultado?.partidas_consideradas ?? 0;
   const mostrarPromedio = partidasConsideradas > 1 && precisionPromedio != null;
 
-  const titulo = esDiagnostico ? 'Tu nivel inicial' : cambio ? 'Tu nivel se actualizó' : 'Tu nivel se mantiene';
-  const etiqueta = esDiagnostico ? 'Diagnóstico completado' : 'Partida analizada';
+  const titulo = esProvisional
+    ? 'Tu nivel provisional'
+    : esDiagnostico
+      ? 'Tu nivel inicial'
+      : cambio
+        ? 'Tu nivel se actualizó'
+        : 'Tu nivel se mantiene';
+  const etiqueta = esProvisional
+    ? `Diagnóstico ${numeroDiagnostico} de ${totalDiagnostico}`
+    : esDiagnostico
+      ? 'Diagnóstico completado'
+      : 'Partida analizada';
 
   return (
     <div
@@ -178,8 +193,12 @@ export default function AvisoNivelCalculado({ resultado, alCerrar, alVerProgreso
         )}
 
         <p id="descripcion-aviso-nivel" className="aviso-nivel-bloque font-body-sm text-body-sm text-on-surface-variant">
-          Se calcula comparando tus jugadas con las de Stockfish. Turing y tus próximas partidas se ajustan a este
-          nivel.
+          Se calcula comparando tus jugadas con las de Stockfish.{' '}
+          {esProvisional
+            ? `Es una estimación: con una sola partida pesa mucho el azar. Juega ${partidasQueFaltan} ${
+                partidasQueFaltan === 1 ? 'partida más' : 'partidas más'
+              } de diagnóstico para confirmarlo.`
+            : 'Turing y tus próximas partidas se ajustan a este nivel.'}
         </p>
 
         <div className="aviso-nivel-bloque flex flex-col-reverse sm:flex-row sm:justify-end gap-space-xs">

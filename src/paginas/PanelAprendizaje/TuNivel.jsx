@@ -77,7 +77,8 @@ export default function TuNivel({
     { scope: raizRef, dependencies: [datos] }
   );
 
-  const sinMedir = datos != null && (datos.diagnostico_completado === false || datos.nivel_estimado == null);
+  // Sin medir = ninguna partida calibrada todavía. Con 1 o 2 hay un nivel provisional, que sí se muestra.
+  const sinMedir = datos != null && (datos.nivel_estimado == null || (datos.partidas_calibradas ?? 0) === 0);
 
   return (
     <div ref={raizRef} className="flex flex-col gap-space-md">
@@ -96,7 +97,11 @@ export default function TuNivel({
         />
       )}
 
-      {sinMedir && <SinMedir alIrASalaControl={alIrASalaControl} claseTexto={claseTextoContenido} />}
+      {sinMedir && <SinMedir
+          alIrASalaControl={alIrASalaControl}
+          claseTexto={claseTextoContenido}
+          partidasDiagnostico={datos?.partidas_diagnostico ?? 3}
+        />}
 
       {datos && !sinMedir && <NivelMedido datos={datos} claseTexto={claseTextoContenido} />}
     </div>
@@ -144,7 +149,7 @@ function ErrorNivel({ error, rangoGuardado, alReintentar }) {
   );
 }
 
-function SinMedir({ alIrASalaControl, claseTexto }) {
+function SinMedir({ alIrASalaControl, claseTexto, partidasDiagnostico = 3 }) {
   return (
     <div className="tu-nivel-bloque rounded-xl bg-primary/10 border border-primary/30 p-space-md flex flex-col gap-space-sm">
       <div className="flex items-start gap-space-sm">
@@ -154,8 +159,9 @@ function SinMedir({ alIrASalaControl, claseTexto }) {
         <div className="flex flex-col gap-space-2xs min-w-0">
           <h3 className="font-headline-sm text-headline-sm text-on-surface">Nivel sin medir</h3>
           <p className={`${claseTexto} text-on-surface-variant`}>
-            Todavía no medimos tu nivel. Juega tu partida de diagnóstico en la Sala de Control (contra Stockfish, nivel{' '}
-            {NIVEL_DIAGNOSTICO}).
+            Todavía no medimos tu nivel. Juega tus partidas de diagnóstico en la Sala de Control (contra Stockfish, nivel{' '}
+            {NIVEL_DIAGNOSTICO}): después de cada una verás un nivel provisional, y con las {partidasDiagnostico} queda
+            confirmado.
           </p>
         </div>
       </div>
@@ -186,9 +192,26 @@ function NivelMedido({ datos, claseTexto }) {
   const hayNivelesSoloStockfish = Object.values(bandas).some(([, hasta]) => hasta > nivelMaxModelo);
   const promedio = precisionAPorcentaje(datos.precision_promedio);
   const partidasCalibradas = datos.partidas_calibradas ?? 0;
+  const partidasDiagnostico = datos.partidas_diagnostico ?? 3;
+  const esProvisional = datos.diagnostico_completado === false;
 
   return (
     <>
+      {esProvisional && (
+        <div
+          role="status"
+          className="tu-nivel-bloque rounded-xl bg-tertiary-container/20 border border-tertiary-container/50 p-space-sm flex items-start gap-space-xs"
+        >
+          <span className="material-symbols-outlined text-[20px] text-tertiary shrink-0" aria-hidden="true">
+            hourglass_top
+          </span>
+          <p className={`${claseTexto} text-on-surface m-0`}>
+            <strong>Nivel provisional:</strong> llevas {partidasCalibradas} de {partidasDiagnostico} partidas de
+            diagnóstico. Una sola partida mide demasiado al azar; al completar las {partidasDiagnostico} el nivel queda
+            confirmado.
+          </p>
+        </div>
+      )}
       {/* Encabezado: nivel y rango medidos */}
       <div className="tu-nivel-bloque rounded-xl bg-primary/10 border border-primary/30 p-space-md flex items-center gap-space-md">
         <div className="w-14 h-14 shrink-0 rounded-full bg-surface-container-lowest border-2 border-primary text-primary flex items-center justify-center">
