@@ -6,6 +6,7 @@ import { useRazonamiento } from '../../contexto/ContextoRazonamiento';
 import CerebroNeuronal from './CerebroNeuronal';
 import CerebroRed from './CerebroRed';
 import AnalisisRedPartida from './AnalisisRedPartida';
+import PanelCalculoTuring from './PanelCalculoTuring';
 
 // Las tres posiciones quedan con NEGRAS a mover a propósito: en Sala de Control el jugador
 // siempre abre con blancas, así que Turing (cuando es el rival) solo le toca responder con
@@ -392,6 +393,10 @@ export default function RazonamientoNeuronal() {
   const latenciaMs = inferenciaVigente?.latencia_ms ?? null;
   const latenciaFormateada = latenciaMs !== null ? `${latenciaMs.toFixed(1)} ms` : estaAnalizando ? '…' : '—';
   const top1 = candidatas[0] ?? null;
+  // Cómo decidió Turing: la red propone y la búsqueda de variantes calcula. La jugada elegida puede no ser la top-1
+  // de la red (si el cálculo la corrige), así que la confianza que se muestra es la de la jugada que de verdad se juega.
+  const calculo = inferenciaVigente?.calculo ?? null;
+  const probabilidadElegida = calculo?.candidatas.find((c) => c.elegida)?.probabilidad ?? top1?.probabilidad ?? null;
   // De quién es la partida que se está mirando: la lista de estudiantes (rol jugador) ya está
   // cargada; si el dueño no está ahí, es el facilitador. Sin lista no se afirma nada.
   const rolDuenoPartida =
@@ -817,7 +822,7 @@ export default function RazonamientoNeuronal() {
                     <li className="flex items-center gap-1"><span className="w-3 border-t-2 border-dashed border-white" aria-hidden="true" />Jugada real</li>
                   )}
                   {flechaTuring && (
-                    <li className="flex items-center gap-1"><span className="w-3 border-t-2 border-neon-lime" aria-hidden="true" />Elige la red</li>
+                    <li className="flex items-center gap-1"><span className="w-3 border-t-2 border-neon-lime" aria-hidden="true" />Elige Turing</li>
                   )}
                   {flechaStockfish && (
                     <li className="flex items-center gap-1"><span className="w-3 border-t-2 border-neon-orange" aria-hidden="true" />Stockfish</li>
@@ -956,7 +961,7 @@ export default function RazonamientoNeuronal() {
                       <span className="font-mono-micro text-[10px] uppercase text-neon-lime font-bold tracking-wider">Selección Motora (real)</span>
                       <span className="font-mono-micro text-[11px] text-on-surface font-semibold">
                         {inferenciaVigente.jugada_elegida}
-                        {top1 ? ` (${(top1.probabilidad * 100).toFixed(0)}% conf.)` : ''}
+                        {probabilidadElegida !== null ? ` (${(probabilidadElegida * 100).toFixed(0)}% de la red)` : ''}
                         {evalModelo != null ? ` · ${formatearCp(evalModelo)}` : ''}
                       </span>
                     </div>
@@ -1051,6 +1056,9 @@ export default function RazonamientoNeuronal() {
             </div>
           </section>
 
+          {/* ===== Cálculo de Turing: la red propone y el cálculo de variantes decide — datos reales ===== */}
+          <PanelCalculoTuring calculo={calculo} analizando={estaAnalizando} />
+
           {/* ===== Candidatas de Turing: detalle táctico de las 3 candidatas reales de la red
               + evaluación puntual de Stockfish para cada una — colapsable, real ===== */}
           <section className="bg-surface-container/70 border border-outline-variant/30 rounded-xl shadow-md overflow-hidden">
@@ -1071,7 +1079,7 @@ export default function RazonamientoNeuronal() {
                     {inferenciaVigente ? (
                       <>
                         Turing jugó <span className="text-neon-cyan font-semibold">{inferenciaVigente.jugada_elegida}</span>
-                        {top1 ? ` (${(top1.probabilidad * 100).toFixed(1)}%)` : ''}
+                        {probabilidadElegida !== null ? ` (${(probabilidadElegida * 100).toFixed(1)}%)` : ''}
                         {cmp && (
                           <>
                             {' · '}Stockfish <span className="text-tertiary-container font-semibold">{cmp.jugada_motor}</span>{' '}
