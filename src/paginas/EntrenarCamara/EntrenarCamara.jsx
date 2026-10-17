@@ -435,6 +435,10 @@ export default function EntrenarCamara({ onVolver }) {
                 {errorFoto}
               </p>
             )}
+            <p className="font-body-sm text-body-sm text-on-surface-variant">
+              Revisá la imagen de control: si el tablero no muestra las piezas, borrá la captura, porque se guardaría
+              con etiquetas equivocadas.
+            </p>
             {urlControl && (
               <figure className="flex flex-col gap-space-xs m-0">
                 <img

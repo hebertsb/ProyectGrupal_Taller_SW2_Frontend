@@ -354,8 +354,10 @@ export async function obtenerFotoVision(grilla = false) {
  * colocación de piezas que el facilitador armó (`fenPiezas`, solo la parte de piezas del FEN).
  * Devuelve `{captura_id, guardadas, total}`; 422 = FEN inválido o tablero no detectado, 503 = cámara.
  */
-export function guardarFotoDataset(fenPiezas) {
-  return solicitar("/vision/dataset/foto", { method: "POST", body: JSON.stringify({ fen_piezas: fenPiezas }) });
+export function guardarFotoDataset(fenPiezas, soloPiezas = false) {
+  const cuerpo = { fen_piezas: fenPiezas };
+  if (soloPiezas) cuerpo.solo_piezas = true; // guarda solo las casillas ocupadas, sin "vacía"
+  return solicitar("/vision/dataset/foto", { method: "POST", body: JSON.stringify(cuerpo) });
 }
 
 /** POST multipart con token. No fija Content-Type: el navegador agrega el boundary solo. */

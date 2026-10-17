@@ -372,3 +372,37 @@ export function colocacionValida(texto) {
   }
   return colocacion;
 }
+
+const PIEZA_A_LETRA_FEN = { pawn: "p", knight: "n", bishop: "b", rook: "r", queen: "q", king: "k" };
+
+/** Letra FEN de una clase del dataset ("white-knight" -> "N", "black-queen" -> "q"); null si no es una pieza. */
+export function letraFenDeClase(clase) {
+  const [color, pieza] = String(clase).split("-");
+  const letra = PIEZA_A_LETRA_FEN[pieza];
+  if (!letra || (color !== "white" && color !== "black")) return null;
+  return color === "white" ? letra.toUpperCase() : letra;
+}
+
+/**
+ * Parte de piezas de un FEN con SOLO `letra` en las `casillas` dadas (["c3", "f3"]); el resto, dígitos.
+ */
+export function fenSoloPieza(letra, casillas) {
+  const marcadas = new Set(casillas);
+  const filas = [];
+  for (let fila = 0; fila < 8; fila += 1) {
+    let texto = "";
+    let vacias = 0;
+    for (let columna = 0; columna < 8; columna += 1) {
+      if (marcadas.has(nombreCasilla(fila, columna))) {
+        if (vacias > 0) texto += vacias;
+        vacias = 0;
+        texto += letra;
+      } else {
+        vacias += 1;
+      }
+    }
+    if (vacias > 0) texto += vacias;
+    filas.push(texto);
+  }
+  return filas.join("/");
+}

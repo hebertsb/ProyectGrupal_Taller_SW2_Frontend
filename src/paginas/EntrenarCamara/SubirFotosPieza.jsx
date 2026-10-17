@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { subirFotosPieza } from '../../api/backend';
 import { reducirImagen } from '../../imagen';
+import CapturaPorDamero from './CapturaPorDamero';
 
 const MAX_FOTOS = 20;
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -172,6 +173,10 @@ export default function SubirFotosPieza({ porClase, minimoPorClase, onSubido }) 
       </div>
       {clases.length === 0 && (
         <p className="font-body-sm text-body-sm text-on-surface-variant">Cargando las clases…</p>
+      )}
+
+      {clase && clase !== 'vacia' && (
+        <CapturaPorDamero clase={clase} nombre={nombreClase(clase)} onGuardado={onSubido} />
       )}
 
       <div className="flex flex-col gap-space-xs">
