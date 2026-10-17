@@ -358,6 +358,45 @@ export function guardarFotoDataset(fenPiezas) {
   return solicitar("/vision/dataset/foto", { method: "POST", body: JSON.stringify({ fen_piezas: fenPiezas }) });
 }
 
+/** POST multipart con token. No fija Content-Type: el navegador agrega el boundary solo. */
+async function solicitarFormulario(endpoint, formulario) {
+  const token = localStorage.getItem("access_token");
+  const headers = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const respuesta = await fetch(endpoint, { method: "POST", headers, body: formulario });
+  if (!respuesta.ok) {
+    const detalle = await respuesta.json().catch(() => null);
+    const texto = typeof detalle?.detail === "string" ? detalle.detail : null;
+    const error = new Error(texto ?? (respuesta.status === 413 ? "la imagen es demasiado grande" : `Error ${respuesta.status}`));
+    error.status = respuesta.status;
+    throw error;
+  }
+  return respuesta.json();
+}
+
+/**
+ * Sube fotos sueltas de una sola pieza (o casilla vacía) a una clase del dataset.
+ * `fotos` es una lista de File/Blob. Devuelve `{guardadas, total_clase}`; 422 = clase inválida o
+ * imagen ilegible, 413 = muy grande.
+ */
+export function subirFotosPieza(clase, fotos) {
+  const formulario = new FormData();
+  formulario.append("clase", clase);
+  fotos.forEach((foto) => formulario.append("fotos", foto, foto.name || "foto.jpg"));
+  return solicitarFormulario("/vision/dataset/pieza", formulario);
+}
+
+/**
+ * Sube una foto del tablero entero (hecha a mano) etiquetada con la colocación de piezas del FEN.
+ * Devuelve `{captura_id, guardadas, total}`; 422 = FEN inválido o tablero no detectado, 413 = muy grande.
+ */
+export function subirFotoTablero(fenPiezas, foto) {
+  const formulario = new FormData();
+  formulario.append("fen_piezas", fenPiezas);
+  formulario.append("foto", foto, foto.name || "tablero.jpg");
+  return solicitarFormulario("/vision/dataset/foto-tablero", formulario);
+}
+
 /**
  * Imagen de control (foto enderezada con grilla) de la última captura. Va con fetch y token
  * porque <img src> no manda Authorization. Devuelve un object URL; quien lo use debe revocarlo.

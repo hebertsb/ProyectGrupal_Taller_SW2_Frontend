@@ -6,7 +6,10 @@ import {
   obtenerResumenDataset,
   obtenerUrlControlDataset,
   reentrenarClasificador,
+  subirFotoTablero,
 } from '../../api/backend';
+import SubirFotosPieza from './SubirFotosPieza';
+import { reducirImagen } from '../../imagen';
 import TableroSoloLectura from '../../componentes/TableroSoloLectura';
 import { aplicarJugadaUciAFen, colocacionValida, POSICION_INICIAL_FEN, sanAUci } from '../../ajedrez';
 
@@ -65,6 +68,7 @@ export default function EntrenarCamara({ onVolver }) {
   const [errorFoto, setErrorFoto] = useState(null);
   const [borrando, setBorrando] = useState(false);
   const [mensajeFoto, setMensajeFoto] = useState(null);
+  const [subiendoTablero, setSubiendoTablero] = useState(false);
   const urlControlRef = useRef(null);
   const montadoRef = useRef(true);
   const temporizadorCuentaRef = useRef(null);
@@ -218,6 +222,36 @@ export default function EntrenarCamara({ onVolver }) {
     temporizadorCuentaRef.current = setTimeout(tic, 1000);
   }
 
+  async function subirFotoDeTablero(evento) {
+    const archivo = evento.target.files?.[0];
+    evento.target.value = '';
+    if (!archivo) return;
+    setSubiendoTablero(true);
+    setErrorFoto(null);
+    setMensajeFoto(null);
+    try {
+      const foto = await reducirImagen(archivo);
+      const respuesta = await subirFotoTablero(fen.split(' ')[0], foto);
+      if (!montadoRef.current) return;
+      setUltimaCaptura(respuesta);
+      setMensajeFoto(`Foto subida: ${respuesta.guardadas} muestras nuevas.`);
+      try {
+        reemplazarUrlControl(await obtenerUrlControlDataset());
+      } catch (e) {
+        if (montadoRef.current) setErrorFoto(`La foto se guardó, pero no se pudo mostrar la imagen de control: ${e.message}`);
+      }
+      await cargarResumen();
+    } catch (e) {
+      if (!montadoRef.current) return;
+      if (e.status === 413) setErrorFoto('La foto es demasiado grande (máximo 10 MB).');
+      else if (e.status === 422) {
+        setErrorFoto(`No se pudo usar la foto: ${e.message}. Revisá que se vea el tablero completo y que la posición en pantalla sea la que armaste.`);
+      } else setErrorFoto(e.message);
+    } finally {
+      if (montadoRef.current) setSubiendoTablero(false);
+    }
+  }
+
   async function borrarCaptura() {
     if (!ultimaCaptura) return;
     setBorrando(true);
@@ -259,7 +293,7 @@ export default function EntrenarCamara({ onVolver }) {
   const porcentaje = Math.min(100, Math.round((total / meta) * 100));
   const clases = resumen ? Object.entries(resumen.por_clase) : [];
   const minimoPorClase = clases.length > 0 ? meta / clases.length : 0;
-  const ocupadaFoto = cuenta !== null || guardando || borrando;
+  const ocupadaFoto = cuenta !== null || guardando || borrando || subiendoTablero;
   const turnoBlancas = fen.split(' ')[1] !== 'b';
 
   return (
@@ -372,6 +406,20 @@ export default function EntrenarCamara({ onVolver }) {
                 {guardando ? 'Guardando…' : 'Sacar foto'}
               </span>
             </button>
+            <div className="flex flex-col gap-space-xs">
+              <label htmlFor="subir-tablero" className="font-body-sm text-body-sm text-on-surface">
+                o subir foto del tablero (usa la posición que ves en pantalla)
+              </label>
+              <input
+                id="subir-tablero"
+                type="file"
+                accept="image/*"
+                onChange={subirFotoDeTablero}
+                disabled={ocupadaFoto}
+                className="min-h-[44px] w-full min-w-0 font-body-sm text-body-sm text-on-surface disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              />
+              {subiendoTablero && <p className="font-body-sm text-body-sm text-on-surface-variant">Subiendo…</p>}
+            </div>
             <div aria-live="polite" className="min-h-[1.5rem]">
               {cuenta !== null && (
                 <p className="font-body-md text-body-md text-on-surface">
@@ -408,6 +456,9 @@ export default function EntrenarCamara({ onVolver }) {
               </button>
             )}
           </section>
+
+          {/* 2b. Fotos por pieza */}
+          <SubirFotosPieza porClase={resumen?.por_clase} minimoPorClase={minimoPorClase} onSubido={cargarResumen} />
 
           {/* 3. Progreso */}
           <section className={CLASE_TARJETA} aria-labelledby="titulo-progreso">
