@@ -13,6 +13,8 @@ import PanelAprendizaje from './paginas/PanelAprendizaje/PanelAprendizaje';
 import Onboarding from './paginas/Onboarding/Onboarding';
 import DemostracionEnVivo from './paginas/DemostracionEnVivo/DemostracionEnVivo';
 import Monitoreo from './paginas/Monitoreo/Monitoreo';
+import CamaraBrazo from './paginas/CamaraBrazo/CamaraBrazo';
+import EntrenarCamara from './paginas/EntrenarCamara/EntrenarCamara';
 import ConfiguracionEnsenanza from './paginas/ConfiguracionEnsenanza/ConfiguracionEnsenanza';
 import EntrenamientoModelo from './paginas/EntrenamientoModelo/EntrenamientoModelo';
 import Perfil from './paginas/Perfil/Perfil';
@@ -322,6 +324,11 @@ export default function App() {
                 </button>
               )}
               {esFacilitador && (
+                <button onClick={() => setPantallaActiva('camaraBrazo')} className={navClasses('camaraBrazo')}>
+                  <span className="material-symbols-outlined text-[18px]">videocam</span>Cámara y Brazo
+                </button>
+              )}
+              {esFacilitador && (
                 <button onClick={() => setPantallaActiva('admin')} className={navClasses('admin')}>
                   <span className="material-symbols-outlined text-[18px]">tune</span>Administración
                 </button>
@@ -439,6 +446,9 @@ export default function App() {
                 )}
                 {esFacilitador && (
                   <button onClick={() => setPantallaActiva('monitoreo')} className={headerNavClasses('monitoreo')}>MONITOREO</button>
+                )}
+                {esFacilitador && (
+                  <button onClick={() => setPantallaActiva('camaraBrazo')} className={headerNavClasses('camaraBrazo')}>CÁMARA Y BRAZO</button>
                 )}
                 {esFacilitador && (
                   <button onClick={() => setPantallaActiva('admin')} className={headerNavClasses('admin')}>ADMINISTRACIÓN</button>
@@ -593,6 +603,23 @@ export default function App() {
                 alClickBoton={() => setPantallaActiva('registro')}
               />
             )
+          )}
+          {pantallaActiva === 'camaraBrazo' && (
+            esFacilitador ? (
+              <CamaraBrazo partidaActivaId={partidaActivaId} onPartidaActivaChange={setPartidaActivaId} onEntrenarCamara={() => setPantallaActiva('entrenarCamara')} />
+            ) : (
+              <AccesoRestringido
+                icono="smartphone"
+                colorIcono="text-primary"
+                titulo="Esta vista es para tu facilitador"
+                mensaje="La pantalla de Cámara y Brazo es un panel técnico para tu facilitador. Para jugar y aprender desde tu celular, usá la app móvil."
+                textoBoton="Ir a Registro de Partidas"
+                alClickBoton={() => setPantallaActiva('registro')}
+              />
+            )
+          )}
+          {pantallaActiva === 'entrenarCamara' && esFacilitador && (
+            <EntrenarCamara onVolver={() => setPantallaActiva('camaraBrazo')} />
           )}
           {pantallaActiva === 'ensenanza' && (
             esFacilitador ? (

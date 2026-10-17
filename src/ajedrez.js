@@ -273,3 +273,102 @@ export function aplicarJugadaUciAFen(fen, uci) {
     .join('/');
   return [nuevaColocacion, turno === 'w' ? 'b' : 'w', ...resto].join(' ');
 }
+
+
+const VECTORES_PIEZA = {
+  n: [[1, 2], [2, 1], [2, -1], [1, -2], [-1, -2], [-2, -1], [-2, 1], [-1, 2]],
+  b: [[1, 1], [1, -1], [-1, 1], [-1, -1]],
+  r: [[1, 0], [-1, 0], [0, 1], [0, -1]],
+  q: [[1, 1], [1, -1], [-1, 1], [-1, -1], [1, 0], [-1, 0], [0, 1], [0, -1]],
+  k: [[1, 1], [1, -1], [-1, 1], [-1, -1], [1, 0], [-1, 0], [0, 1], [0, -1]],
+};
+
+/**
+ * Traduce una jugada en notación SAN ("e4", "Nf3", "exd5", "O-O", "e8=Q") a UCI ("e2e4") para el
+ * FEN dado, usando solo geometría de movimiento y casillas bloqueadas. No verifica clavadas ni
+ * jaques (el facilitador mueve piezas reales, así que la jugada ya es legal): sirve para dibujar y
+ * etiquetar. Devuelve `{ uci }` o `{ error }` con un mensaje en español.
+ */
+export function sanAUci(fen, san) {
+  const limpio = String(san ?? '').trim().replace(/[+#!?]+$/g, '').replace(/0/g, 'O');
+  if (!limpio) return { error: 'Escribí una jugada.' };
+  const blancas = turnoDeFen(fen) === 'w';
+  const matriz = fenAMatriz(fen);
+  const colorPropio = (pieza) => pieza && (pieza === pieza.toUpperCase()) === blancas;
+  const en = (fila, col) => (fila >= 0 && fila < 8 && col >= 0 && col < 8 ? matriz[fila][col] : undefined);
+
+  if (/^O-O(-O)?$/.test(limpio)) {
+    const fila = blancas ? 7 : 0;
+    if (en(fila, 4)?.toLowerCase() !== 'k' || !colorPropio(en(fila, 4))) return { error: 'El rey no está en su casilla inicial para enrocar.' };
+    return { uci: nombreCasilla(fila, 4) + nombreCasilla(fila, limpio === 'O-O' ? 6 : 2) };
+  }
+
+  const m = limpio.match(/^([NBRQK])?([a-h])?([1-8])?x?([a-h][1-8])(?:=?([QRBN]))?$/);
+  if (!m) return { error: `No entiendo «${san}». Usá notación como e4, Nf3, exd5 u O-O.` };
+  const tipo = (m[1] ?? 'P').toLowerCase();
+  const colOrigen = m[2] ? 'abcdefgh'.indexOf(m[2]) : null;
+  const filaOrigen = m[3] ? 8 - Number(m[3]) : null;
+  const destCol = 'abcdefgh'.indexOf(m[4][0]);
+  const destFila = 8 - Number(m[4][1]);
+  if (colorPropio(en(destFila, destCol))) return { error: `En ${m[4]} ya hay una pieza propia.` };
+
+  const candidatas = [];
+  for (let f = 0; f < 8; f++) {
+    for (let c = 0; c < 8; c++) {
+      const pieza = en(f, c);
+      if (!pieza || !colorPropio(pieza) || pieza.toLowerCase() !== tipo) continue;
+      if (colOrigen !== null && c !== colOrigen) continue;
+      if (filaOrigen !== null && f !== filaOrigen) continue;
+      if (llegaPieza(tipo, f, c, destFila, destCol, blancas, en, limpio.includes('x'))) candidatas.push([f, c]);
+    }
+  }
+  if (candidatas.length === 0) return { error: `Ninguna pieza puede hacer «${san}» en esta posición.` };
+  if (candidatas.length > 1) return { error: `«${san}» es ambigua: indicá la columna o fila de origen (ej. Nbd2).` };
+  const [f, c] = candidatas[0];
+  let uci = nombreCasilla(f, c) + nombreCasilla(destFila, destCol);
+  if (tipo === 'p' && (destFila === 0 || destFila === 7)) uci += (m[5] ?? 'Q').toLowerCase();
+  return { uci };
+}
+
+function llegaPieza(tipo, f, c, destFila, destCol, blancas, en, esCaptura) {
+  const df = destFila - f;
+  const dc = destCol - c;
+  if (tipo === 'p') {
+    const paso = blancas ? -1 : 1;
+    if (dc === 0) {
+      if (en(destFila, destCol)) return false;
+      if (df === paso) return true;
+      const filaInicial = blancas ? 6 : 1;
+      return f === filaInicial && df === 2 * paso && !en(f + paso, c);
+    }
+    // Captura en diagonal (la captura al paso llega a casilla vacía; se acepta).
+    return esCaptura && Math.abs(dc) === 1 && df === paso;
+  }
+  if (tipo === 'n' || tipo === 'k') {
+    return VECTORES_PIEZA[tipo].some(([vf, vc]) => vf === df && vc === dc);
+  }
+  for (const [vf, vc] of VECTORES_PIEZA[tipo]) {
+    let ff = f + vf;
+    let cc = c + vc;
+    while (ff >= 0 && ff < 8 && cc >= 0 && cc < 8) {
+      if (ff === destFila && cc === destCol) return true;
+      if (en(ff, cc)) break;
+      ff += vf;
+      cc += vc;
+    }
+  }
+  return false;
+}
+
+/** Parte de piezas de un FEN (sin turno ni derechos) o `null` si no es una colocación válida de 8x8. */
+export function colocacionValida(texto) {
+  const colocacion = String(texto ?? '').trim().split(/\s+/)[0];
+  const filas = colocacion.split('/');
+  if (filas.length !== 8) return null;
+  for (const fila of filas) {
+    if (!/^[pnbrqkPNBRQK1-8]+$/.test(fila)) return null;
+    const ancho = [...fila].reduce((suma, ch) => suma + (/\d/.test(ch) ? Number(ch) : 1), 0);
+    if (ancho !== 8) return null;
+  }
+  return colocacion;
+}

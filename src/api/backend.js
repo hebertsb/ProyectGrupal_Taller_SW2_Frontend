@@ -300,6 +300,103 @@ export async function obtenerUrlGrillaDebug(archivoFoto) {
   return URL.createObjectURL(blob);
 }
 
+/** Estado de la cámara fija: {fuente, disponible, ancho, alto, latencia_ms, error}. */
+export function obtenerEstadoVision() {
+  return solicitar("/vision/estado", { method: "GET" });
+}
+
+/**
+ * Calibración del tablero: `{calibrada, esquinas}` con esquinas
+ * `{a1, h1, h8, a8}` como `[x, y]` en píxeles de la foto de GET /vision/foto
+ * (o `null` si no hay calibración).
+ */
+export function obtenerCalibracionTablero() {
+  return solicitar("/vision/calibracion", { method: "GET" });
+}
+
+/** Guarda las 4 esquinas; si el backend las rechaza (422) el error trae su `detail`. */
+export function guardarCalibracionTablero(esquinas) {
+  return solicitar("/vision/calibracion", { method: "PUT", body: JSON.stringify({ esquinas }) });
+}
+
+/** Quita la calibración y vuelve a la detección automática. */
+export function quitarCalibracionTablero() {
+  return solicitar("/vision/calibracion", { method: "DELETE" });
+}
+
+/**
+ * Foto actual de la cámara (o con la grilla de depuración dibujada si
+ * `grilla` es true). Va con fetch y token porque <img src> no manda el header
+ * Authorization. Devuelve `{ url, blob }`: `url` es un object URL para el <img>
+ * (quien lo use debe revocarlo con `URL.revokeObjectURL`) y `blob` sirve para
+ * reenviar la misma foto a `reconocerTablero`.
+ */
+export async function obtenerFotoVision(grilla = false) {
+  const token = localStorage.getItem("access_token");
+  const headers = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  const respuesta = await fetch(`/vision/foto?grilla=${grilla ? "true" : "false"}`, {
+    headers,
+    cache: "no-store",
+  });
+  if (!respuesta.ok) {
+    const detalle = await respuesta.json().catch(() => null);
+    throw new Error(detalle?.detail ?? `Error ${respuesta.status}`);
+  }
+  const blob = await respuesta.blob();
+  return { url: URL.createObjectURL(blob), blob };
+}
+
+/**
+ * Entrenar cámara: junta muestras etiquetadas del tablero real. Guarda una captura con la
+ * colocación de piezas que el facilitador armó (`fenPiezas`, solo la parte de piezas del FEN).
+ * Devuelve `{captura_id, guardadas, total}`; 422 = FEN inválido o tablero no detectado, 503 = cámara.
+ */
+export function guardarFotoDataset(fenPiezas) {
+  return solicitar("/vision/dataset/foto", { method: "POST", body: JSON.stringify({ fen_piezas: fenPiezas }) });
+}
+
+/**
+ * Imagen de control (foto enderezada con grilla) de la última captura. Va con fetch y token
+ * porque <img src> no manda Authorization. Devuelve un object URL; quien lo use debe revocarlo.
+ * `?t=` evita que el navegador reutilice una imagen anterior.
+ */
+export async function obtenerUrlControlDataset() {
+  const token = localStorage.getItem("access_token");
+  const headers = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const respuesta = await fetch(`/vision/dataset/control?t=${Date.now()}`, { headers, cache: "no-store" });
+  if (!respuesta.ok) throw await errorDeRespuesta(respuesta);
+  return URL.createObjectURL(await respuesta.blob());
+}
+
+/** Contadores del dataset: `{por_clase: {clase: n}, total, capturas, minimo_recomendado}`. */
+export function obtenerResumenDataset() {
+  return solicitar("/vision/dataset/resumen", { method: "GET" });
+}
+
+/** Borra una captura entera (todas sus muestras). Devuelve `{borradas}`. */
+export function borrarCapturaDataset(capturaId) {
+  return solicitar(`/vision/dataset/captura/${encodeURIComponent(capturaId)}`, { method: "DELETE" });
+}
+
+/** Inicia el reentrenamiento del clasificador. 409 = ya hay uno corriendo, 400 = pocas muestras. */
+export function reentrenarClasificador() {
+  return solicitar("/vision/dataset/reentrenar", { method: "POST" });
+}
+
+/** Estado del reentrenamiento: `{estado: "inactivo"|"en_curso"|"terminado"|"error", log}`. */
+export function obtenerEstadoReentrenamiento() {
+  return solicitar("/vision/dataset/reentrenar/estado", { method: "GET" });
+}
+
+/** Estado del brazo: {modo: "simulado"|"real", host, conectado: bool|null, ultima_jugada}. */
+export function obtenerEstadoBrazo() {
+  return solicitar("/brazo/estado", { method: "GET" });
+}
+
 /** Health check del backend — sin auth para que funcione antes de login */
 export async function backendEnLinea() {
   try {
