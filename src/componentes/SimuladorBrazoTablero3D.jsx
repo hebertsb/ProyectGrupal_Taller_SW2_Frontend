@@ -9,11 +9,15 @@ import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { fenAMatriz, nombreCasilla } from '../ajedrez';
 
 // Constantes métricas del mundo 3D
-const TAM_CASILLA = 0.65;
-const ANCHO_TABLERO = TAM_CASILLA * 8; // 5.2
-const ALTO_BASE_TABLERO = 0.22;
+const TAM_CASILLA = 0.50;
+const ANCHO_TABLERO = TAM_CASILLA * 8; // 4.0
+const ALTO_BASE_TABLERO = 0.20;
 const LONG_L1 = 3.6; // Brazo Dobot CR5AS
 const LONG_L2 = 3.4; // Antebrazo Dobot CR5AS
+
+// Parámetros espaciales calibrados con el laboratorio real (point.json)
+const Z_BASE_ROBOT = 4.70; // Base del robot montada detrás del tablero
+const Z_DESCANSO_PINZA = 2.65; // Posición de descanso de la pinza sobre el marcador de calibración detrás del tablero
 
 // Posición Cero oficial calibrada del robot real (calibracion_local/brazo.json - alias DESCANSO)
 export const ANGULOS_CERO_DEG = {
@@ -44,8 +48,8 @@ const MAPA_TIPO_A_ARCHIVO = {
   k: 'rey',
 };
 
-// Escala métrica para ajustar piezas Staunton reales a la cuadrícula de 0.65 unidades
-const ESCALA_PIEZAS_STAUNTON = 10.4;
+// Escala métrica para ajustar piezas Staunton reales a la cuadrícula de 0.50 unidades
+const ESCALA_PIEZAS_STAUNTON = 8.0;
 
 // Cache en memoria para plantillas de modelos 3D (6 tipos x 2 colores)
 const cacheModelosPiezas3D = new Map();
@@ -267,7 +271,7 @@ export default function SimuladorBrazoTablero3D({
   // Estado HUD para telemetría
   const [telemetria, setTelemetria] = useState({
     estadoRobot: 'EN ESPERA (POSICIÓN CERO / DESCANSO)',
-    efectorXYZ: { x: 0, y: -455, z: 235 },
+    efectorXYZ: { x: 0, y: -262, z: 235 },
     juntasGrados: { ...ANGULOS_CERO_DEG },
     pinzaActiva: false,
     maniobraProgreso: 0,
@@ -337,7 +341,7 @@ export default function SimuladorBrazoTablero3D({
 
     // Cámara 3D (perspectiva isométrica viendo el tablero desde el lado del jugador de blancas hacia el robot)
     const camera = new THREE.PerspectiveCamera(40, ancho / alto, 0.1, 100);
-    camera.position.set(4.6, 5.4, -4.6);
+    camera.position.set(4.8, 5.2, -4.6);
     cameraRef.current = camera;
 
     // Renderizador WebGL de alta precisión
@@ -358,7 +362,7 @@ export default function SimuladorBrazoTablero3D({
     controls.maxPolarAngle = Math.PI / 2 - 0.05; // No pasar por debajo del suelo
     controls.minDistance = 3.5;
     controls.maxDistance = 18.0;
-    controls.target.set(0, 0.4, 0.3);
+    controls.target.set(0, 0.4, 0.8);
     controlsRef.current = controls;
 
     // Iluminación PBR de estudio para ajedrez y robótica
@@ -378,7 +382,7 @@ export default function SimuladorBrazoTablero3D({
     scene.add(luzRelleno);
 
     const luzPuntoBrazo = new THREE.PointLight(0x00e5ff, 2.0, 8);
-    luzPuntoBrazo.position.set(0, 3.5, 3.5);
+    luzPuntoBrazo.position.set(0, 3.8, 3.8);
     scene.add(luzPuntoBrazo);
 
     // Suelo reflectante con cuadrícula tecnológica
@@ -462,20 +466,44 @@ export default function SimuladorBrazoTablero3D({
     casillasMapRef.current = casillasMap;
 
     // Bandeja de Capturas lateral (para piezas eliminadas por el brazo)
-    const bandejaCapturasGeo = new THREE.BoxGeometry(1.0, 0.12, ANCHO_TABLERO);
+    const bandejaCapturasGeo = new THREE.BoxGeometry(0.85, 0.10, ANCHO_TABLERO);
     const bandejaCapturasMat = new THREE.MeshStandardMaterial({
       color: 0x111622,
       roughness: 0.4,
       metalness: 0.7,
     });
     const bandejaCapturas = new THREE.Mesh(bandejaCapturasGeo, bandejaCapturasMat);
-    bandejaCapturas.position.set(ANCHO_TABLERO / 2 + 0.85, 0.06, 0);
+    bandejaCapturas.position.set(ANCHO_TABLERO / 2 + 0.70, 0.05, 0);
     bandejaCapturas.receiveShadow = true;
     scene.add(bandejaCapturas);
 
+    // Hoja de calibración / marcador de posición cero en la mesa (como en el laboratorio real FICCT)
+    const hojaCalibGeo = new THREE.PlaneGeometry(0.65, 0.65);
+    const canvasCalib = document.createElement('canvas');
+    canvasCalib.width = 128;
+    canvasCalib.height = 128;
+    const ctxCalib = canvasCalib.getContext('2d');
+    ctxCalib.fillStyle = '#ffffff';
+    ctxCalib.fillRect(0, 0, 128, 128);
+    ctxCalib.fillStyle = '#111827';
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        if ((r + c) % 2 === 0) {
+          ctxCalib.fillRect(c * 16, r * 16, 16, 16);
+        }
+      }
+    }
+    const texCalib = new THREE.CanvasTexture(canvasCalib);
+    const hojaCalibMat = new THREE.MeshBasicMaterial({ map: texCalib });
+    const hojaCalib = new THREE.Mesh(hojaCalibGeo, hojaCalibMat);
+    hojaCalib.rotation.x = -Math.PI / 2;
+    hojaCalib.position.set(0, 0.002, Z_DESCANSO_PINZA);
+    hojaCalib.receiveShadow = true;
+    scene.add(hojaCalib);
+
     // 3. Brazo Robótico Dobot CR5AS (6-DOF) Cinemático
     const robotGroup = new THREE.Group();
-    robotGroup.position.set(0, 0, 3.9); // Ubicado detrás de las piezas negras (modelo IA contrincante)
+    robotGroup.position.set(0, 0, Z_BASE_ROBOT); // Ubicado detrás de las piezas negras (modelo IA contrincante)
     robotGroup.rotation.y = Math.PI; // Encarando el tablero hacia el jugador de blancas
     scene.add(robotGroup);
 
@@ -616,12 +644,12 @@ export default function SimuladorBrazoTablero3D({
       dedoIzq,
       dedoDer,
       targetPos: new THREE.Vector3(0, 2.5, 0),
-      posActual: new THREE.Vector3(0, 2.8, 3.9),
+      posActual: new THREE.Vector3(0, 2.4, Z_DESCANSO_PINZA),
     };
 
     // 3b. Modelo 3D Escaneado Real del Brazo Dobot CR5AS con Cámara (FICCT)
     const robotRealGroup = new THREE.Group();
-    robotRealGroup.position.set(0, 0, 3.9); // Ubicado detrás de las piezas negras
+    robotRealGroup.position.set(0, 0, Z_BASE_ROBOT); // Ubicado detrás de las piezas negras
     robotRealGroup.rotation.y = Math.PI / 2; // Orientado hacia el tablero
     robotRealGroup.visible = false;
     scene.add(robotRealGroup);
@@ -680,7 +708,7 @@ export default function SimuladorBrazoTablero3D({
 
     // 3c. Gemelo Digital Oficial Dobot CR5AS Articulado 6-DOF con Pinza DH-Robotics PGE-50-26
     const robotOficialGroup = new THREE.Group();
-    robotOficialGroup.position.set(0, 0, 3.9); // Ubicado detrás de las piezas negras (modelo IA contrincante)
+    robotOficialGroup.position.set(0, 0, Z_BASE_ROBOT); // Ubicado detrás de las piezas negras (modelo IA contrincante)
     robotOficialGroup.rotation.y = Math.PI; // Encarando el tablero hacia el jugador de blancas
     robotOficialGroup.visible = true; // Por defecto visible
     scene.add(robotOficialGroup);
@@ -1193,9 +1221,9 @@ export default function SimuladorBrazoTablero3D({
 
     const piezaMesh = piezasMeshesRef.current.get(origen);
 
-    // Cinemática Inversa Analítica para Dobot 6-DOF montado en el bando negro (0, 0, 3.9) rotado hacia el tablero
+    // Cinemática Inversa Analítica para Dobot 6-DOF montado en el bando negro (0, 0, Z_BASE_ROBOT) rotado hacia el tablero
     const resolverIKDobot = (targetX, targetY, targetZ) => {
-      const baseZ = 3.9;
+      const baseZ = Z_BASE_ROBOT;
       const dxLocal = -targetX;
       const dzLocal = baseZ - targetZ; // > 0 hacia el tablero
 
@@ -1257,8 +1285,8 @@ export default function SimuladorBrazoTablero3D({
         curJ5 = THREE.MathUtils.lerp(ANGULOS_CERO_RAD.j5, 0, pSub);
         curJ6 = THREE.MathUtils.lerp(ANGULOS_CERO_RAD.j6, 0, pSub);
         targetX = THREE.MathUtils.lerp(0, cOrigen.x, pSub);
-        targetZ = THREE.MathUtils.lerp(3.2, cOrigen.z, pSub);
-        targetY = THREE.MathUtils.lerp(2.8, yHover, pSub);
+        targetZ = THREE.MathUtils.lerp(Z_DESCANSO_PINZA, cOrigen.z, pSub);
+        targetY = THREE.MathUtils.lerp(2.2, yHover, pSub);
         estadoTexto = `APROXIMACIÓN -> CASILLA ${origen.toUpperCase()}`;
       } else if (t < 0.38) {
         // Fase 2: Descender y sujetar la pieza
@@ -1315,8 +1343,8 @@ export default function SimuladorBrazoTablero3D({
         curJ5 = THREE.MathUtils.lerp(0, ANGULOS_CERO_RAD.j5, pSub);
         curJ6 = THREE.MathUtils.lerp(0, ANGULOS_CERO_RAD.j6, pSub);
         targetX = THREE.MathUtils.lerp(cDestino.x, 0, pSub);
-        targetZ = THREE.MathUtils.lerp(cDestino.z, 3.2, pSub);
-        targetY = THREE.MathUtils.lerp(yHover, 2.8, pSub);
+        targetZ = THREE.MathUtils.lerp(cDestino.z, Z_DESCANSO_PINZA, pSub);
+        targetY = THREE.MathUtils.lerp(yHover, 2.2, pSub);
         estadoTexto = t >= 1.0 ? 'EN ESPERA (POSICIÓN CERO / DESCANSO)' : 'RETORNO A POSICIÓN CERO (DESCANSO)';
       }
 
@@ -1352,7 +1380,7 @@ export default function SimuladorBrazoTablero3D({
 
       // Mapeo milimétrico a las coordenadas de laboratorio reales (calibracion_local/brazo.json)
       const realX_mm = t >= 1.0 ? 0 : Math.round(targetX * 42.0);
-      const realY_mm = t >= 1.0 ? -455 : Math.round(-455 + (targetZ - 2.275) * 46.0);
+      const realY_mm = t >= 1.0 ? -262 : Math.round(-455 + (targetZ - 2.275) * 46.0);
       const realZ_mm = t >= 1.0 ? 235 : Math.round(235 + (targetY - yGrip) * 75);
 
       // Actualizar telemetría para el HUD
@@ -1391,23 +1419,23 @@ export default function SimuladorBrazoTablero3D({
     if (!camera || !controls) return;
 
     if (preset === 'isometrica') {
-      camera.position.set(4.6, 5.4, -4.6);
-      controls.target.set(0, 0.4, 0.3);
+      camera.position.set(4.8, 5.2, -4.6);
+      controls.target.set(0, 0.4, 0.8);
     } else if (preset === 'brazo') {
       // Vista desde detrás del hombro del robot hacia el tablero
-      camera.position.set(0, 5.0, 5.8);
-      controls.target.set(0, 0.5, -0.5);
+      camera.position.set(0, 5.2, 6.8);
+      controls.target.set(0, 0.5, 0.0);
     } else if (preset === 'cenital') {
-      camera.position.set(0.01, 8.5, 0);
-      controls.target.set(0, 0.3, 0);
+      camera.position.set(0.01, 8.5, 0.5);
+      controls.target.set(0, 0.3, 0.5);
     } else if (preset === 'blancas') {
       // Vista del jugador humano sentado frente a las piezas blancas
       camera.position.set(0, 4.0, -5.4);
       controls.target.set(0, 0.5, 0.5);
     } else if (preset === 'negras') {
       // Vista desde el bando de las piezas negras (del robot)
-      camera.position.set(0, 4.2, 5.5);
-      controls.target.set(0, 0.5, -0.5);
+      camera.position.set(0, 4.5, 6.6);
+      controls.target.set(0, 0.5, 0.0);
     }
     controls.update();
   };
