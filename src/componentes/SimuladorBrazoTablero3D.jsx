@@ -253,6 +253,7 @@ export default function SimuladorBrazoTablero3D({
 }) {
   const mountRef = useRef(null);
   const animFrameRef = useRef(null);
+  const animManiobraRef = useRef(null);
   const escenaRef = useRef(null);
   const rendererRef = useRef(null);
   const cameraRef = useRef(null);
@@ -283,6 +284,7 @@ export default function SimuladorBrazoTablero3D({
 
   // Estado interactivo de pruebas y jugadas
   const [fenInterno, setFenInterno] = useState(fen);
+  const [versionTablero, setVersionTablero] = useState(0);
   const [jugadaActiva, setJugadaActiva] = useState(null);
   const [animando, setAnimando] = useState(false);
   const [inputUci, setInputUci] = useState('');
@@ -304,23 +306,73 @@ export default function SimuladorBrazoTablero3D({
     }
   }, [ultimoMovimiento]);
 
-  // Disparar jugada de prueba manual o preset
+  // Disparar jugada de prueba manual o preset (cancela maniobras previas si existiesen)
   const dispararJugadaPrueba = (uci) => {
-    if (animando) return;
+    if (animManiobraRef.current) {
+      cancelAnimationFrame(animManiobraRef.current);
+      animManiobraRef.current = null;
+    }
+    setAnimando(true);
     setJugadaActiva({ uci, id: Date.now() });
   };
 
   const manejarEnvioManual = (e) => {
     e.preventDefault();
     const limpia = inputUci.trim().toLowerCase();
-    if (animando || limpia.length < 4) return;
+    if (limpia.length < 4) return;
     dispararJugadaPrueba(limpia);
     setInputUci('');
   };
 
   const reiniciarPosicionPiezas = () => {
-    setFenInterno('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+    if (animManiobraRef.current) {
+      cancelAnimationFrame(animManiobraRef.current);
+      animManiobraRef.current = null;
+    }
+    setAnimando(false);
     setJugadaActiva(null);
+    setInputUci('');
+    setFenInterno('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+    setVersionTablero((v) => v + 1);
+
+    // 1. Limpiar iluminación y destacados de las casillas
+    if (casillasMapRef.current) {
+      casillasMapRef.current.forEach((m) => {
+        if (m.material) {
+          m.material.emissive = new THREE.Color(0x000000);
+          m.material.emissiveIntensity = 0;
+        }
+      });
+    }
+
+    // 2. Restaurar articulaciones del Dobot CR5AS oficial a Posición Cero
+    const robotArt = robotArticuladoRef.current;
+    if (robotArt) {
+      if (robotArt.j1) robotArt.j1.rotation.y = ANGULOS_CERO_RAD.j1;
+      if (robotArt.j2) robotArt.j2.rotation.z = ANGULOS_CERO_RAD.j2;
+      if (robotArt.j3) robotArt.j3.rotation.z = ANGULOS_CERO_RAD.j3;
+      if (robotArt.j4) robotArt.j4.rotation.z = ANGULOS_CERO_RAD.j4;
+      if (robotArt.j5) robotArt.j5.rotation.y = ANGULOS_CERO_RAD.j5;
+      if (robotArt.j6) robotArt.j6.rotation.z = ANGULOS_CERO_RAD.j6;
+      if (robotArt.sliderIzq) robotArt.sliderIzq.position.x = -13.0;
+      if (robotArt.sliderDer) robotArt.sliderDer.position.x = 13.0;
+      if (robotArt.dedoIzq) robotArt.dedoIzq.position.x = -13.0;
+      if (robotArt.dedoDer) robotArt.dedoDer.position.x = 13.0;
+    }
+
+    // 3. Restaurar brazo esquemático cinemático
+    const robot = robotRef.current;
+    if (robot) {
+      if (robot.j1) robot.j1.rotation.y = ANGULOS_CERO_RAD.j1;
+      if (robot.j2) robot.j2.rotation.z = ANGULOS_CERO_RAD.j2;
+      if (robot.j3) robot.j3.rotation.z = ANGULOS_CERO_RAD.j3;
+      if (robot.j4) robot.j4.rotation.z = -ANGULOS_CERO_RAD.j2 - ANGULOS_CERO_RAD.j3;
+      if (robot.efector) robot.efector.rotation.y = 0;
+      if (robot.dedoIzq) robot.dedoIzq.position.x = -0.20;
+      if (robot.dedoDer) robot.dedoDer.position.x = 0.20;
+    }
+
+    // 4. Restaurar telemetría de reposo
     setTelemetria({
       estadoRobot: 'EN ESPERA (POSICIÓN CERO / DESCANSO)',
       efectorXYZ: { x: 0, y: -262, z: 235 },
@@ -1233,7 +1285,7 @@ export default function SimuladorBrazoTablero3D({
       scene.add(mesh);
       piezasMeshesRef.current.set(casilla, mesh);
     });
-  }, [piezasTablero, modelosCargados]);
+  }, [piezasTablero, modelosCargados, versionTablero]);
 
   // 3. Cinemática Inversa y Animación de Pick-and-Place para el Dobot CR5AS
   useEffect(() => {
@@ -1248,144 +1300,182 @@ export default function SimuladorBrazoTablero3D({
 
     // Resaltar casillas origen y destino
     const casillas = casillasMapRef.current;
-    casillas.forEach((m, k) => {
-      if (k === origen) {
-        m.material.emissive = new THREE.Color(0xfbbf24); // Amarillo origen
-        m.material.emissiveIntensity = 0.55;
-      } else if (k === destino) {
-        m.material.emissive = new THREE.Color(0x10b981); // Esmeralda destino
-        m.material.emissiveIntensity = 0.55;
-      } else {
-        m.material.emissive = new THREE.Color(0x000000);
-        m.material.emissiveIntensity = 0;
-      }
-    });
+    if (casillas) {
+      casillas.forEach((m, k) => {
+        if (m.material) {
+          if (k === origen) {
+            m.material.emissive = new THREE.Color(0xfbbf24); // Amarillo origen
+            m.material.emissiveIntensity = 0.55;
+          } else if (k === destino) {
+            m.material.emissive = new THREE.Color(0x10b981); // Esmeralda destino
+            m.material.emissiveIntensity = 0.55;
+          } else {
+            m.material.emissive = new THREE.Color(0x000000);
+            m.material.emissiveIntensity = 0;
+          }
+        }
+      });
+    }
 
     const cOrigen = casillaACoord(origen);
     const cDestino = casillaACoord(destino);
     const robot = robotRef.current;
-    if (!robot) return;
+    const robotArt = robotArticuladoRef.current;
+    if (!robot && !robotArt) return;
 
-    const piezaMesh = piezasMeshesRef.current.get(origen);
+    const piezaMesh = piezasMeshesRef.current ? piezasMeshesRef.current.get(origen) : null;
 
-    // Cinemática Inversa Analítica para Dobot 6-DOF montado en el bando negro (0, 0, Z_BASE_ROBOT) rotado hacia el tablero
-    const resolverIKDobot = (targetX, targetY, targetZ) => {
-      const baseZ = Z_BASE_ROBOT;
-      const dxLocal = -targetX;
-      const dzLocal = baseZ - targetZ; // > 0 hacia el tablero
+    // Cinemática Inversa Analítica exacta para el Dobot CR5AS oficial calibrado
+    const resolverIKDobot = (casillaNom, yOffsetMm = 0) => {
+      let targetX_mm = 0;
+      let targetY_mm = -485.0;
+      const targetZ_mm = 235.0 + yOffsetMm;
 
-      const j1 = Math.atan2(dxLocal, dzLocal);
-      const r = Math.sqrt(dxLocal * dxLocal + dzLocal * dzLocal);
-      const dy = targetY - 0.85;
+      if (casillaNom && casillaNom.length >= 2) {
+        const col = 'abcdefgh'.indexOf(casillaNom[0].toLowerCase());
+        const fila = parseInt(casillaNom[1], 10) - 1; // 0..7 (0=fila 1, 7=fila 8)
+        const u = THREE.MathUtils.clamp(col / 7.0, 0, 1);
+        const v = THREE.MathUtils.clamp(fila / 7.0, 0, 1);
+        // Interpolación afín exacta del plano calibrado del tablero (calibracion_local/brazo.json)
+        // a1: [-98.67, -664.06], h1: [117.96, -666.06]
+        // a8: [-94.44, -453.91], h8: [115.59, -456.20]
+        targetX_mm = (1 - u) * (1 - v) * (-98.67) + u * (1 - v) * 117.96 + (1 - u) * v * (-94.44) + u * v * 115.59;
+        targetY_mm = (1 - u) * (1 - v) * (-664.06) + u * (1 - v) * (-666.06) + (1 - u) * v * (-453.91) + u * v * (-456.20);
+      }
 
-      const dTotal = Math.sqrt(r * r + dy * dy);
-      const dClamped = Math.min(LONG_L1 + LONG_L2 - 0.05, Math.max(0.8, dTotal));
+      // 1. Ángulo J1 en el plano horizontal de la base
+      const j1_deg = THREE.MathUtils.radToDeg(Math.atan2(targetY_mm, targetX_mm));
+      const j1 = THREE.MathUtils.degToRad(j1_deg);
 
-      const cosJ3 = (dClamped * dClamped - LONG_L1 * LONG_L1 - LONG_L2 * LONG_L2) / (2 * LONG_L1 * LONG_L2);
-      const acosJ3 = Math.acos(THREE.MathUtils.clamp(cosJ3, -1, 1));
-      const j3 = -acosJ3;
-      const j2 = Math.atan2(r, dy) - Math.atan2(LONG_L2 * Math.sin(-j3), LONG_L1 + LONG_L2 * Math.cos(j3));
-      const j4 = -Math.PI / 2 - (j2 + j3);
+      // 2. Cinemática planar 2-DOF para J2 y J3
+      const a2 = 427.0; // Eslabón 2 (mm)
+      const a3 = 357.0; // Eslabón 3 (mm)
+      const d1 = 147.0; // Altura de la base al eje J2 (mm)
+      const z_muneca = targetZ_mm + 235.0; // Centro de muñeca J4 sobre la punta
+      const deltaZ = z_muneca - d1;
+      const R = Math.sqrt(targetX_mm * targetX_mm + targetY_mm * targetY_mm);
+      const D = Math.sqrt(R * R + deltaZ * deltaZ);
+      const dClamped = THREE.MathUtils.clamp(D, 220.0, a2 + a3 - 5.0);
+
+      const cosGamma = (dClamped * dClamped - a2 * a2 - a3 * a3) / (2.0 * a2 * a3);
+      const gamma = Math.acos(THREE.MathUtils.clamp(cosGamma, -1.0, 1.0));
+      const j3_deg = -(180.0 - THREE.MathUtils.radToDeg(gamma));
+      const j3 = THREE.MathUtils.degToRad(j3_deg);
+
+      const alpha = Math.atan2(R, deltaZ);
+      const beta = Math.atan2(a3 * Math.sin(gamma), a2 + a3 * Math.cos(gamma));
+      const j2_deg = THREE.MathUtils.radToDeg(alpha - beta);
+      const j2 = THREE.MathUtils.degToRad(j2_deg);
+
+      // Invariante de orientación vertical del efector: J2 + J3 + J4 = -90°
+      const j4_deg = -90.0 - (j2_deg + j3_deg);
+      const j4 = THREE.MathUtils.degToRad(j4_deg);
+
+      const j5 = THREE.MathUtils.degToRad(90.0);
+      const j6_diag = THREE.MathUtils.degToRad(-27.81 + 45.0); // 45° diagonal para agarre
 
       return {
         j1,
         j2,
         j3,
         j4,
+        j5,
+        j6_diag,
+        xyz_mm: {
+          x: Math.round(targetX_mm),
+          y: Math.round(targetY_mm),
+          z: Math.round(targetZ_mm),
+        },
       };
     };
 
-    // Animación de la maniobra cinemática completa en 5 fases con retorno a Posición Cero calibrada
+    // Precalcular posturas clave de la maniobra
+    const ikHoverOrig = resolverIKDobot(origen, 80.0);
+    const ikGripOrig = resolverIKDobot(origen, 0.0);
+    const ikGripDest = resolverIKDobot(destino, 0.0);
+    const ikHoverDest = resolverIKDobot(destino, 80.0);
+
+    const duracionManiobra = 3200; // 3.2 segundos: ritmo cadencioso y perfectamente visible
     let startTime = performance.now();
-    const duracionManiobra = 2200; // 2.2 segundos para una maniobra fluida y realista
 
     const animarManiobra = (ahora) => {
       const transcurrido = ahora - startTime;
       const t = Math.min(1.0, transcurrido / duracionManiobra);
 
-      let targetX = 0;
-      let targetY = 0;
-      let targetZ = 0;
       let curJ1 = ANGULOS_CERO_RAD.j1;
       let curJ2 = ANGULOS_CERO_RAD.j2;
       let curJ3 = ANGULOS_CERO_RAD.j3;
       let curJ4 = ANGULOS_CERO_RAD.j4;
       let curJ5 = ANGULOS_CERO_RAD.j5;
       let curJ6 = ANGULOS_CERO_RAD.j6;
-      let estadoTexto = 'CALCULANDO CINEMÁTICA';
+      let curX_mm = 0;
+      let curY_mm = -262;
+      let curZ_mm = 235;
       let pinzaActiva = false;
-
-      const yHover = ALTO_BASE_TABLERO + 1.8;
-      const yGrip = ALTO_BASE_TABLERO + 0.95;
-
-      const ikHoverOrig = resolverIKDobot(cOrigen.x, yHover, cOrigen.z);
-      const ikGripOrig = resolverIKDobot(cOrigen.x, yGrip, cOrigen.z);
-      const ikGripDest = resolverIKDobot(cDestino.x, yGrip, cDestino.z);
-      const ikHoverDest = resolverIKDobot(cDestino.x, yHover, cDestino.z);
-
-      // Rotación diagonal a 45° para agarre de piezas (giro_diagonal_grados en calibracion_local/brazo.json)
-      const j6DiagOrig = THREE.MathUtils.degToRad(74.33) + ikHoverOrig.j1;
-      const j6DiagDest = THREE.MathUtils.degToRad(74.33) + ikHoverDest.j1;
+      let estadoTexto = 'CALCULANDO CINEMÁTICA';
 
       if (t < 0.22) {
-        // Fase 1: Desplazarse suavemente de la Posición Cero (recto 0°) a Hover sobre el origen girando a 45° diagonal
+        // Fase 1: Desplazarse suavemente de la Posición Cero (recto 0°) a Hover sobre origen girando a 45° diagonal
         const pSub = t / 0.22;
         curJ1 = THREE.MathUtils.lerp(ANGULOS_CERO_RAD.j1, ikHoverOrig.j1, pSub);
         curJ2 = THREE.MathUtils.lerp(ANGULOS_CERO_RAD.j2, ikHoverOrig.j2, pSub);
         curJ3 = THREE.MathUtils.lerp(ANGULOS_CERO_RAD.j3, ikHoverOrig.j3, pSub);
         curJ4 = THREE.MathUtils.lerp(ANGULOS_CERO_RAD.j4, ikHoverOrig.j4, pSub);
-        curJ5 = THREE.MathUtils.lerp(ANGULOS_CERO_RAD.j5, Math.PI / 2, pSub);
-        curJ6 = THREE.MathUtils.lerp(ANGULOS_CERO_RAD.j6, j6DiagOrig, pSub);
-        targetX = THREE.MathUtils.lerp(0, cOrigen.x, pSub);
-        targetZ = THREE.MathUtils.lerp(Z_DESCANSO_PINZA, cOrigen.z, pSub);
-        targetY = THREE.MathUtils.lerp(2.2, yHover, pSub);
+        curJ5 = THREE.MathUtils.lerp(ANGULOS_CERO_RAD.j5, ikHoverOrig.j5, pSub);
+        curJ6 = THREE.MathUtils.lerp(ANGULOS_CERO_RAD.j6, ikHoverOrig.j6_diag, pSub);
+        curX_mm = THREE.MathUtils.lerp(0, ikHoverOrig.xyz_mm.x, pSub);
+        curY_mm = THREE.MathUtils.lerp(-262, ikHoverOrig.xyz_mm.y, pSub);
+        curZ_mm = THREE.MathUtils.lerp(235, ikHoverOrig.xyz_mm.z, pSub);
         estadoTexto = `APROXIMACIÓN -> CASILLA ${origen.toUpperCase()}`;
       } else if (t < 0.38) {
         // Fase 2: Descender y sujetar la pieza con dedos orientados en diagonal (45°)
         const pSub = (t - 0.22) / 0.16;
-        curJ1 = THREE.MathUtils.lerp(ikHoverOrig.j1, ikGripOrig.j1, pSub);
+        curJ1 = ikHoverOrig.j1;
         curJ2 = THREE.MathUtils.lerp(ikHoverOrig.j2, ikGripOrig.j2, pSub);
         curJ3 = THREE.MathUtils.lerp(ikHoverOrig.j3, ikGripOrig.j3, pSub);
         curJ4 = THREE.MathUtils.lerp(ikHoverOrig.j4, ikGripOrig.j4, pSub);
-        curJ5 = Math.PI / 2;
-        curJ6 = THREE.MathUtils.degToRad(74.33) + curJ1;
-        targetX = cOrigen.x;
-        targetZ = cOrigen.z;
-        targetY = THREE.MathUtils.lerp(yHover, yGrip, pSub);
-        pinzaActiva = pSub > 0.4;
+        curJ5 = ikGripOrig.j5;
+        curJ6 = ikGripOrig.j6_diag;
+        curX_mm = ikGripOrig.xyz_mm.x;
+        curY_mm = ikGripOrig.xyz_mm.y;
+        curZ_mm = THREE.MathUtils.lerp(ikHoverOrig.xyz_mm.z, ikGripOrig.xyz_mm.z, pSub);
+        pinzaActiva = pSub > 0.45;
         estadoTexto = `SUJETANDO PIEZA EN ${origen.toUpperCase()} (DIAGONAL 45°)`;
       } else if (t < 0.70) {
         // Fase 3: Elevar y trasladar en curva parabólica hacia el destino manteniendo 45° diagonal
         const pSub = (t - 0.38) / 0.32;
         pinzaActiva = true;
-        targetX = THREE.MathUtils.lerp(cOrigen.x, cDestino.x, pSub);
-        targetZ = THREE.MathUtils.lerp(cOrigen.z, cDestino.z, pSub);
-        targetY = yGrip + Math.sin(pSub * Math.PI) * 1.35;
-        const ikArc = resolverIKDobot(targetX, targetY, targetZ);
-        curJ1 = ikArc.j1;
-        curJ2 = ikArc.j2;
-        curJ3 = ikArc.j3;
-        curJ4 = ikArc.j4;
-        curJ5 = Math.PI / 2;
-        curJ6 = THREE.MathUtils.degToRad(74.33) + curJ1;
+        const lift = Math.sin(pSub * Math.PI) * 0.18;
+        curJ1 = THREE.MathUtils.lerp(ikGripOrig.j1, ikGripDest.j1, pSub);
+        curJ2 = THREE.MathUtils.lerp(ikGripOrig.j2, ikGripDest.j2, pSub) - lift;
+        curJ3 = THREE.MathUtils.lerp(ikGripOrig.j3, ikGripDest.j3, pSub) - lift * 0.85;
+        curJ4 = -Math.PI / 2 - (curJ2 + curJ3);
+        curJ5 = ikGripDest.j5;
+        curJ6 = THREE.MathUtils.lerp(ikGripOrig.j6_diag, ikGripDest.j6_diag, pSub);
+        curX_mm = THREE.MathUtils.lerp(ikGripOrig.xyz_mm.x, ikGripDest.xyz_mm.x, pSub);
+        curY_mm = THREE.MathUtils.lerp(ikGripOrig.xyz_mm.y, ikGripDest.xyz_mm.y, pSub);
+        curZ_mm = 235.0 + Math.sin(pSub * Math.PI) * 85.0;
 
         if (piezaMesh) {
-          piezaMesh.position.set(targetX, targetY - 0.91, targetZ);
+          const px = THREE.MathUtils.lerp(cOrigen.x, cDestino.x, pSub);
+          const pz = THREE.MathUtils.lerp(cOrigen.z, cDestino.z, pSub);
+          const py = ALTO_BASE_TABLERO + 0.038 + Math.sin(pSub * Math.PI) * 0.95;
+          piezaMesh.position.set(px, py, pz);
         }
         estadoTexto = `TRASLADANDO ${origen.toUpperCase()} -> ${destino.toUpperCase()}`;
       } else if (t < 0.85) {
-        // Fase 4: Descender sobre la casilla de destino y soltar a 45° diagonal
+        // Fase 4: Descender sobre la casilla de destino y soltar
         const pSub = (t - 0.70) / 0.15;
-        curJ1 = THREE.MathUtils.lerp(ikGripDest.j1, ikHoverDest.j1, pSub);
+        curJ1 = ikGripDest.j1;
         curJ2 = THREE.MathUtils.lerp(ikGripDest.j2, ikHoverDest.j2, pSub);
         curJ3 = THREE.MathUtils.lerp(ikGripDest.j3, ikHoverDest.j3, pSub);
         curJ4 = THREE.MathUtils.lerp(ikGripDest.j4, ikHoverDest.j4, pSub);
-        curJ5 = Math.PI / 2;
-        curJ6 = THREE.MathUtils.degToRad(74.33) + curJ1;
-        targetX = cDestino.x;
-        targetZ = cDestino.z;
-        targetY = THREE.MathUtils.lerp(yGrip, yHover, pSub);
-        pinzaActiva = pSub < 0.5;
+        curJ5 = ikHoverDest.j5;
+        curJ6 = ikHoverDest.j6_diag;
+        curX_mm = ikGripDest.xyz_mm.x;
+        curY_mm = ikGripDest.xyz_mm.y;
+        curZ_mm = THREE.MathUtils.lerp(ikGripDest.xyz_mm.z, ikHoverDest.xyz_mm.z, pSub);
+        pinzaActiva = pSub < 0.40;
 
         if (piezaMesh) {
           piezaMesh.position.set(cDestino.x, ALTO_BASE_TABLERO + 0.038, cDestino.z);
@@ -1399,15 +1489,14 @@ export default function SimuladorBrazoTablero3D({
         curJ3 = THREE.MathUtils.lerp(ikHoverDest.j3, ANGULOS_CERO_RAD.j3, pSub);
         curJ4 = THREE.MathUtils.lerp(ikHoverDest.j4, ANGULOS_CERO_RAD.j4, pSub);
         curJ5 = THREE.MathUtils.lerp(Math.PI / 2, ANGULOS_CERO_RAD.j5, pSub);
-        curJ6 = THREE.MathUtils.lerp(j6DiagDest, ANGULOS_CERO_RAD.j6, pSub);
-        targetX = THREE.MathUtils.lerp(cDestino.x, 0, pSub);
-        targetZ = THREE.MathUtils.lerp(cDestino.z, Z_DESCANSO_PINZA, pSub);
-        targetY = THREE.MathUtils.lerp(yHover, 2.2, pSub);
+        curJ6 = THREE.MathUtils.lerp(ikHoverDest.j6_diag, ANGULOS_CERO_RAD.j6, pSub);
+        curX_mm = THREE.MathUtils.lerp(ikHoverDest.xyz_mm.x, 0, pSub);
+        curY_mm = THREE.MathUtils.lerp(ikHoverDest.xyz_mm.y, -262, pSub);
+        curZ_mm = THREE.MathUtils.lerp(ikHoverDest.xyz_mm.z, 235, pSub);
         estadoTexto = t >= 1.0 ? 'EN ESPERA (POSICIÓN CERO / DESCANSO)' : 'RETORNO A POSICIÓN CERO (DESCANSO)';
       }
 
       // 1. Articular el Gemelo Oficial Dobot CR5AS con Pinza PGE-50-26
-      const robotArt = robotArticuladoRef.current;
       if (robotArt) {
         if (robotArt.j1) robotArt.j1.rotation.y = curJ1;
         if (robotArt.j2) robotArt.j2.rotation.z = curJ2;
@@ -1440,18 +1529,13 @@ export default function SimuladorBrazoTablero3D({
         if (robot.dedoDer) robot.dedoDer.position.x = aperturaSimple;
       }
 
-      // Mapeo milimétrico a las coordenadas de laboratorio reales (calibracion_local/brazo.json)
-      const realX_mm = t >= 1.0 ? 0 : Math.round(targetX * 42.0);
-      const realY_mm = t >= 1.0 ? -262 : Math.round(-455 + (targetZ - 2.275) * 46.0);
-      const realZ_mm = t >= 1.0 ? 235 : Math.round(235 + (targetY - yGrip) * 75);
-
       // Actualizar telemetría para el HUD
       setTelemetria({
         estadoRobot: estadoTexto,
         efectorXYZ: {
-          x: realX_mm,
-          y: realY_mm,
-          z: realZ_mm,
+          x: Math.round(curX_mm),
+          y: Math.round(curY_mm),
+          z: Math.round(curZ_mm),
         },
         juntasGrados: {
           j1: Math.round(THREE.MathUtils.radToDeg(curJ1)),
@@ -1466,18 +1550,33 @@ export default function SimuladorBrazoTablero3D({
       });
 
       if (t < 1.0) {
-        requestAnimationFrame(animarManiobra);
+        animManiobraRef.current = requestAnimationFrame(animarManiobra);
       } else {
+        animManiobraRef.current = null;
         setAnimando(false);
         // Actualizar referencia de la pieza en memoria a la casilla destino
         if (piezaMesh) {
+          piezaMesh.position.set(cDestino.x, ALTO_BASE_TABLERO + 0.038, cDestino.z);
+          // Si había una pieza contraria en destino (captura), removerla
+          const piezaDestino = piezasMeshesRef.current.get(destino);
+          if (piezaDestino && piezaDestino !== piezaMesh) {
+            const scene = escenaRef.current;
+            if (scene) scene.remove(piezaDestino);
+          }
           piezasMeshesRef.current.delete(origen);
           piezasMeshesRef.current.set(destino, piezaMesh);
         }
       }
     };
 
-    requestAnimationFrame(animarManiobra);
+    animManiobraRef.current = requestAnimationFrame(animarManiobra);
+
+    return () => {
+      if (animManiobraRef.current) {
+        cancelAnimationFrame(animManiobraRef.current);
+        animManiobraRef.current = null;
+      }
+    };
   }, [jugadaActiva]);
 
   // Cambiar preset de cámara
@@ -1632,8 +1731,7 @@ export default function SimuladorBrazoTablero3D({
           <button
             type="button"
             onClick={() => dispararJugadaPrueba('e7e5')}
-            disabled={animando}
-            className="px-2.5 py-1 rounded bg-slate-800 hover:bg-[#00e5ff] hover:text-black border border-[#00e5ff]/30 text-slate-200 text-[11px] font-semibold transition-all disabled:opacity-40"
+            className="px-2.5 py-1 rounded bg-slate-800 hover:bg-[#00e5ff] hover:text-black border border-[#00e5ff]/30 text-slate-200 text-[11px] font-semibold transition-all shadow-sm active:scale-95"
             title="Probar agarre y traslado de peón de e7 a e5"
           >
             ▶ Peón e7→e5
@@ -1641,8 +1739,7 @@ export default function SimuladorBrazoTablero3D({
           <button
             type="button"
             onClick={() => dispararJugadaPrueba('g8f6')}
-            disabled={animando}
-            className="px-2.5 py-1 rounded bg-slate-800 hover:bg-[#00e5ff] hover:text-black border border-[#00e5ff]/30 text-slate-200 text-[11px] font-semibold transition-all disabled:opacity-40"
+            className="px-2.5 py-1 rounded bg-slate-800 hover:bg-[#00e5ff] hover:text-black border border-[#00e5ff]/30 text-slate-200 text-[11px] font-semibold transition-all shadow-sm active:scale-95"
             title="Probar agarre y salto de caballo de g8 a f6"
           >
             ▶ Caballo g8→f6
@@ -1650,8 +1747,7 @@ export default function SimuladorBrazoTablero3D({
           <button
             type="button"
             onClick={() => dispararJugadaPrueba('d7d5')}
-            disabled={animando}
-            className="px-2.5 py-1 rounded bg-slate-800 hover:bg-[#00e5ff] hover:text-black border border-[#00e5ff]/30 text-slate-200 text-[11px] font-semibold transition-all disabled:opacity-40"
+            className="px-2.5 py-1 rounded bg-slate-800 hover:bg-[#00e5ff] hover:text-black border border-[#00e5ff]/30 text-slate-200 text-[11px] font-semibold transition-all shadow-sm active:scale-95"
             title="Probar agarre de peón dama de d7 a d5"
           >
             ▶ Peón d7→d5
@@ -1659,8 +1755,7 @@ export default function SimuladorBrazoTablero3D({
           <button
             type="button"
             onClick={() => dispararJugadaPrueba('b8c6')}
-            disabled={animando}
-            className="px-2.5 py-1 rounded bg-slate-800 hover:bg-[#00e5ff] hover:text-black border border-[#00e5ff]/30 text-slate-200 text-[11px] font-semibold transition-all disabled:opacity-40"
+            className="px-2.5 py-1 rounded bg-slate-800 hover:bg-[#00e5ff] hover:text-black border border-[#00e5ff]/30 text-slate-200 text-[11px] font-semibold transition-all shadow-sm active:scale-95"
             title="Probar agarre de caballo de b8 a c6"
           >
             ▶ Caballo b8→c6
@@ -1679,15 +1774,15 @@ export default function SimuladorBrazoTablero3D({
           />
           <button
             type="submit"
-            disabled={animando || inputUci.length < 4}
-            className="px-2.5 py-1 rounded bg-[#00e5ff]/20 hover:bg-[#00e5ff] hover:text-black border border-[#00e5ff]/40 text-[#00e5ff] text-[11px] font-bold transition-all disabled:opacity-40"
+            disabled={inputUci.length < 4}
+            className="px-2.5 py-1 rounded bg-[#00e5ff]/20 hover:bg-[#00e5ff] hover:text-black border border-[#00e5ff]/40 text-[#00e5ff] text-[11px] font-bold transition-all disabled:opacity-40 active:scale-95"
           >
             Mover
           </button>
           <button
             type="button"
             onClick={reiniciarPosicionPiezas}
-            className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-white/10 text-slate-300 text-[11px] transition-all ml-1"
+            className="px-2.5 py-1 rounded bg-red-950/40 hover:bg-red-600 hover:text-white border border-red-500/30 text-red-200 text-[11px] font-semibold transition-all ml-1 shadow-sm active:scale-95"
             title="Reiniciar piezas y robot a posición inicial"
           >
             ↺ Reset
