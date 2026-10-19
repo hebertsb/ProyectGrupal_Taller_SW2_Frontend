@@ -736,6 +736,8 @@ export default function SimuladorBrazoTablero3D({
 
       // Ensamble fiel de la Pinza Eléctrica DH-Robotics PGE-50-26 según el robot real de FICCT
       const pinzaGroup = new THREE.Group();
+      // Orientar la pinza vertical hacia abajo (eje Z de TOOL) y de frente hacia el tablero
+      pinzaGroup.rotation.set(Math.PI / 2, Math.PI, 0);
 
       // 1. Cuerpo Superior PGE-50: Negro Mate Anodizado (29 x 60 x 20 mm)
       const cuerpoSuperiorGeo = new THREE.BoxGeometry(29, 60, 20);
@@ -824,14 +826,14 @@ export default function SimuladorBrazoTablero3D({
       sliderDer.add(blockSliderDer);
 
       // 4. Dedos Largos Impresos 3D (Dimensiones reales 11.5 x 53 x 14 mm)
-      // DEDO IZQUIERDO: ROJO (PLA) - Idéntico al brazo real en laboratorio FICCT
+      // DEDO ROJO (PLA)
       const matDedoRojo = new THREE.MeshStandardMaterial({
         color: 0xdc2626, // Rojo intenso del dedo impreso real
         roughness: 0.45,
         metalness: 0.08,
       });
 
-      // DEDO DERECHO: BLANCO (PLA) - Idéntico al brazo real en laboratorio FICCT
+      // DEDO BLANCO (PLA)
       const matDedoBlanco = new THREE.MeshStandardMaterial({
         color: 0xf8fafc, // Blanco puro del dedo impreso real
         roughness: 0.45,
@@ -845,72 +847,77 @@ export default function SimuladorBrazoTablero3D({
         stlGeo.center();
 
         const meshDedoRojo = new THREE.Mesh(stlGeo, matDedoRojo);
-        meshDedoRojo.position.set(0, 33.5, 0);
+        meshDedoRojo.position.set(0, 26.5, 0);
         meshDedoRojo.castShadow = true;
         sliderIzq.add(meshDedoRojo);
 
         const meshDedoBlanco = new THREE.Mesh(stlGeo, matDedoBlanco);
-        meshDedoBlanco.position.set(0, 33.5, 0);
+        meshDedoBlanco.position.set(0, 26.5, 0);
         meshDedoBlanco.castShadow = true;
         sliderDer.add(meshDedoBlanco);
       }, undefined, () => {
         // Fallback procedural exacto con las mismas medidas reales
         const dedoGeoProcedural = new THREE.BoxGeometry(11.5, 53, 14);
         const meshDedoRojo = new THREE.Mesh(dedoGeoProcedural, matDedoRojo);
-        meshDedoRojo.position.set(0, 33.5, 0);
+        meshDedoRojo.position.set(0, 26.5, 0);
         meshDedoRojo.castShadow = true;
         sliderIzq.add(meshDedoRojo);
 
         const meshDedoBlanco = new THREE.Mesh(dedoGeoProcedural, matDedoBlanco);
-        meshDedoBlanco.position.set(0, 33.5, 0);
+        meshDedoBlanco.position.set(0, 26.5, 0);
         meshDedoBlanco.castShadow = true;
         sliderDer.add(meshDedoBlanco);
       });
 
-      // 5. Módulo de Cámara FICCT en la Muñeca (junto a la brida)
+      // 5. Módulo de Cámara FICCT en la Muñeca (frente a la brida, como en el robot real)
       const camaraGroup = new THREE.Group();
-      camaraGroup.position.set(38, 15, -12); // Montada al costado del efector
+      camaraGroup.position.set(0, 16, 24); // Frontal sobre la brida
 
       // Cuerpo blanco de la cámara industrial
-      const camCuerpoGeo = new THREE.BoxGeometry(30, 34, 30);
+      const camCuerpoGeo = new THREE.BoxGeometry(28, 30, 26);
       const camCuerpoMat = new THREE.MeshStandardMaterial({
-        color: 0xf1f5f9,
+        color: 0xf8fafc,
         metalness: 0.2,
-        roughness: 0.3,
+        roughness: 0.35,
       });
       const camCuerpo = new THREE.Mesh(camCuerpoGeo, camCuerpoMat);
       camCuerpo.castShadow = true;
       camaraGroup.add(camCuerpo);
 
-      // Lente frontal negro con anillo azul
-      const camLenteGeo = new THREE.CylinderGeometry(8, 8, 8, 24);
+      // Lente frontal oscuro apuntando hacia abajo/frente
+      const camLenteGeo = new THREE.CylinderGeometry(7, 7, 6, 24);
       const camLenteMat = new THREE.MeshStandardMaterial({
         color: 0x090a0f,
         metalness: 0.9,
         roughness: 0.1,
       });
       const camLente = new THREE.Mesh(camLenteGeo, camLenteMat);
-      camLente.position.set(0, 19, 0);
+      camLente.position.set(0, 15, 0);
       camaraGroup.add(camLente);
 
-      const camAnilloGeo = new THREE.TorusGeometry(8.2, 0.6, 12, 24);
-      const camAnilloMat = new THREE.MeshStandardMaterial({ color: 0x00e5ff, emissive: 0x00e5ff, emissiveIntensity: 0.5 });
+      // Anillo LED verde esmeralda brillante (como en las fotos reales de la FICCT)
+      const camAnilloGeo = new THREE.TorusGeometry(7.2, 0.8, 16, 32);
+      const camAnilloMat = new THREE.MeshStandardMaterial({
+        color: 0x10b981,
+        emissive: 0x10b981,
+        emissiveIntensity: 1.4,
+      });
       const camAnillo = new THREE.Mesh(camAnilloGeo, camAnilloMat);
       camAnillo.rotation.x = Math.PI / 2;
-      camAnillo.position.set(0, 20, 0);
+      camAnillo.position.set(0, 17.5, 0);
       camaraGroup.add(camAnillo);
 
       // Cable negro flexible hacia el antebrazo
       const cablePunto = new THREE.CylinderGeometry(2, 2, 35, 12);
       const cableMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.8 });
       const cable = new THREE.Mesh(cablePunto, cableMat);
-      cable.position.set(-6, -18, 0);
+      cable.position.set(-6, -16, -6);
       cable.rotation.z = 0.3;
       camaraGroup.add(cable);
 
       pinzaGroup.add(camaraGroup);
 
-      // Haz láser de puntería hacia la casilla (suave y discreto)
+      // Haz láser de puntería hacia la casilla (suave y discreto desde las puntas de los dedos)
       const laserOficialGeo = new THREE.CylinderGeometry(0.5, 0.5, 230, 8);
       const laserOficialMat = new THREE.MeshBasicMaterial({
         color: 0x00e5ff,
