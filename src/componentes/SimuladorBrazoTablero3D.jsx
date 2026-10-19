@@ -786,8 +786,9 @@ export default function SimuladorBrazoTablero3D({
 
       // Ensamble fiel de la Pinza Eléctrica DH-Robotics PGE-50-26 según el robot real de FICCT
       const pinzaGroup = new THREE.Group();
-      // Orientar la pinza vertical hacia abajo (eje Z de TOOL) y de frente hacia el tablero
+      // Orientar la pinza vertical hacia abajo (eje Z de TOOL) y alineada completamente recta (0° en reposo)
       pinzaGroup.rotation.set(Math.PI / 2, Math.PI, 0);
+      pinzaGroup.rotateY(THREE.MathUtils.degToRad(60.67));
 
       // 1. Cuerpo Superior PGE-50: Negro Mate Anodizado (29 x 60 x 20 mm)
       const cuerpoSuperiorGeo = new THREE.BoxGeometry(29, 60, 20);
@@ -896,27 +897,27 @@ export default function SimuladorBrazoTablero3D({
         stlGeo.computeVertexNormals();
         stlGeo.center();
 
-        const meshDedoRojo = new THREE.Mesh(stlGeo, matDedoRojo);
-        meshDedoRojo.position.set(0, 26.5, 0);
-        meshDedoRojo.castShadow = true;
-        sliderIzq.add(meshDedoRojo);
-
         const meshDedoBlanco = new THREE.Mesh(stlGeo, matDedoBlanco);
         meshDedoBlanco.position.set(0, 26.5, 0);
         meshDedoBlanco.castShadow = true;
-        sliderDer.add(meshDedoBlanco);
+        sliderIzq.add(meshDedoBlanco);
+
+        const meshDedoRojo = new THREE.Mesh(stlGeo, matDedoRojo);
+        meshDedoRojo.position.set(0, 26.5, 0);
+        meshDedoRojo.castShadow = true;
+        sliderDer.add(meshDedoRojo);
       }, undefined, () => {
         // Fallback procedural exacto con las mismas medidas reales
         const dedoGeoProcedural = new THREE.BoxGeometry(11.5, 53, 14);
-        const meshDedoRojo = new THREE.Mesh(dedoGeoProcedural, matDedoRojo);
-        meshDedoRojo.position.set(0, 26.5, 0);
-        meshDedoRojo.castShadow = true;
-        sliderIzq.add(meshDedoRojo);
-
         const meshDedoBlanco = new THREE.Mesh(dedoGeoProcedural, matDedoBlanco);
         meshDedoBlanco.position.set(0, 26.5, 0);
         meshDedoBlanco.castShadow = true;
-        sliderDer.add(meshDedoBlanco);
+        sliderIzq.add(meshDedoBlanco);
+
+        const meshDedoRojo = new THREE.Mesh(dedoGeoProcedural, matDedoRojo);
+        meshDedoRojo.position.set(0, 26.5, 0);
+        meshDedoRojo.castShadow = true;
+        sliderDer.add(meshDedoRojo);
       });
 
       // 5. Módulo de Cámara Industrial FICCT (montada lateralmente con bracket y cable hacia la muñeca, idéntica al escaneo FICCT)
@@ -1235,14 +1236,15 @@ export default function SimuladorBrazoTablero3D({
       const dClamped = Math.min(LONG_L1 + LONG_L2 - 0.05, Math.max(0.8, dTotal));
 
       const cosJ3 = (dClamped * dClamped - LONG_L1 * LONG_L1 - LONG_L2 * LONG_L2) / (2 * LONG_L1 * LONG_L2);
-      const j3 = -Math.acos(THREE.MathUtils.clamp(cosJ3, -1, 1));
+      const acosJ3 = Math.acos(THREE.MathUtils.clamp(cosJ3, -1, 1));
+      const j3 = -acosJ3;
       const j2 = Math.atan2(r, dy) - Math.atan2(LONG_L2 * Math.sin(-j3), LONG_L1 + LONG_L2 * Math.cos(j3));
-      const j4 = -(j2 + j3);
+      const j4 = -Math.PI / 2 - (j2 + j3);
 
       return {
         j1,
-        j2: -j2,
-        j3: -j3,
+        j2,
+        j3,
         j4,
       };
     };
@@ -1262,8 +1264,8 @@ export default function SimuladorBrazoTablero3D({
       let curJ2 = ANGULOS_CERO_RAD.j2;
       let curJ3 = ANGULOS_CERO_RAD.j3;
       let curJ4 = ANGULOS_CERO_RAD.j4;
-      let curJ5 = 0;
-      let curJ6 = 0;
+      let curJ5 = ANGULOS_CERO_RAD.j5;
+      let curJ6 = ANGULOS_CERO_RAD.j6;
       let estadoTexto = 'CALCULANDO CINEMÁTICA';
       let pinzaActiva = false;
 
@@ -1275,33 +1277,39 @@ export default function SimuladorBrazoTablero3D({
       const ikGripDest = resolverIKDobot(cDestino.x, yGrip, cDestino.z);
       const ikHoverDest = resolverIKDobot(cDestino.x, yHover, cDestino.z);
 
+      // Rotación diagonal a 45° para agarre de piezas (giro_diagonal_grados en calibracion_local/brazo.json)
+      const j6DiagOrig = THREE.MathUtils.degToRad(74.33) + ikHoverOrig.j1;
+      const j6DiagDest = THREE.MathUtils.degToRad(74.33) + ikHoverDest.j1;
+
       if (t < 0.22) {
-        // Fase 1: Desplazarse suavemente de la Posición Cero a Hover sobre el origen
+        // Fase 1: Desplazarse suavemente de la Posición Cero (recto 0°) a Hover sobre el origen girando a 45° diagonal
         const pSub = t / 0.22;
         curJ1 = THREE.MathUtils.lerp(ANGULOS_CERO_RAD.j1, ikHoverOrig.j1, pSub);
         curJ2 = THREE.MathUtils.lerp(ANGULOS_CERO_RAD.j2, ikHoverOrig.j2, pSub);
         curJ3 = THREE.MathUtils.lerp(ANGULOS_CERO_RAD.j3, ikHoverOrig.j3, pSub);
         curJ4 = THREE.MathUtils.lerp(ANGULOS_CERO_RAD.j4, ikHoverOrig.j4, pSub);
-        curJ5 = THREE.MathUtils.lerp(ANGULOS_CERO_RAD.j5, 0, pSub);
-        curJ6 = THREE.MathUtils.lerp(ANGULOS_CERO_RAD.j6, 0, pSub);
+        curJ5 = THREE.MathUtils.lerp(ANGULOS_CERO_RAD.j5, Math.PI / 2, pSub);
+        curJ6 = THREE.MathUtils.lerp(ANGULOS_CERO_RAD.j6, j6DiagOrig, pSub);
         targetX = THREE.MathUtils.lerp(0, cOrigen.x, pSub);
         targetZ = THREE.MathUtils.lerp(Z_DESCANSO_PINZA, cOrigen.z, pSub);
         targetY = THREE.MathUtils.lerp(2.2, yHover, pSub);
         estadoTexto = `APROXIMACIÓN -> CASILLA ${origen.toUpperCase()}`;
       } else if (t < 0.38) {
-        // Fase 2: Descender y sujetar la pieza
+        // Fase 2: Descender y sujetar la pieza con dedos orientados en diagonal (45°)
         const pSub = (t - 0.22) / 0.16;
         curJ1 = THREE.MathUtils.lerp(ikHoverOrig.j1, ikGripOrig.j1, pSub);
         curJ2 = THREE.MathUtils.lerp(ikHoverOrig.j2, ikGripOrig.j2, pSub);
         curJ3 = THREE.MathUtils.lerp(ikHoverOrig.j3, ikGripOrig.j3, pSub);
         curJ4 = THREE.MathUtils.lerp(ikHoverOrig.j4, ikGripOrig.j4, pSub);
+        curJ5 = Math.PI / 2;
+        curJ6 = THREE.MathUtils.degToRad(74.33) + curJ1;
         targetX = cOrigen.x;
         targetZ = cOrigen.z;
         targetY = THREE.MathUtils.lerp(yHover, yGrip, pSub);
         pinzaActiva = pSub > 0.4;
-        estadoTexto = `SUJETANDO PIEZA EN ${origen.toUpperCase()}`;
+        estadoTexto = `SUJETANDO PIEZA EN ${origen.toUpperCase()} (DIAGONAL 45°)`;
       } else if (t < 0.70) {
-        // Fase 3: Elevar y trasladar en curva parabólica hacia el destino
+        // Fase 3: Elevar y trasladar en curva parabólica hacia el destino manteniendo 45° diagonal
         const pSub = (t - 0.38) / 0.32;
         pinzaActiva = true;
         targetX = THREE.MathUtils.lerp(cOrigen.x, cDestino.x, pSub);
@@ -1312,18 +1320,22 @@ export default function SimuladorBrazoTablero3D({
         curJ2 = ikArc.j2;
         curJ3 = ikArc.j3;
         curJ4 = ikArc.j4;
+        curJ5 = Math.PI / 2;
+        curJ6 = THREE.MathUtils.degToRad(74.33) + curJ1;
 
         if (piezaMesh) {
           piezaMesh.position.set(targetX, targetY - 0.91, targetZ);
         }
         estadoTexto = `TRASLADANDO ${origen.toUpperCase()} -> ${destino.toUpperCase()}`;
       } else if (t < 0.85) {
-        // Fase 4: Descender sobre la casilla de destino y soltar
+        // Fase 4: Descender sobre la casilla de destino y soltar a 45° diagonal
         const pSub = (t - 0.70) / 0.15;
         curJ1 = THREE.MathUtils.lerp(ikGripDest.j1, ikHoverDest.j1, pSub);
         curJ2 = THREE.MathUtils.lerp(ikGripDest.j2, ikHoverDest.j2, pSub);
         curJ3 = THREE.MathUtils.lerp(ikGripDest.j3, ikHoverDest.j3, pSub);
         curJ4 = THREE.MathUtils.lerp(ikGripDest.j4, ikHoverDest.j4, pSub);
+        curJ5 = Math.PI / 2;
+        curJ6 = THREE.MathUtils.degToRad(74.33) + curJ1;
         targetX = cDestino.x;
         targetZ = cDestino.z;
         targetY = THREE.MathUtils.lerp(yGrip, yHover, pSub);
@@ -1334,14 +1346,14 @@ export default function SimuladorBrazoTablero3D({
         }
         estadoTexto = `POSICIONANDO EN ${destino.toUpperCase()}`;
       } else {
-        // Fase 5: Retornar a la Posición Cero oficial calibrada (tiempo de descanso)
+        // Fase 5: Retornar a la Posición Cero oficial calibrada (girando de regreso a RECTO 0°)
         const pSub = (t - 0.85) / 0.15;
         curJ1 = THREE.MathUtils.lerp(ikHoverDest.j1, ANGULOS_CERO_RAD.j1, pSub);
         curJ2 = THREE.MathUtils.lerp(ikHoverDest.j2, ANGULOS_CERO_RAD.j2, pSub);
         curJ3 = THREE.MathUtils.lerp(ikHoverDest.j3, ANGULOS_CERO_RAD.j3, pSub);
         curJ4 = THREE.MathUtils.lerp(ikHoverDest.j4, ANGULOS_CERO_RAD.j4, pSub);
-        curJ5 = THREE.MathUtils.lerp(0, ANGULOS_CERO_RAD.j5, pSub);
-        curJ6 = THREE.MathUtils.lerp(0, ANGULOS_CERO_RAD.j6, pSub);
+        curJ5 = THREE.MathUtils.lerp(Math.PI / 2, ANGULOS_CERO_RAD.j5, pSub);
+        curJ6 = THREE.MathUtils.lerp(j6DiagDest, ANGULOS_CERO_RAD.j6, pSub);
         targetX = THREE.MathUtils.lerp(cDestino.x, 0, pSub);
         targetZ = THREE.MathUtils.lerp(cDestino.z, Z_DESCANSO_PINZA, pSub);
         targetY = THREE.MathUtils.lerp(yHover, 2.2, pSub);
@@ -1372,6 +1384,10 @@ export default function SimuladorBrazoTablero3D({
         if (robot.j2) robot.j2.rotation.z = curJ2;
         if (robot.j3) robot.j3.rotation.z = curJ3;
         if (robot.j4) robot.j4.rotation.z = -curJ2 - curJ3;
+        if (robot.efector) {
+          const efRot = t >= 1.0 || t < 0.02 ? 0 : Math.PI / 4;
+          robot.efector.rotation.y = efRot;
+        }
 
         const aperturaSimple = pinzaActiva ? 0.08 : 0.20;
         if (robot.dedoIzq) robot.dedoIzq.position.x = -aperturaSimple;
