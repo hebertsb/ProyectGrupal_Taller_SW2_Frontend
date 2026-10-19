@@ -4,6 +4,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { fenAMatriz, nombreCasilla } from '../ajedrez';
 
 // Constantes métricas del mundo 3D
@@ -238,29 +239,34 @@ export default function SimuladorBrazoTablero3D({
   const robotRef = useRef(null);
   const robotGroupRef = useRef(null);
   const robotRealGroupRef = useRef(null);
+  const robotOficialGroupRef = useRef(null);
+  const robotArticuladoRef = useRef(null);
   const casillaDestacadaRef = useRef({ origen: null, destino: null });
   const casillasMapRef = useRef(new Map());
 
   // Estado HUD para telemetría
   const [telemetria, setTelemetria] = useState({
     estadoRobot: 'EN ESPERA (HOME)',
-    efectorXYZ: { x: -4.2, y: 3.2, z: 0 },
-    juntasGrados: { j1: 0, j2: -25, j3: 45, j4: -20, j5: 0, j6: 0 },
+    efectorXYZ: { x: 0, y: 235, z: 262 },
+    juntasGrados: { j1: -57, j2: 28, j3: -149, j4: 31, j5: 90, j6: -28 },
     pinzaActiva: false,
     maniobraProgreso: 0,
   });
 
   const [vistaCamara, setVistaCamara] = useState('isometrica');
   const [modelosCargados, setModelosCargados] = useState(cacheModelosPiezas3D.size === 12);
-  const [modeloRobot, setModeloRobot] = useState('real'); // 'real' (modelo escaneado FICCT) | 'cinematico' (6-DOF)
+  const [modeloRobot, setModeloRobot] = useState('oficial'); // 'oficial' (CR5AS Articulado + PGE-50) | 'escaneo' (FICCT) | 'cinematico'
 
-  // Control de visibilidad entre el brazo real escaneado y el brazo articulado cinemático
+  // Control de visibilidad entre los modelos del brazo
   useEffect(() => {
-    if (robotGroupRef.current) {
-      robotGroupRef.current.visible = modeloRobot === 'cinematico';
+    if (robotOficialGroupRef.current) {
+      robotOficialGroupRef.current.visible = modeloRobot === 'oficial';
     }
     if (robotRealGroupRef.current) {
-      robotRealGroupRef.current.visible = modeloRobot === 'real';
+      robotRealGroupRef.current.visible = modeloRobot === 'escaneo';
+    }
+    if (robotGroupRef.current) {
+      robotGroupRef.current.visible = modeloRobot === 'cinematico';
     }
   }, [modeloRobot]);
 
@@ -595,6 +601,7 @@ export default function SimuladorBrazoTablero3D({
     // 3b. Modelo 3D Escaneado Real del Brazo Dobot CR5AS con Cámara (FICCT)
     const robotRealGroup = new THREE.Group();
     robotRealGroup.position.set(-4.8, 0, 0); // Ubicado a un lado del tablero en el flanco izquierdo
+    robotRealGroup.visible = false;
     scene.add(robotRealGroup);
     robotRealGroupRef.current = robotRealGroup;
 
@@ -628,18 +635,13 @@ export default function SimuladorBrazoTablero3D({
       const model = gltf.scene;
 
       // Centrado milimétrico de la base cilíndrica del modelo escaneado:
-      // Base real: center_x = 0.1504, min_y = -0.9522, center_z = -0.5833
       const pivot = new THREE.Group();
-      pivot.position.set(0, 0.08, 0); // Descansa exactamente sobre la placa de montaje
+      pivot.position.set(0, 0.08, 0);
       model.position.set(-0.1504, 0.9522, 0.5833);
       pivot.add(model);
 
       const escala = 1.75;
       pivot.scale.set(escala, escala, escala);
-
-      // Rotación analítica calculada (94.32° = 1.6462 rad):
-      // Hace que el brazo, la cámara y la pinza apunten directamente hacia adentro (+X),
-      // sobrevolando el tablero a la altura de juego sin colisionar con las casillas.
       pivot.rotation.y = 1.6462;
 
       model.traverse((child) => {
@@ -652,6 +654,187 @@ export default function SimuladorBrazoTablero3D({
       robotRealGroup.add(pivot);
     }, undefined, (err) => {
       console.warn('Nota: Modelo robot_arm_camera.glb no disponible, usando cinemático:', err);
+    });
+
+    // 3c. Gemelo Digital Oficial Dobot CR5AS Articulado 6-DOF con Pinza DH-Robotics PGE-50-26
+    const robotOficialGroup = new THREE.Group();
+    robotOficialGroup.position.set(-4.6, 0, 0); // Flanco izquierdo del tablero
+    robotOficialGroup.visible = true; // Por defecto visible
+    scene.add(robotOficialGroup);
+    robotOficialGroupRef.current = robotOficialGroup;
+
+    // Pedestal industrial metálico con anillo LED cian
+    const pedestalOficialGeo = new THREE.CylinderGeometry(0.70, 0.78, 0.08, 32);
+    const pedestalOficialMat = new THREE.MeshStandardMaterial({
+      color: 0x1e293b,
+      metalness: 0.85,
+      roughness: 0.25,
+    });
+    const pedestalOficial = new THREE.Mesh(pedestalOficialGeo, pedestalOficialMat);
+    pedestalOficial.position.y = 0.04;
+    pedestalOficial.receiveShadow = true;
+    pedestalOficial.castShadow = true;
+    robotOficialGroup.add(pedestalOficial);
+
+    const anilloOficialGeo = new THREE.TorusGeometry(0.71, 0.016, 16, 48);
+    const anilloOficialMat = new THREE.MeshStandardMaterial({
+      color: 0x00e5ff,
+      emissive: 0x00e5ff,
+      emissiveIntensity: 0.8,
+    });
+    const anilloOficial = new THREE.Mesh(anilloOficialGeo, anilloOficialMat);
+    anilloOficial.rotation.x = Math.PI / 2;
+    anilloOficial.position.y = 0.08;
+    robotOficialGroup.add(anilloOficial);
+
+    // Cargar modelo oficial Dobot CR5 con DRACOLoader
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath('/draco/');
+    const dobotLoader = new GLTFLoader();
+    dobotLoader.setDRACOLoader(dracoLoader);
+
+    dobotLoader.load('/modelos/dobot_cr5.glb', (gltf) => {
+      const model = gltf.scene;
+
+      // Escala métrica: convierte milímetros del CAD oficial a unidades de Three.js
+      const ESCALA_DOBOT = 0.0078;
+      model.scale.set(ESCALA_DOBOT, ESCALA_DOBOT, ESCALA_DOBOT);
+      model.position.set(0, 0.08, 0);
+
+      // Extraer nodos articulares J1 a J6 y TOOL
+      const j1 = model.getObjectByName('J1');
+      const j2 = model.getObjectByName('J2');
+      const j3 = model.getObjectByName('J3');
+      const j4 = model.getObjectByName('J4');
+      const j5 = model.getObjectByName('J5');
+      const j6 = model.getObjectByName('J6');
+      const tool = model.getObjectByName('TOOL') || j6;
+
+      // Ocultar skins internas / huesos auxiliares
+      const skins = [
+        'J3SkinKey1', 'J3SkinKey2', 'J3SkinKey3', 'J3SkinKey4', 'J3SkinKey5', 'J3SkinKey6', 'J3SkinKey7',
+        'J4SkinKey1', 'J4SkinKey2', 'J4SkinKey3',
+        'J5SkinKey1', 'J5SkinKey2', 'J5SkinKey3',
+      ];
+      skins.forEach((sk) => {
+        const obj = model.getObjectByName(sk);
+        if (obj) obj.visible = false;
+      });
+
+      // Configurar sombras y materiales PBR elegantes
+      model.traverse((child) => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+          if (child.material) {
+            child.material.metalness = Math.max(child.material.metalness || 0, 0.5);
+            child.material.roughness = Math.min(child.material.roughness || 0.5, 0.35);
+          }
+        }
+      });
+
+      // Ensamble de la Pinza Eléctrica DH-Robotics PGE-50-26 acoplada al efector TOOL
+      const pinzaGroup = new THREE.Group();
+
+      // Cuerpo PGE-50: 29 x 20 x 97 mm
+      const cuerpoPGEGeo = new THREE.BoxGeometry(29, 97, 22);
+      const cuerpoPGEMat = new THREE.MeshStandardMaterial({
+        color: 0x1e293b,
+        metalness: 0.85,
+        roughness: 0.2,
+      });
+      const cuerpoPGE = new THREE.Mesh(cuerpoPGEGeo, cuerpoPGEMat);
+      cuerpoPGE.position.set(0, 48.5, 0);
+      cuerpoPGE.castShadow = true;
+      pinzaGroup.add(cuerpoPGE);
+
+      // Placa LED DH-Robotics en cian
+      const placaDHGeo = new THREE.BoxGeometry(16, 28, 23);
+      const placaDHMat = new THREE.MeshStandardMaterial({
+        color: 0x00e5ff,
+        emissive: 0x00e5ff,
+        emissiveIntensity: 0.6,
+      });
+      const placaDH = new THREE.Mesh(placaDHGeo, placaDHMat);
+      placaDH.position.set(0, 50, 0);
+      pinzaGroup.add(placaDH);
+
+      // Dedos largos impresos 3D (recorrido 26 mm: +-6 mm cerrada, +-13 mm abierta)
+      const dedoGeo = new THREE.BoxGeometry(6, 65, 14);
+      const dedoMat = new THREE.MeshStandardMaterial({
+        color: 0x0f172a,
+        metalness: 0.65,
+        roughness: 0.35,
+      });
+
+      const dedoIzq = new THREE.Mesh(dedoGeo, dedoMat);
+      dedoIzq.position.set(-13, 115, 0);
+      dedoIzq.castShadow = true;
+      pinzaGroup.add(dedoIzq);
+
+      const dedoDer = new THREE.Mesh(dedoGeo, dedoMat);
+      dedoDer.position.set(13, 115, 0);
+      dedoDer.castShadow = true;
+      pinzaGroup.add(dedoDer);
+
+      // Almohadillas de silicona cian para agarre suave de piezas
+      const gomaGeo = new THREE.BoxGeometry(3, 22, 12);
+      const gomaMat = new THREE.MeshStandardMaterial({
+        color: 0x00e5ff,
+        emissive: 0x00e5ff,
+        emissiveIntensity: 0.35,
+      });
+      const gomaIzq = new THREE.Mesh(gomaGeo, gomaMat);
+      gomaIzq.position.set(2, -18, 0);
+      dedoIzq.add(gomaIzq);
+      const gomaDer = new THREE.Mesh(gomaGeo, gomaMat);
+      gomaDer.position.set(-2, -18, 0);
+      dedoDer.add(gomaDer);
+
+      // Haz láser de puntería hacia la casilla
+      const laserOficialGeo = new THREE.CylinderGeometry(0.6, 0.6, 220, 8);
+      const laserOficialMat = new THREE.MeshBasicMaterial({
+        color: 0x00e5ff,
+        transparent: true,
+        opacity: 0.6,
+      });
+      const laserOficial = new THREE.Mesh(laserOficialGeo, laserOficialMat);
+      laserOficial.position.set(0, 225, 0);
+      pinzaGroup.add(laserOficial);
+
+      // Acoplar al nodo TOOL o J6
+      if (tool) {
+        tool.add(pinzaGroup);
+      } else if (j6) {
+        j6.add(pinzaGroup);
+      }
+
+      // Aplicar postura HOME calibrada real [302.86°, 28.21°, -149.12°, 30.90°, 89.71°, -27.81°]
+      if (j1) j1.rotation.y = THREE.MathUtils.degToRad(-57.14);
+      if (j2) j2.rotation.z = THREE.MathUtils.degToRad(28.21);
+      if (j3) j3.rotation.z = THREE.MathUtils.degToRad(-149.12);
+      if (j4) j4.rotation.z = THREE.MathUtils.degToRad(30.90);
+      if (j5) j5.rotation.y = THREE.MathUtils.degToRad(89.71);
+      if (j6) j6.rotation.z = THREE.MathUtils.degToRad(-27.81);
+
+      robotArticuladoRef.current = {
+        model,
+        j1,
+        j2,
+        j3,
+        j4,
+        j5,
+        j6,
+        tool,
+        pinzaGroup,
+        dedoIzq,
+        dedoDer,
+        laser: laserOficial,
+      };
+
+      robotOficialGroup.add(model);
+    }, undefined, (err) => {
+      console.warn('Nota: Modelo dobot_cr5.glb no disponible, usando alternativas:', err);
     });
 
     // 4. Adaptación a Resize
@@ -863,7 +1046,7 @@ export default function SimuladorBrazoTablero3D({
       }
 
       // Cinemática Inversa Analítica para Dobot 6-DOF
-      const basePos = robot.group.position; // (-4.4, 0, 0)
+      const basePos = robot?.group?.position || { x: -4.6, y: 0, z: 0 };
       const dx = targetX - basePos.x;
       const dz = targetZ - basePos.z;
       const r = Math.sqrt(dx * dx + dz * dz);
@@ -871,7 +1054,6 @@ export default function SimuladorBrazoTablero3D({
 
       // J1: Rotación Yaw de la base hacia el objetivo
       const anguloJ1 = Math.atan2(dz, dx);
-      robot.j1.rotation.y = anguloJ1;
 
       // J2 y J3: Resolución planar de 2 eslabones (L1 y L2)
       const dTotal = Math.sqrt(r * r + dy * dy);
@@ -880,31 +1062,54 @@ export default function SimuladorBrazoTablero3D({
       const cosJ3 = (dClamped * dClamped - LONG_L1 * LONG_L1 - LONG_L2 * LONG_L2) / (2 * LONG_L1 * LONG_L2);
       const anguloJ3 = -Math.acos(THREE.MathUtils.clamp(cosJ3, -1, 1));
       const anguloJ2 = Math.atan2(r, dy) - Math.atan2(LONG_L2 * Math.sin(-anguloJ3), LONG_L1 + LONG_L2 * Math.cos(anguloJ3));
+      const anguloJ4 = -(anguloJ2 + anguloJ3);
 
-      robot.j2.rotation.z = -anguloJ2;
-      robot.j3.rotation.z = -anguloJ3;
+      // 1. Articular el Gemelo Oficial Dobot CR5AS con Pinza PGE-50-26
+      const robotArt = robotArticuladoRef.current;
+      if (robotArt) {
+        if (robotArt.j1) robotArt.j1.rotation.y = anguloJ1;
+        if (robotArt.j2) robotArt.j2.rotation.z = -anguloJ2;
+        if (robotArt.j3) robotArt.j3.rotation.z = -anguloJ3;
+        if (robotArt.j4) robotArt.j4.rotation.z = anguloJ4;
+        if (robotArt.j5) robotArt.j5.rotation.y = 0;
+        if (robotArt.j6) robotArt.j6.rotation.z = 0;
 
-      // J4: Orientar el efector verticalmente hacia abajo perpendicular al tablero
-      robot.j4.rotation.z = anguloJ2 + anguloJ3;
+        // Carrera de la pinza eléctrica PGE-50-26 (26 mm totales: +-6 mm agarre, +-13 mm abierta)
+        const aperturaOficial = pinzaActiva ? 6.0 : 13.0;
+        if (robotArt.dedoIzq) robotArt.dedoIzq.position.x = -aperturaOficial;
+        if (robotArt.dedoDer) robotArt.dedoDer.position.x = aperturaOficial;
+      }
 
-      // Animación de apertura/cierre de pinza
-      const aperturaDedos = pinzaActiva ? 0.08 : 0.20;
-      robot.dedoIzq.position.x = -aperturaDedos;
-      robot.dedoDer.position.x = aperturaDedos;
+      // 2. Articular el Brazo Cinemático Esquemático
+      if (robot) {
+        if (robot.j1) robot.j1.rotation.y = anguloJ1;
+        if (robot.j2) robot.j2.rotation.z = -anguloJ2;
+        if (robot.j3) robot.j3.rotation.z = -anguloJ3;
+        if (robot.j4) robot.j4.rotation.z = anguloJ2 + anguloJ3;
+
+        const aperturaSimple = pinzaActiva ? 0.08 : 0.20;
+        if (robot.dedoIzq) robot.dedoIzq.position.x = -aperturaSimple;
+        if (robot.dedoDer) robot.dedoDer.position.x = aperturaSimple;
+      }
+
+      // Mapeo milimétrico a las coordenadas de laboratorio reales (calibracion_local/brazo.json)
+      const realX_mm = Math.round(targetX * 38.7);
+      const realY_mm = Math.round(-560 + targetZ * 38.7);
+      const realZ_mm = Math.round(235 + (targetY - yGrip) * 80);
 
       // Actualizar telemetría para el HUD
       setTelemetria({
         estadoRobot: estadoTexto,
         efectorXYZ: {
-          x: parseFloat(targetX.toFixed(2)),
-          y: parseFloat(targetY.toFixed(2)),
-          z: parseFloat(targetZ.toFixed(2)),
+          x: realX_mm,
+          y: realY_mm,
+          z: realZ_mm,
         },
         juntasGrados: {
           j1: Math.round(THREE.MathUtils.radToDeg(anguloJ1)),
-          j2: Math.round(THREE.MathUtils.radToDeg(anguloJ2)),
-          j3: Math.round(THREE.MathUtils.radToDeg(anguloJ3)),
-          j4: Math.round(THREE.MathUtils.radToDeg(robot.j4.rotation.z)),
+          j2: Math.round(THREE.MathUtils.radToDeg(-anguloJ2)),
+          j3: Math.round(THREE.MathUtils.radToDeg(-anguloJ3)),
+          j4: Math.round(THREE.MathUtils.radToDeg(anguloJ4)),
           j5: 0,
           j6: 0,
         },
@@ -976,17 +1181,27 @@ export default function SimuladorBrazoTablero3D({
           </div>
         </div>
 
-        {/* SELECTOR DE MODELO DEL BRAZO (REAL FICCT vs CINEMÁTICO ARTICULADO) */}
+        {/* SELECTOR DE MODELO DEL BRAZO */}
         <div className="flex items-center gap-1 bg-surface-container-lowest p-0.5 rounded-lg border border-cyan-500/30 text-[10px]">
           <button
             type="button"
-            onClick={() => setModeloRobot('real')}
+            onClick={() => setModeloRobot('oficial')}
             className={`px-2 py-1 rounded transition-all flex items-center gap-1 ${
-              modeloRobot === 'real' ? 'bg-[#00e5ff] text-black font-bold shadow-sm' : 'text-slate-400 hover:text-white'
+              modeloRobot === 'oficial' ? 'bg-[#00e5ff] text-black font-bold shadow-sm' : 'text-slate-400 hover:text-white'
+            }`}
+            title="Gemelo digital oficial Dobot CR5AS articulado con pinza PGE-50-26 y cinemática 6-DOF"
+          >
+            <span>🦾</span> CR5AS Articulado
+          </button>
+          <button
+            type="button"
+            onClick={() => setModeloRobot('escaneo')}
+            className={`px-2 py-1 rounded transition-all flex items-center gap-1 ${
+              modeloRobot === 'escaneo' ? 'bg-[#00e5ff] text-black font-bold shadow-sm' : 'text-slate-400 hover:text-white'
             }`}
             title="Modelo 3D escaneado con cámara real de la universidad (FICCT)"
           >
-            <span>📷</span> Brazo Real 3D (FICCT)
+            <span>📷</span> Escaneo FICCT
           </button>
           <button
             type="button"
@@ -994,9 +1209,9 @@ export default function SimuladorBrazoTablero3D({
             className={`px-2 py-1 rounded transition-all flex items-center gap-1 ${
               modeloRobot === 'cinematico' ? 'bg-[#00e5ff] text-black font-bold shadow-sm' : 'text-slate-400 hover:text-white'
             }`}
-            title="Brazo articulado interactivo 6-DOF con cinemática inversa y pinza"
+            title="Brazo esquemático simple 6-DOF"
           >
-            <span>🦾</span> Cinemática 6-DOF
+            <span>📐</span> Cinemática Simple
           </button>
         </div>
 
@@ -1060,19 +1275,21 @@ export default function SimuladorBrazoTablero3D({
             <div className="flex items-center justify-between gap-4 text-[#00e5ff] font-bold border-b border-white/10 pb-1">
               <span>EFECTOR XYZ (mm)</span>
               <span className={telemetria.pinzaActiva ? 'text-amber-400' : 'text-slate-400'}>
-                GRIPPER: {telemetria.pinzaActiva ? 'CERRADO (ON)' : 'ABIERTO (OFF)'}
+                PINZA PGE-50: {telemetria.pinzaActiva ? 'AGARRE (ON)' : 'ABIERTA (OFF)'}
               </span>
             </div>
-            <div className="grid grid-cols-3 gap-2 text-slate-300">
-              <span>X: {(telemetria.efectorXYZ.x * 100).toFixed(0)}</span>
-              <span>Y: {(telemetria.efectorXYZ.y * 100).toFixed(0)}</span>
-              <span>Z: {(telemetria.efectorXYZ.z * 100).toFixed(0)}</span>
+            <div className="grid grid-cols-3 gap-2 text-slate-300 font-semibold">
+              <span>X: {telemetria.efectorXYZ.x} mm</span>
+              <span>Y: {telemetria.efectorXYZ.y} mm</span>
+              <span>Z: {telemetria.efectorXYZ.z} mm</span>
             </div>
-            <div className="text-[9px] text-slate-400 pt-1 border-t border-white/5 flex gap-2">
+            <div className="text-[9px] text-slate-400 pt-1 border-t border-white/5 grid grid-cols-6 gap-1">
               <span>J1: {telemetria.juntasGrados.j1}°</span>
               <span>J2: {telemetria.juntasGrados.j2}°</span>
               <span>J3: {telemetria.juntasGrados.j3}°</span>
               <span>J4: {telemetria.juntasGrados.j4}°</span>
+              <span>J5: {telemetria.juntasGrados.j5}°</span>
+              <span>J6: {telemetria.juntasGrados.j6}°</span>
             </div>
           </div>
         </div>
