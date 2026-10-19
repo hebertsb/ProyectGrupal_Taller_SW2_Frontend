@@ -281,6 +281,55 @@ export default function SimuladorBrazoTablero3D({
   const [modelosCargados, setModelosCargados] = useState(cacheModelosPiezas3D.size === 12);
   const [modeloRobot, setModeloRobot] = useState('oficial'); // 'oficial' (CR5AS Articulado + PGE-50) | 'escaneo' (FICCT) | 'cinematico'
 
+  // Estado interactivo de pruebas y jugadas
+  const [fenInterno, setFenInterno] = useState(fen);
+  const [jugadaActiva, setJugadaActiva] = useState(null);
+  const [animando, setAnimando] = useState(false);
+  const [inputUci, setInputUci] = useState('');
+
+  // Sincronizar FEN externo cuando cambie la partida
+  useEffect(() => {
+    setFenInterno(fen);
+  }, [fen]);
+
+  // Sincronizar jugada externa cuando Turing IA o el rival mueva
+  useEffect(() => {
+    if (ultimoMovimiento) {
+      const uci = typeof ultimoMovimiento === 'string'
+        ? ultimoMovimiento
+        : ultimoMovimiento.uci || `${ultimoMovimiento.origen || ultimoMovimiento.from || ''}${ultimoMovimiento.destino || ultimoMovimiento.to || ''}`;
+      if (uci && uci.length >= 4) {
+        setJugadaActiva({ uci, id: Date.now() });
+      }
+    }
+  }, [ultimoMovimiento]);
+
+  // Disparar jugada de prueba manual o preset
+  const dispararJugadaPrueba = (uci) => {
+    if (animando) return;
+    setJugadaActiva({ uci, id: Date.now() });
+  };
+
+  const manejarEnvioManual = (e) => {
+    e.preventDefault();
+    const limpia = inputUci.trim().toLowerCase();
+    if (animando || limpia.length < 4) return;
+    dispararJugadaPrueba(limpia);
+    setInputUci('');
+  };
+
+  const reiniciarPosicionPiezas = () => {
+    setFenInterno('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+    setJugadaActiva(null);
+    setTelemetria({
+      estadoRobot: 'EN ESPERA (POSICIÓN CERO / DESCANSO)',
+      efectorXYZ: { x: 0, y: -262, z: 235 },
+      juntasGrados: { ...ANGULOS_CERO_DEG },
+      pinzaActiva: false,
+      maniobraProgreso: 0,
+    });
+  };
+
   // Control de visibilidad entre los modelos del brazo
   useEffect(() => {
     if (robotOficialGroupRef.current) {
@@ -309,7 +358,7 @@ export default function SimuladorBrazoTablero3D({
 
   // Mapear piezas del FEN a una lista manejable
   const piezasTablero = useMemo(() => {
-    const matriz = fenAMatriz(fen);
+    const matriz = fenAMatriz(fenInterno);
     const piezas = [];
     for (let f = 0; f < 8; f++) {
       for (let c = 0; c < 8; c++) {
@@ -323,7 +372,7 @@ export default function SimuladorBrazoTablero3D({
       }
     }
     return piezas;
-  }, [fen]);
+  }, [fenInterno]);
 
   // 1. Inicialización de la escena Three.js
   useEffect(() => {
@@ -1188,17 +1237,14 @@ export default function SimuladorBrazoTablero3D({
 
   // 3. Cinemática Inversa y Animación de Pick-and-Place para el Dobot CR5AS
   useEffect(() => {
-    if (!ultimoMovimiento) return;
+    if (!jugadaActiva || !jugadaActiva.uci) return;
 
-    const origen = typeof ultimoMovimiento === 'string'
-      ? ultimoMovimiento.slice(0, 2)
-      : ultimoMovimiento.origen || ultimoMovimiento.from || ultimoMovimiento.uci?.slice(0, 2);
-
-    const destino = typeof ultimoMovimiento === 'string'
-      ? ultimoMovimiento.slice(2, 4)
-      : ultimoMovimiento.destino || ultimoMovimiento.to || ultimoMovimiento.uci?.slice(2, 4);
+    const origen = jugadaActiva.uci.slice(0, 2);
+    const destino = jugadaActiva.uci.slice(2, 4);
 
     if (!origen || !destino) return;
+
+    setAnimando(true);
 
     // Resaltar casillas origen y destino
     const casillas = casillasMapRef.current;
@@ -1421,11 +1467,18 @@ export default function SimuladorBrazoTablero3D({
 
       if (t < 1.0) {
         requestAnimationFrame(animarManiobra);
+      } else {
+        setAnimando(false);
+        // Actualizar referencia de la pieza en memoria a la casilla destino
+        if (piezaMesh) {
+          piezasMeshesRef.current.delete(origen);
+          piezasMeshesRef.current.set(destino, piezaMesh);
+        }
       }
     };
 
     requestAnimationFrame(animarManiobra);
-  }, [ultimoMovimiento]);
+  }, [jugadaActiva]);
 
   // Cambiar preset de cámara
   const cambiarPresetCamara = (preset) => {
@@ -1568,6 +1621,78 @@ export default function SimuladorBrazoTablero3D({
             Negras
           </button>
         </div>
+      </div>
+
+      {/* 1b. BARRA DE PRUEBAS DE JUGADA Y CINEMÁTICA EN VIVO */}
+      <div className="relative z-10 w-full px-4 py-1.5 bg-[#080a10]/95 border-b border-[#00e5ff]/20 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[#00e5ff] font-semibold flex items-center gap-1 text-[11px] mr-1">
+            <span>🕹️</span> PROBAR AGARRE:
+          </span>
+          <button
+            type="button"
+            onClick={() => dispararJugadaPrueba('e7e5')}
+            disabled={animando}
+            className="px-2.5 py-1 rounded bg-slate-800 hover:bg-[#00e5ff] hover:text-black border border-[#00e5ff]/30 text-slate-200 text-[11px] font-semibold transition-all disabled:opacity-40"
+            title="Probar agarre y traslado de peón de e7 a e5"
+          >
+            ▶ Peón e7→e5
+          </button>
+          <button
+            type="button"
+            onClick={() => dispararJugadaPrueba('g8f6')}
+            disabled={animando}
+            className="px-2.5 py-1 rounded bg-slate-800 hover:bg-[#00e5ff] hover:text-black border border-[#00e5ff]/30 text-slate-200 text-[11px] font-semibold transition-all disabled:opacity-40"
+            title="Probar agarre y salto de caballo de g8 a f6"
+          >
+            ▶ Caballo g8→f6
+          </button>
+          <button
+            type="button"
+            onClick={() => dispararJugadaPrueba('d7d5')}
+            disabled={animando}
+            className="px-2.5 py-1 rounded bg-slate-800 hover:bg-[#00e5ff] hover:text-black border border-[#00e5ff]/30 text-slate-200 text-[11px] font-semibold transition-all disabled:opacity-40"
+            title="Probar agarre de peón dama de d7 a d5"
+          >
+            ▶ Peón d7→d5
+          </button>
+          <button
+            type="button"
+            onClick={() => dispararJugadaPrueba('b8c6')}
+            disabled={animando}
+            className="px-2.5 py-1 rounded bg-slate-800 hover:bg-[#00e5ff] hover:text-black border border-[#00e5ff]/30 text-slate-200 text-[11px] font-semibold transition-all disabled:opacity-40"
+            title="Probar agarre de caballo de b8 a c6"
+          >
+            ▶ Caballo b8→c6
+          </button>
+        </div>
+
+        {/* Input manual de jugada UCI y botón Reset */}
+        <form onSubmit={manejarEnvioManual} className="flex items-center gap-1.5">
+          <input
+            type="text"
+            value={inputUci}
+            onChange={(e) => setInputUci(e.target.value.toLowerCase())}
+            placeholder="ej. e7e5"
+            maxLength={4}
+            className="w-16 px-2 py-0.5 rounded bg-black/60 border border-white/20 text-center font-mono text-[11px] text-[#00e5ff] focus:outline-none focus:border-[#00e5ff]"
+          />
+          <button
+            type="submit"
+            disabled={animando || inputUci.length < 4}
+            className="px-2.5 py-1 rounded bg-[#00e5ff]/20 hover:bg-[#00e5ff] hover:text-black border border-[#00e5ff]/40 text-[#00e5ff] text-[11px] font-bold transition-all disabled:opacity-40"
+          >
+            Mover
+          </button>
+          <button
+            type="button"
+            onClick={reiniciarPosicionPiezas}
+            className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-white/10 text-slate-300 text-[11px] transition-all ml-1"
+            title="Reiniciar piezas y robot a posición inicial"
+          >
+            ↺ Reset
+          </button>
+        </form>
       </div>
 
       {/* 2. ÁREA PRINCIPAL THREE.JS VIEWPORT */}
