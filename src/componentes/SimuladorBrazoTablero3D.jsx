@@ -5,6 +5,7 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { fenAMatriz, nombreCasilla } from '../ajedrez';
 
 // Constantes métricas del mundo 3D
@@ -733,73 +734,191 @@ export default function SimuladorBrazoTablero3D({
         }
       });
 
-      // Ensamble de la Pinza Eléctrica DH-Robotics PGE-50-26 acoplada al efector TOOL
+      // Ensamble fiel de la Pinza Eléctrica DH-Robotics PGE-50-26 según el robot real de FICCT
       const pinzaGroup = new THREE.Group();
 
-      // Cuerpo PGE-50: 29 x 20 x 97 mm
-      const cuerpoPGEGeo = new THREE.BoxGeometry(29, 97, 22);
-      const cuerpoPGEMat = new THREE.MeshStandardMaterial({
-        color: 0x1e293b,
+      // 1. Cuerpo Superior PGE-50: Negro Mate Anodizado (29 x 60 x 20 mm)
+      const cuerpoSuperiorGeo = new THREE.BoxGeometry(29, 60, 20);
+      const matNegroPGE = new THREE.MeshStandardMaterial({
+        color: 0x14161b,
         metalness: 0.85,
-        roughness: 0.2,
-      });
-      const cuerpoPGE = new THREE.Mesh(cuerpoPGEGeo, cuerpoPGEMat);
-      cuerpoPGE.position.set(0, 48.5, 0);
-      cuerpoPGE.castShadow = true;
-      pinzaGroup.add(cuerpoPGE);
-
-      // Placa LED DH-Robotics en cian
-      const placaDHGeo = new THREE.BoxGeometry(16, 28, 23);
-      const placaDHMat = new THREE.MeshStandardMaterial({
-        color: 0x00e5ff,
-        emissive: 0x00e5ff,
-        emissiveIntensity: 0.6,
-      });
-      const placaDH = new THREE.Mesh(placaDHGeo, placaDHMat);
-      placaDH.position.set(0, 50, 0);
-      pinzaGroup.add(placaDH);
-
-      // Dedos largos impresos 3D (recorrido 26 mm: +-6 mm cerrada, +-13 mm abierta)
-      const dedoGeo = new THREE.BoxGeometry(6, 65, 14);
-      const dedoMat = new THREE.MeshStandardMaterial({
-        color: 0x0f172a,
-        metalness: 0.65,
         roughness: 0.35,
       });
+      const cuerpoSuperior = new THREE.Mesh(cuerpoSuperiorGeo, matNegroPGE);
+      cuerpoSuperior.position.set(0, 30, 0);
+      cuerpoSuperior.castShadow = true;
+      pinzaGroup.add(cuerpoSuperior);
 
-      const dedoIzq = new THREE.Mesh(dedoGeo, dedoMat);
-      dedoIzq.position.set(-13, 115, 0);
-      dedoIzq.castShadow = true;
-      pinzaGroup.add(dedoIzq);
+      // Logo vertical "DH-ROBOTICS" y LED en la cara frontal
+      const canvasLogo = document.createElement('canvas');
+      canvasLogo.width = 128;
+      canvasLogo.height = 256;
+      const ctxLogo = canvasLogo.getContext('2d');
+      ctxLogo.fillStyle = '#14161b';
+      ctxLogo.fillRect(0, 0, 128, 256);
+      ctxLogo.save();
+      ctxLogo.translate(64, 135);
+      ctxLogo.rotate(-Math.PI / 2);
+      ctxLogo.font = 'bold 18px Arial, sans-serif';
+      ctxLogo.fillStyle = '#e2e8f0';
+      ctxLogo.textAlign = 'center';
+      ctxLogo.fillText('DH-ROBOTICS', 0, 6);
+      ctxLogo.restore();
+      // LED azul/cian de encendido
+      ctxLogo.beginPath();
+      ctxLogo.arc(64, 45, 5, 0, Math.PI * 2);
+      ctxLogo.fillStyle = '#00e5ff';
+      ctxLogo.fill();
 
-      const dedoDer = new THREE.Mesh(dedoGeo, dedoMat);
-      dedoDer.position.set(13, 115, 0);
-      dedoDer.castShadow = true;
-      pinzaGroup.add(dedoDer);
+      const texLogo = new THREE.CanvasTexture(canvasLogo);
+      const placaLogoGeo = new THREE.PlaneGeometry(18, 48);
+      const placaLogoMat = new THREE.MeshBasicMaterial({ map: texLogo });
+      const placaLogo = new THREE.Mesh(placaLogoGeo, placaLogoMat);
+      placaLogo.position.set(0, 32, 10.1);
+      pinzaGroup.add(placaLogo);
 
-      // Almohadillas de silicona cian para agarre suave de piezas
-      const gomaGeo = new THREE.BoxGeometry(3, 22, 12);
-      const gomaMat = new THREE.MeshStandardMaterial({
-        color: 0x00e5ff,
-        emissive: 0x00e5ff,
-        emissiveIntensity: 0.35,
+      // 2. Cuello / Sección Inferior Metálica: Aluminio Plateado Cepillado (29.2 x 37 x 20.2 mm)
+      const cuelloMetalGeo = new THREE.BoxGeometry(29.2, 37, 20.2);
+      const matAluminioCepillado = new THREE.MeshStandardMaterial({
+        color: 0xd1d5db,
+        metalness: 0.95,
+        roughness: 0.22,
       });
-      const gomaIzq = new THREE.Mesh(gomaGeo, gomaMat);
-      gomaIzq.position.set(2, -18, 0);
-      dedoIzq.add(gomaIzq);
-      const gomaDer = new THREE.Mesh(gomaGeo, gomaMat);
-      gomaDer.position.set(-2, -18, 0);
-      dedoDer.add(gomaDer);
+      const cuelloMetal = new THREE.Mesh(cuelloMetalGeo, matAluminioCepillado);
+      cuelloMetal.position.set(0, 78.5, 0);
+      cuelloMetal.castShadow = true;
+      pinzaGroup.add(cuelloMetal);
 
-      // Haz láser de puntería hacia la casilla
-      const laserOficialGeo = new THREE.CylinderGeometry(0.6, 0.6, 220, 8);
+      // Tornillos / Guías de montaje en el cuello metálico
+      const tornilloGeo = new THREE.CylinderGeometry(1.2, 1.2, 0.5, 12);
+      const matTornillo = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.9, roughness: 0.2 });
+      [-6, 6].forEach((tx) => {
+        const tornilloFrente = new THREE.Mesh(tornilloGeo, matTornillo);
+        tornilloFrente.rotation.x = Math.PI / 2;
+        tornilloFrente.position.set(tx, 90, 10.2);
+        pinzaGroup.add(tornilloFrente);
+      });
+
+      // 3. Guías deslizantes inferiores de acero (Sliders PGE-50)
+      const correderaGeo = new THREE.BoxGeometry(11, 7, 16);
+      const matCorredera = new THREE.MeshStandardMaterial({
+        color: 0x94a3b8,
+        metalness: 0.92,
+        roughness: 0.25,
+      });
+
+      // Slider izquierdo (porta-dedo rojo)
+      const sliderIzq = new THREE.Group();
+      sliderIzq.position.set(-13, 97, 0);
+      pinzaGroup.add(sliderIzq);
+      const blockSliderIzq = new THREE.Mesh(correderaGeo, matCorredera);
+      blockSliderIzq.position.y = 3.5;
+      sliderIzq.add(blockSliderIzq);
+
+      // Slider derecho (porta-dedo blanco)
+      const sliderDer = new THREE.Group();
+      sliderDer.position.set(13, 97, 0);
+      pinzaGroup.add(sliderDer);
+      const blockSliderDer = new THREE.Mesh(correderaGeo, matCorredera);
+      blockSliderDer.position.y = 3.5;
+      sliderDer.add(blockSliderDer);
+
+      // 4. Dedos Largos Impresos 3D (Dimensiones reales 11.5 x 53 x 14 mm)
+      // DEDO IZQUIERDO: ROJO (PLA) - Idéntico al brazo real en laboratorio FICCT
+      const matDedoRojo = new THREE.MeshStandardMaterial({
+        color: 0xdc2626, // Rojo intenso del dedo impreso real
+        roughness: 0.45,
+        metalness: 0.08,
+      });
+
+      // DEDO DERECHO: BLANCO (PLA) - Idéntico al brazo real en laboratorio FICCT
+      const matDedoBlanco = new THREE.MeshStandardMaterial({
+        color: 0xf8fafc, // Blanco puro del dedo impreso real
+        roughness: 0.45,
+        metalness: 0.08,
+      });
+
+      // Cargar la geometría STL original de los dedos impresos
+      const stlLoader = new STLLoader();
+      stlLoader.load('/modelos/dedo_pinza.stl', (stlGeo) => {
+        stlGeo.computeVertexNormals();
+        stlGeo.center();
+
+        const meshDedoRojo = new THREE.Mesh(stlGeo, matDedoRojo);
+        meshDedoRojo.position.set(0, 33.5, 0);
+        meshDedoRojo.castShadow = true;
+        sliderIzq.add(meshDedoRojo);
+
+        const meshDedoBlanco = new THREE.Mesh(stlGeo, matDedoBlanco);
+        meshDedoBlanco.position.set(0, 33.5, 0);
+        meshDedoBlanco.castShadow = true;
+        sliderDer.add(meshDedoBlanco);
+      }, undefined, () => {
+        // Fallback procedural exacto con las mismas medidas reales
+        const dedoGeoProcedural = new THREE.BoxGeometry(11.5, 53, 14);
+        const meshDedoRojo = new THREE.Mesh(dedoGeoProcedural, matDedoRojo);
+        meshDedoRojo.position.set(0, 33.5, 0);
+        meshDedoRojo.castShadow = true;
+        sliderIzq.add(meshDedoRojo);
+
+        const meshDedoBlanco = new THREE.Mesh(dedoGeoProcedural, matDedoBlanco);
+        meshDedoBlanco.position.set(0, 33.5, 0);
+        meshDedoBlanco.castShadow = true;
+        sliderDer.add(meshDedoBlanco);
+      });
+
+      // 5. Módulo de Cámara FICCT en la Muñeca (junto a la brida)
+      const camaraGroup = new THREE.Group();
+      camaraGroup.position.set(38, 15, -12); // Montada al costado del efector
+
+      // Cuerpo blanco de la cámara industrial
+      const camCuerpoGeo = new THREE.BoxGeometry(30, 34, 30);
+      const camCuerpoMat = new THREE.MeshStandardMaterial({
+        color: 0xf1f5f9,
+        metalness: 0.2,
+        roughness: 0.3,
+      });
+      const camCuerpo = new THREE.Mesh(camCuerpoGeo, camCuerpoMat);
+      camCuerpo.castShadow = true;
+      camaraGroup.add(camCuerpo);
+
+      // Lente frontal negro con anillo azul
+      const camLenteGeo = new THREE.CylinderGeometry(8, 8, 8, 24);
+      const camLenteMat = new THREE.MeshStandardMaterial({
+        color: 0x090a0f,
+        metalness: 0.9,
+        roughness: 0.1,
+      });
+      const camLente = new THREE.Mesh(camLenteGeo, camLenteMat);
+      camLente.position.set(0, 19, 0);
+      camaraGroup.add(camLente);
+
+      const camAnilloGeo = new THREE.TorusGeometry(8.2, 0.6, 12, 24);
+      const camAnilloMat = new THREE.MeshStandardMaterial({ color: 0x00e5ff, emissive: 0x00e5ff, emissiveIntensity: 0.5 });
+      const camAnillo = new THREE.Mesh(camAnilloGeo, camAnilloMat);
+      camAnillo.rotation.x = Math.PI / 2;
+      camAnillo.position.set(0, 20, 0);
+      camaraGroup.add(camAnillo);
+
+      // Cable negro flexible hacia el antebrazo
+      const cablePunto = new THREE.CylinderGeometry(2, 2, 35, 12);
+      const cableMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.8 });
+      const cable = new THREE.Mesh(cablePunto, cableMat);
+      cable.position.set(-6, -18, 0);
+      cable.rotation.z = 0.3;
+      camaraGroup.add(cable);
+
+      pinzaGroup.add(camaraGroup);
+
+      // Haz láser de puntería hacia la casilla (suave y discreto)
+      const laserOficialGeo = new THREE.CylinderGeometry(0.5, 0.5, 230, 8);
       const laserOficialMat = new THREE.MeshBasicMaterial({
         color: 0x00e5ff,
         transparent: true,
-        opacity: 0.6,
+        opacity: 0.55,
       });
       const laserOficial = new THREE.Mesh(laserOficialGeo, laserOficialMat);
-      laserOficial.position.set(0, 225, 0);
+      laserOficial.position.set(0, 240, 0);
       pinzaGroup.add(laserOficial);
 
       // Acoplar al nodo TOOL o J6
@@ -827,8 +946,8 @@ export default function SimuladorBrazoTablero3D({
         j6,
         tool,
         pinzaGroup,
-        dedoIzq,
-        dedoDer,
+        sliderIzq,
+        sliderDer,
         laser: laserOficial,
       };
 
@@ -1076,6 +1195,8 @@ export default function SimuladorBrazoTablero3D({
 
         // Carrera de la pinza eléctrica PGE-50-26 (26 mm totales: +-6 mm agarre, +-13 mm abierta)
         const aperturaOficial = pinzaActiva ? 6.0 : 13.0;
+        if (robotArt.sliderIzq) robotArt.sliderIzq.position.x = -aperturaOficial;
+        if (robotArt.sliderDer) robotArt.sliderDer.position.x = aperturaOficial;
         if (robotArt.dedoIzq) robotArt.dedoIzq.position.x = -aperturaOficial;
         if (robotArt.dedoDer) robotArt.dedoDer.position.x = aperturaOficial;
       }
