@@ -15,6 +15,7 @@ import DemostracionEnVivo from './paginas/DemostracionEnVivo/DemostracionEnVivo'
 import Monitoreo from './paginas/Monitoreo/Monitoreo';
 import CamaraBrazo from './paginas/CamaraBrazo/CamaraBrazo';
 import EntrenarCamara from './paginas/EntrenarCamara/EntrenarCamara';
+import BannerCalibracion from './paginas/Camara/Calibracion/BannerCalibracion';
 import ConfiguracionEnsenanza from './paginas/ConfiguracionEnsenanza/ConfiguracionEnsenanza';
 import EntrenamientoModelo from './paginas/EntrenamientoModelo/EntrenamientoModelo';
 import Perfil from './paginas/Perfil/Perfil';
@@ -519,6 +520,7 @@ export default function App() {
         </header>
 
         <main className="w-full pt-16 bg-surface-container-lowest min-h-screen">
+          {esFacilitador && <BannerCalibracion onIrACalibrar={() => setPantallaActiva('camaraBrazo')} />}
           {/* Banner global de transmisión en vivo — a propósito NO es un toast: se queda mientras
               la transmisión siga activa y el jugador no la esté viendo, en CUALQUIER pantalla (no
               solo Registro de Partidas). Nunca se le muestra al facilitador. */}

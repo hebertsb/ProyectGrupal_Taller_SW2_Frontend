@@ -319,6 +319,54 @@ export function guardarCalibracionTablero(esquinas) {
   return solicitar("/vision/calibracion", { method: "PUT", body: JSON.stringify({ esquinas }) });
 }
 
+/**
+ * Estado de la calibración del tablero con su vigencia: `{calibrada, vigente, motivo_no_vigente, esquinas, fecha, resolucion,
+ * fuente, advertencias}`. `vigente` es `null` si no se pudo verificar (la cámara no entrega imagen).
+ */
+export function obtenerEstadoCalibracion() {
+  return solicitar("/vision/calibracion/estado", { method: "GET" });
+}
+
+function formularioDeCalibracion(esquinas, foto) {
+  const formulario = new FormData();
+  formulario.append("esquinas", JSON.stringify(esquinas));
+  formulario.append("foto", foto, "foto.jpg");
+  return formulario;
+}
+
+/**
+ * Guarda la calibración con la foto sobre la que se marcaron las esquinas (de ahí salen la resolución y la referencia para
+ * detectar que la cámara se movió). Devuelve el estado, con `advertencias` si algo se ve dudoso; 422 = esquinas inválidas.
+ */
+export function guardarCalibracionConFoto(esquinas, foto) {
+  return solicitarFormulario("/vision/calibracion/guardar", formularioDeCalibracion(esquinas, foto));
+}
+
+/**
+ * Vista previa del tablero enderezado con la grilla 8x8 para esas esquinas, sin guardar. Devuelve un object URL (JPEG); quien
+ * lo use debe revocarlo con `URL.revokeObjectURL`.
+ */
+export async function previsualizarCalibracion(esquinas, foto) {
+  const token = localStorage.getItem("access_token");
+  const headers = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const respuesta = await fetch("/vision/calibracion/previsualizar", {
+    method: "POST",
+    headers,
+    body: formularioDeCalibracion(esquinas, foto),
+  });
+  if (!respuesta.ok) throw await errorDeRespuesta(respuesta);
+  return URL.createObjectURL(await respuesta.blob());
+}
+
+/**
+ * Compara una foto de la cámara fija con la de referencia de la calibración: `{movida, desplazamiento_px, coincidencias, mensaje}`.
+ * `movida` es `null` si no se pudo comparar.
+ */
+export function comprobarCalibracion() {
+  return solicitarFormulario("/vision/calibracion/comprobar", new FormData());
+}
+
 /** Quita la calibración y vuelve a la detección automática. */
 export function quitarCalibracionTablero() {
   return solicitar("/vision/calibracion", { method: "DELETE" });
@@ -861,3 +909,73 @@ export async function descargarDatasetEntrenamiento({ soloNuevas = false } = {})
     nombreDesdeContentDisposition(respuesta.headers.get("Content-Disposition")) ?? nombreDatasetPorDefecto();
   return { blob, nombre };
 }
+
+/**
+ * Descarga el dataset de piezas (ZIP con una carpeta por clase + clases.json) para entrenar en Colab. Devuelve
+ * `{ blob, nombre }`; 404 = todavía no hay muestras.
+ */
+export async function descargarDatasetPiezas() {
+  const token = localStorage.getItem("access_token");
+  const headers = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const respuesta = await fetch("/vision/dataset/export", { headers });
+  if (!respuesta.ok) throw await errorDeRespuesta(respuesta);
+  return { blob: await respuesta.blob(), nombre: "dataset_piezas.zip" };
+}
+
+/** Borra todas las fotos de una clase del dataset (ej. "black-pawn"). Devuelve `{borradas}`. */
+export function borrarClaseDataset(clase) {
+  return solicitar(`/vision/dataset/clase/${encodeURIComponent(clase)}`, { method: "DELETE" });
+}
+
+/**
+ * Vista previa de lo que se guardaría ahora en el dataset: el tablero con las casillas elegidas en verde y su recorte exacto.
+ * Devuelve un object URL (JPEG) que quien lo use debe revocar; 503 = cámara no disponible. No guarda nada.
+ */
+export async function obtenerVistaPreviaDataset(casillas) {
+  const token = localStorage.getItem("access_token");
+  const headers = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const respuesta = await fetch(`/vision/dataset/vista-previa?casillas=${encodeURIComponent(casillas.join(","))}`, {
+    headers,
+    cache: "no-store",
+  });
+  if (!respuesta.ok) throw await errorDeRespuesta(respuesta);
+  return URL.createObjectURL(await respuesta.blob());
+}
+
+/**
+ * Probador de piezas: saca una foto y devuelve `{casillas: [{casilla, clase, confianza, alternativas}], imagen}` con `imagen` en
+ * base64 (JPEG anotado). 409 = no hay modelo entrenado, 422 = tablero no detectado, 503 = cámara.
+ */
+export function probarPiezas() {
+  return solicitar("/vision/probar-piezas", { method: "GET" });
+}
+
+// --- Control del brazo (panel «Control del brazo»): todo bajo /brazo/control, solo facilitador ---
+const controlBrazo = (ruta, metodo = "POST", cuerpo) =>
+  solicitar(`/brazo/control${ruta}`, { method: metodo, ...(cuerpo === undefined ? {} : { body: JSON.stringify(cuerpo) }) });
+
+/** Estado del brazo: `{conectado, destino, emulador, calibrado, modo, modo_texto, pose, angulos, pinza, tarea, ...}`. */
+export const estadoControlBrazo = () => controlBrazo("/estado", "GET");
+export const conectarBrazo = (host, puerto, emulador) => controlBrazo("/conectar", "POST", { host, puerto, emulador });
+export const desconectarBrazo = () => controlBrazo("/desconectar");
+export const habilitarBrazo = () => controlBrazo("/habilitar");
+export const deshabilitarBrazo = () => controlBrazo("/deshabilitar");
+export const limpiarErrorBrazo = () => controlBrazo("/limpiar-error");
+/** Parada: frena el brazo y cancela la secuencia en curso. */
+export const pararBrazo = () => controlBrazo("/parar");
+export const obtenerParametrosBrazo = () => controlBrazo("/parametros", "GET");
+export const actualizarParametrosBrazo = (valores, guardar = false) => controlBrazo("/parametros", "PUT", { valores, guardar });
+export const inicializarPinza = () => controlBrazo("/pinza/inicializar");
+/** `accion`: "abrir" | "cerrar" | "ancho" (con `anchoMm`). */
+export const moverPinza = (accion, anchoMm = null) => controlBrazo("/pinza", "POST", { accion, ancho_mm: anchoMm });
+export const listarConfiguracionesBrazo = () => controlBrazo("/configuraciones", "GET");
+export const guardarConfiguracionBrazo = (nombre, descripcion = "") => controlBrazo("/configuraciones", "POST", { nombre, descripcion });
+export const aplicarConfiguracionBrazo = (nombre) => controlBrazo(`/configuraciones/${encodeURIComponent(nombre)}/aplicar`);
+export const borrarConfiguracionBrazo = (nombre) => controlBrazo(`/configuraciones/${encodeURIComponent(nombre)}`, "DELETE");
+/** Ensayo: pasos y poses por los que pasaría, sin mover nada. */
+export const ensayoMoverPieza = (origen, destino, tipoPieza = "p") =>
+  controlBrazo("/mover-pieza/ensayo", "POST", { origen, destino, tipo_pieza: tipoPieza });
+export const moverPiezaBrazo = (origen, destino, tipoPieza = "p") =>
+  controlBrazo("/mover-pieza", "POST", { origen, destino, tipo_pieza: tipoPieza });

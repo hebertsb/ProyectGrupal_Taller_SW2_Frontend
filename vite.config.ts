@@ -18,6 +18,7 @@ export default defineConfig({
       '/analisis': BACKEND_URL,
       '/partida': BACKEND_URL,
       '/vision': BACKEND_URL,
+      '/brazo': BACKEND_URL,
       '/health': BACKEND_URL,
       '/aprendizaje': BACKEND_URL,
       '/auth': BACKEND_URL,

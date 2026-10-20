@@ -51,7 +51,7 @@ function mensajeErrorFoto(error) {
  * muestra la posición que hay que tener armada en el tablero físico; la jugada se escribe en SAN.
  * Todo el acceso al backend pasa por api/backend.js.
  */
-export default function EntrenarCamara({ onVolver }) {
+export default function EntrenarCamara({ onVolver, incrustada = false }) {
   // --- Posición ---
   const [fen, setFen] = useState(POSICION_INICIAL_FEN);
   const [historial, setHistorial] = useState([]);
@@ -297,9 +297,9 @@ export default function EntrenarCamara({ onVolver }) {
   const turnoBlancas = fen.split(' ')[1] !== 'b';
 
   return (
-    <div className="w-full min-w-0 flex flex-col gap-space-md px-4 py-4 md:px-6">
+    <div className={`w-full min-w-0 flex flex-col gap-space-md ${incrustada ? '' : 'px-4 py-4 md:px-6'}`}>
       <header className="flex flex-col gap-1">
-        {onVolver && (
+        {onVolver && !incrustada && (
           <button
             type="button"
             onClick={onVolver}
@@ -309,7 +309,7 @@ export default function EntrenarCamara({ onVolver }) {
             Volver a Cámara y Brazo
           </button>
         )}
-        <h2 className="font-headline-md text-headline-md text-on-surface">Entrenar cámara</h2>
+        {!incrustada && <h2 className="font-headline-md text-headline-md text-on-surface">Entrenar cámara</h2>}
         <p className="font-body-sm text-body-sm text-on-surface-variant">
           Armá en el tablero físico la posición que ves acá, sacá la foto y avanzá con la jugada. Con suficientes
           fotos podés reentrenar el clasificador de piezas.
