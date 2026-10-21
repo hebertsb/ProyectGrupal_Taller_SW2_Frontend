@@ -93,7 +93,7 @@ export default function Login({ onLoginSuccess }) {
   const manejarRespuestaGoogle = async (response) => {
     setError(null);
     setCargando(true);
-    setMensajeEstado('Verificando token criptográfico de Google...');
+    setMensajeEstado('Verificando tu cuenta de Google...');
     setProgresoTrack(35);
 
     try {
@@ -191,7 +191,7 @@ export default function Login({ onLoginSuccess }) {
           rolEsperado === 'facilitador' ? claveFacilitador : null
         );
       } else {
-        setMensajeEstado('Verificando firma criptográfica...');
+        setMensajeEstado('Verificando tus datos...');
         setProgresoTrack(50);
         data = await loginApi(email.trim(), password, rolEsperado);
       }
@@ -482,10 +482,10 @@ export default function Login({ onLoginSuccess }) {
                 </div>
               )}
 
-              {/* Correo Electrónico o ID */}
+              {/* Correo electrónico */}
               <div>
                 <label className="block text-[11px] font-mono tracking-wide text-slate-300 mb-1">
-                  CORREO ELECTRÓNICO O ID DE {rolEsperado === 'facilitador' ? 'FACILITADOR' : 'JUGADOR'}
+                  CORREO ELECTRÓNICO
                 </label>
                 <div className="relative rounded-lg shadow-sm">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
@@ -496,17 +496,17 @@ export default function Login({ onLoginSuccess }) {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    placeholder={rolEsperado === 'facilitador' ? 'facilitador@test.com' : 'jugador@kairos-chess.ai'}
+                    placeholder="tu.correo@gmail.com"
                     className="block w-full pl-9 pr-3 py-2 bg-[#0a0d14] border border-white/10 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#00e5ff] focus:border-[#00e5ff] font-mono transition duration-150"
                   />
                 </div>
               </div>
 
-              {/* Contraseña Criptográfica */}
+              {/* Contraseña */}
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="block text-[11px] font-mono tracking-wide text-slate-300">
-                    CONTRASEÑA CRIPTOGRÁFICA
+                    CONTRASEÑA
                   </label>
                   {modo === 'login' && (
                     <button
@@ -606,7 +606,7 @@ export default function Login({ onLoginSuccess }) {
                       </>
                     ) : (
                       <>
-                        <span>{modo === 'login' ? 'INICIAR SESIÓN' : 'REGISTRAR OPERADOR'}</span>
+                        <span>{modo === 'login' ? 'INICIAR SESIÓN' : 'CREAR CUENTA'}</span>
                         <span className="material-symbols-outlined text-[16px] transform group-hover:translate-x-1 transition-transform">
                           arrow_forward
                         </span>
