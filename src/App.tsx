@@ -525,7 +525,9 @@ export default function App() {
         </header>
 
         <main className="w-full pt-16 bg-surface-container-lowest min-h-screen">
-          {esFacilitador && <BannerCalibracion onIrACalibrar={() => setPantallaActiva('camaraBrazo')} />}
+          {/* Solo en Cámara y Brazo: el brazo se usa en local, así que el aviso no debe aparecer en las demás pantallas
+              (ni en el sitio publicado, donde no hay cámara ni brazo). */}
+          {esFacilitador && pantallaActiva === 'camaraBrazo' && <BannerCalibracion />}
           {/* Banner global de transmisión en vivo — a propósito NO es un toast: se queda mientras
               la transmisión siga activa y el jugador no la esté viendo, en CUALQUIER pantalla (no
               solo Registro de Partidas). Nunca se le muestra al facilitador. */}
