@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { leerSesion } from '../../api/sesion';
 
 const DECODIFICADOR = new TextDecoder();
 const REINTENTO_MS = 1500;
@@ -55,7 +56,7 @@ export default function useFlujoVivo({ modo, casillas = [], activo = true }) {
     async function conectar() {
       controlador = new AbortController();
       try {
-        const token = localStorage.getItem('access_token');
+        const token = leerSesion('access_token');
         const consulta = new URLSearchParams({ modo });
         if (claveCasillas) consulta.set('casillas', claveCasillas);
         const respuesta = await fetch(`/vision/flujo?${consulta}`, {

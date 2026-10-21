@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useRef, useState, Suspense, lazy } from 'react';
+import { leerSesion, actualizarSesion, borrarSesion, renovarSesion } from './api/sesion';
 import SalaControl from './paginas/SalaControl/SalaControl';
 import RazonamientoNeuronal from './paginas/RazonamientoNeuronal/RazonamientoNeuronal';
 import Administracion from './paginas/Administracion/Administracion';
@@ -32,7 +33,7 @@ const INTERVALO_SONDEO_DEMOSTRACION_MS = 8000;
 
 function obtenerUsuarioGuardado() {
   try {
-    const stored = localStorage.getItem('usuario');
+    const stored = leerSesion('usuario');
     return stored ? JSON.parse(stored) : null;
   } catch {
     return null;
@@ -97,7 +98,7 @@ export default function App() {
   const manejarActualizarUsuario = (usuarioActualizado) => {
     setUsuario(usuarioActualizado);
     try {
-      localStorage.setItem('usuario', JSON.stringify(usuarioActualizado));
+      actualizarSesion('usuario', JSON.stringify(usuarioActualizado));
     } catch {
       // localStorage puede fallar (modo privado, cuota, etc.) — no es crítico,
       // el estado en memoria ya se actualizó.
@@ -131,9 +132,7 @@ export default function App() {
   }
 
   const manejarLogout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('usuario');
+    borrarSesion();
     setPartidaActivaId(null);
     setPartidaParaAprender(null);
     setPartidaDemostracionId(null);
@@ -242,14 +241,20 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pantallaActiva, usuario?.id]);
 
-  // Verificar token al cargar
+  // Mantener la sesión abierta hasta que el usuario cierre sesión: al abrir la app y cada 6 horas se
+  // renueva el access token (dura 12 h) con el refresh token. Si el refresh ya venció, se cierra la sesión.
   useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    if (token && !usuario) {
-      // Token existe pero no hay usuario en estado - podría ser token expirado
-      // El backend responderá 401 en las llamadas y la UI lo manejará
-    }
-  }, [usuario]);
+    if (!usuario?.id) return undefined;
+    let activo = true;
+    const renovar = async () => {
+      const ok = await renovarSesion();
+      if (activo && ok === false) manejarLogout();
+    };
+    renovar();
+    const intervalo = setInterval(renovar, 6 * 60 * 60 * 1000);
+    return () => { activo = false; clearInterval(intervalo); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [usuario?.id]);
 
   const navClasses = (path: string) => 
     pantallaActiva === path

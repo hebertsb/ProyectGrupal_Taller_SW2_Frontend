@@ -2,11 +2,13 @@
  * Capa de comunicación con el backend real (FastAPI). Solo fetch — sin
  * estado ni JSX. Nada de datos simulados: si el backend no responde, el
  * error se propaga tal cual para que la interfaz lo muestre.
- * Incluye automáticamente el token JWT si existe en localStorage.
+ * Incluye automáticamente el token JWT de la sesión (ver api/sesion.js).
  */
 
+import { leerSesion } from "./sesion";
+
 async function solicitar(endpoint, opciones = {}) {
-  const token = localStorage.getItem("access_token");
+  const token = leerSesion("access_token");
   const headers = { "Content-Type": "application/json", ...opciones.headers };
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
@@ -70,7 +72,7 @@ async function errorDeRespuesta(respuesta) {
  * llama decide degradar al flujo de siempre.
  */
 export async function obtenerPartidaEnCurso() {
-  const token = localStorage.getItem("access_token");
+  const token = leerSesion("access_token");
   const headers = { "Content-Type": "application/json" };
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
@@ -109,7 +111,7 @@ export function guardarRelojPartida(partidaId, { blancasMs, negrasMs, controlTie
   if (negrasMs != null) cuerpo.negras_ms = Math.round(negrasMs);
   if (controlTiempoMs != null) cuerpo.control_tiempo_ms = controlTiempoMs;
   if (alCerrar) {
-    const token = localStorage.getItem("access_token");
+    const token = leerSesion("access_token");
     fetch(`/partida/${partidaId}/reloj`, {
       method: "PUT",
       keepalive: true,
@@ -193,7 +195,7 @@ export function actualizarPermisosPartida(partidaId, permisos) {
  * cubren los casos más probables en vez de asumir uno solo.
  */
 export async function obtenerDemostracionActiva() {
-  const token = localStorage.getItem("access_token");
+  const token = leerSesion("access_token");
   const headers = { "Content-Type": "application/json" };
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
@@ -228,7 +230,7 @@ export function analizarPosicion(fen, nivel) {
  * encuadre justo en el momento de mostrar el sistema.
  */
 export async function reconocerTablero(turno = "w", archivoFoto = null) {
-  const token = localStorage.getItem("access_token");
+  const token = leerSesion("access_token");
   const datos = new FormData();
   datos.append("turno", turno);
   if (archivoFoto) {
@@ -257,7 +259,7 @@ export async function reconocerTablero(turno = "w", archivoFoto = null) {
  * de revocarlo con `URL.revokeObjectURL` cuando ya no haga falta.
  */
 export async function obtenerUrlFotoCamara() {
-  const token = localStorage.getItem("access_token");
+  const token = leerSesion("access_token");
   const headers = {};
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
@@ -280,7 +282,7 @@ export async function obtenerUrlFotoCamara() {
  * haga falta.
  */
 export async function obtenerUrlGrillaDebug(archivoFoto) {
-  const token = localStorage.getItem("access_token");
+  const token = leerSesion("access_token");
   const datos = new FormData();
   datos.append("foto_subida", archivoFoto);
   const headers = {};
@@ -347,7 +349,7 @@ export function guardarCalibracionConFoto(esquinas, foto) {
  * lo use debe revocarlo con `URL.revokeObjectURL`.
  */
 export async function previsualizarCalibracion(esquinas, foto) {
-  const token = localStorage.getItem("access_token");
+  const token = leerSesion("access_token");
   const headers = {};
   if (token) headers["Authorization"] = `Bearer ${token}`;
   const respuesta = await fetch("/vision/calibracion/previsualizar", {
@@ -380,7 +382,7 @@ export function quitarCalibracionTablero() {
  * reenviar la misma foto a `reconocerTablero`.
  */
 export async function obtenerFotoVision(grilla = false) {
-  const token = localStorage.getItem("access_token");
+  const token = leerSesion("access_token");
   const headers = {};
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
@@ -410,7 +412,7 @@ export function guardarFotoDataset(fenPiezas, soloPiezas = false) {
 
 /** POST multipart con token. No fija Content-Type: el navegador agrega el boundary solo. */
 async function solicitarFormulario(endpoint, formulario) {
-  const token = localStorage.getItem("access_token");
+  const token = leerSesion("access_token");
   const headers = {};
   if (token) headers["Authorization"] = `Bearer ${token}`;
   const respuesta = await fetch(endpoint, { method: "POST", headers, body: formulario });
@@ -453,7 +455,7 @@ export function subirFotoTablero(fenPiezas, foto) {
  * `?t=` evita que el navegador reutilice una imagen anterior.
  */
 export async function obtenerUrlControlDataset() {
-  const token = localStorage.getItem("access_token");
+  const token = leerSesion("access_token");
   const headers = {};
   if (token) headers["Authorization"] = `Bearer ${token}`;
   const respuesta = await fetch(`/vision/dataset/control?t=${Date.now()}`, { headers, cache: "no-store" });
@@ -561,7 +563,7 @@ export function inferenciaModelo(fen) {
 }
 
 async function solicitarAuth(endpoint, opciones = {}) {
-  const token = localStorage.getItem("access_token");
+  const token = leerSesion("access_token");
   const respuesta = await fetch(endpoint, {
     method: "GET",
     headers: {
@@ -645,7 +647,7 @@ export function guardarNivelEstimado(nivel, rango) {
  * cualquier otro endpoint en construcción (404/405).
  */
 export async function subirFotoPerfil(archivo) {
-  const token = localStorage.getItem("access_token");
+  const token = leerSesion("access_token");
   const datos = new FormData();
   datos.append("archivo", archivo);
   const headers = {};
@@ -703,7 +705,7 @@ export function listarCodigosFacilitador() {
 
 /** Anula un código que todavía no se usó. */
 export async function anularCodigoFacilitador(codigoId) {
-  const token = localStorage.getItem("access_token");
+  const token = leerSesion("access_token");
   const respuesta = await fetch(`/auth/codigos-facilitador/${codigoId}`, {
     method: "DELETE",
     headers: { Authorization: `Bearer ${token}` },
@@ -764,7 +766,7 @@ export function obtenerVideosFacilitador() {
  * Devuelve `{tipo_pieza, url}`.
  */
 export async function subirVideoPieza(tipoPieza, archivo) {
-  const token = localStorage.getItem("access_token");
+  const token = leerSesion("access_token");
   const datos = new FormData();
   datos.append("archivo", archivo);
   const headers = {};
@@ -822,7 +824,7 @@ export function obtenerHistorialTutor(limite = 50) {
  * criterio defensivo).
  */
 export async function borrarHistorialTutor() {
-  const token = localStorage.getItem("access_token");
+  const token = leerSesion("access_token");
   const respuesta = await fetch("/tutor/historial", {
     method: "DELETE",
     headers: {
@@ -893,7 +895,7 @@ function nombreDatasetPorDefecto() {
  * el `detail` del backend (ej. 409 cuando todavía no hay partidas válidas).
  */
 export async function descargarDatasetEntrenamiento({ soloNuevas = false } = {}) {
-  const token = localStorage.getItem("access_token");
+  const token = leerSesion("access_token");
   const headers = { "Content-Type": "application/json" };
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
@@ -915,7 +917,7 @@ export async function descargarDatasetEntrenamiento({ soloNuevas = false } = {})
  * `{ blob, nombre }`; 404 = todavía no hay muestras.
  */
 export async function descargarDatasetPiezas() {
-  const token = localStorage.getItem("access_token");
+  const token = leerSesion("access_token");
   const headers = {};
   if (token) headers["Authorization"] = `Bearer ${token}`;
   const respuesta = await fetch("/vision/dataset/export", { headers });
@@ -933,7 +935,7 @@ export function borrarClaseDataset(clase) {
  * Devuelve un object URL (JPEG) que quien lo use debe revocar; 503 = cámara no disponible. No guarda nada.
  */
 export async function obtenerVistaPreviaDataset(casillas) {
-  const token = localStorage.getItem("access_token");
+  const token = leerSesion("access_token");
   const headers = {};
   if (token) headers["Authorization"] = `Bearer ${token}`;
   const respuesta = await fetch(`/vision/dataset/vista-previa?casillas=${encodeURIComponent(casillas.join(","))}`, {

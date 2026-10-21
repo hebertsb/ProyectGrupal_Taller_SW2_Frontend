@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { login as loginApi, loginGoogle, registro as registroApi } from '../../api/backend';
 import CampoCodigoInvitacion from './CampoCodigoInvitacion';
+import { guardarSesion } from '../../api/sesion';
 
 export default function Login({ onLoginSuccess }) {
   const [modo, setModo] = useState('login'); // 'login' | 'registro'
@@ -34,16 +35,46 @@ export default function Login({ onLoginSuccess }) {
 
   const animTimerRef = useRef(null);
 
-  // Inicializar Google Identity Services (GIS) si está disponible en window
+  // Botón oficial de Google (Google Identity Services). La librería se carga una sola vez y
+  // dibuja el botón clásico de Google, que abre la ventana real para elegir la cuenta.
+  const googleBtnRef = useRef(null);
+  const respuestaGoogleRef = useRef(null);
+  const [googleListo, setGoogleListo] = useState(false);
   useEffect(() => {
-    // Si la librería de Google está cargada en el cliente
-    if (window.google?.accounts?.id) {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (!clientId) return undefined;
+    const iniciar = () => {
+      const contenedor = googleBtnRef.current;
+      if (!window.google?.accounts?.id || !contenedor) return;
       window.google.accounts.id.initialize({
-        client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
-        callback: manejarRespuestaGoogle,
+        client_id: clientId,
+        callback: (respuesta) => respuestaGoogleRef.current?.(respuesta),
+        // Quien ya entró con Google ve "Continuar como …" (One Tap) sin volver a elegir la cuenta.
+        auto_select: true,
+        cancel_on_tap_outside: true,
       });
+      contenedor.innerHTML = '';
+      const ancho = Math.round(Math.min(400, Math.max(220, contenedor.parentElement?.offsetWidth || 320)));
+      window.google.accounts.id.renderButton(contenedor, {
+        type: 'standard', theme: 'outline', size: 'large', text: 'continue_with',
+        shape: 'pill', logo_alignment: 'center', width: ancho, locale: 'es',
+      });
+      setGoogleListo(true);
+      window.google.accounts.id.prompt();
+    };
+    if (window.google?.accounts?.id) { iniciar(); return undefined; }
+    let script = document.querySelector('script[data-google-gsi]');
+    if (!script) {
+      script = document.createElement('script');
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.defer = true;
+      script.dataset.googleGsi = '1';
+      document.head.appendChild(script);
     }
-  }, [rolEsperado, claveFacilitador]);
+    script.addEventListener('load', iniciar);
+    return () => script.removeEventListener('load', iniciar);
+  }, []);
 
   /** Si el servidor rechazó por falta de código de invitación, se muestra el campo y se lleva el foco ahí. */
   const pedirCodigoSiHaceFalta = (err) => {
@@ -75,12 +106,18 @@ export default function Login({ onLoginSuccess }) {
     }
   };
 
-  // Botón Google Sign-In
+  respuestaGoogleRef.current = manejarRespuestaGoogle;
+
+  // Respaldo si no cargó el botón oficial de Google
   const iniciarGoogleSignIn = () => {
     setError(null);
-    // Si la librería de Google está activa
     if (window.google?.accounts?.id) {
       window.google.accounts.id.prompt();
+      return;
+    }
+    // En la versión publicada no hay simulación: solo vale el inicio de sesión real con Google.
+    if (!import.meta.env.DEV) {
+      setError('No se pudo cargar el inicio de sesión con Google. Revisá tu conexión y recargá la página.');
       return;
     }
 
@@ -122,9 +159,10 @@ export default function Login({ onLoginSuccess }) {
       setMensajeEstado('¡Enlace Actuador confirmado! Sesión autorizada.');
 
       // Guardar en Storage
-      localStorage.setItem('access_token', data.tokens.access_token);
-      localStorage.setItem('refresh_token', data.tokens.refresh_token);
-      localStorage.setItem('usuario', JSON.stringify(data.usuario));
+      guardarSesion(
+        { accessToken: data.tokens.access_token, refreshToken: data.tokens.refresh_token, usuario: data.usuario },
+        recordar,
+      );
 
       setTimeout(() => {
         onLoginSuccess(data.usuario);
@@ -372,8 +410,10 @@ export default function Login({ onLoginSuccess }) {
               </div>
             )}
 
-            {/* BOTÓN GOOGLE OAUTH */}
+            {/* BOTÓN GOOGLE OAUTH: el oficial de Google; el propio queda de respaldo si no cargó */}
             <div className="mb-4">
+              <div ref={googleBtnRef} className={`w-full justify-center min-h-[44px] ${googleListo ? 'flex' : 'hidden'}`} />
+              {!googleListo && (
               <button
                 type="button"
                 onClick={iniciarGoogleSignIn}
@@ -389,6 +429,7 @@ export default function Login({ onLoginSuccess }) {
                 </svg>
                 <span>Continuar con Google</span>
               </button>
+              )}
             </div>
 
             {/* SEPARADOR CRIPTOGRÁFICO */}
@@ -470,7 +511,7 @@ export default function Login({ onLoginSuccess }) {
                   {modo === 'login' && (
                     <button
                       type="button"
-                      onClick={() => setNotificacion('Enlace de restablecimiento enviado al administrador del nodo.')}
+                      onClick={() => setNotificacion('Para restablecer tu contraseña, pedíselo a tu facilitador o entrá con "Continuar con Google" si tu cuenta usa Gmail.')}
                       className="text-[11px] text-[#00e5ff]/80 hover:text-[#00e5ff] transition"
                     >
                       ¿Olvidaste tu contraseña?
@@ -614,7 +655,9 @@ export default function Login({ onLoginSuccess }) {
               </div>
             )}
 
-            {/* CREDENCIALES DE PRUEBA RÁPIDA (CHIPS CON CLIC DIRECTO) */}
+            {/* CREDENCIALES DE PRUEBA RÁPIDA (CHIPS CON CLIC DIRECTO): solo en desarrollo (npm run dev),
+                nunca en el build publicado, donde esos usuarios de prueba no existen */}
+            {import.meta.env.DEV && (
             <details className="mt-5 p-2.5 rounded-xl bg-surface-container-lowest/80 border border-outline-variant/30" open={pantallaAncha}>
               <summary className="font-mono-micro text-[10px] text-slate-400 text-center mb-1.5 uppercase tracking-wider cursor-pointer list-none">
                 Credenciales de prueba rápida (clic para rellenar):
@@ -649,6 +692,7 @@ export default function Login({ onLoginSuccess }) {
                 </button>
               </div>
             </details>
+            )}
           </section>
 
           {/* PIE DE SEGURIDAD CRIPTOGRÁFICA */}
