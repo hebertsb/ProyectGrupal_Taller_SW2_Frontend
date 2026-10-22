@@ -15,6 +15,10 @@ import EntrenamientoPiezas from '../Camara/Piezas/EntrenamientoPiezas';
 import ProbadorPiezas from '../Camara/Piezas/ProbadorPiezas';
 import useFlujoVivo from '../Camara/useFlujoVivo';
 import PanelBrazo from '../Camara/Brazo/PanelBrazo';
+import SelectorCamara from '../Camara/SelectorCamara';
+import LenteYAltura from '../Camara/Calibracion/LenteYAltura';
+import VerificacionUnificada from '../Camara/Calibracion/VerificacionUnificada';
+import useCamarasConfiguradas from '../Camara/useCamarasConfiguradas';
 
 const INTERVALO_FOTO_MS = 400;
 const INTERVALO_ESTADO_MS = 3000;
@@ -43,6 +47,13 @@ const CLASE_BOTON_PRIMARIO =
  */
 export default function CamaraBrazo({ partidaActivaId = null, onPartidaActivaChange, onEntrenarCamara }) {
   const [pestana, setPestana] = useState('camara');
+  // Qué cámara se ve: la principal, la secundaria o las dos juntas. El asistente calibra la que se mira (con «ambas», la principal).
+  const { tieneSecundaria, calibradas } = useCamarasConfiguradas();
+  const [vistaElegida, setVistaElegida] = useState('principal');
+  const vista = tieneSecundaria ? vistaElegida : 'principal';
+  const camaraCalibrar = vista === 'secundaria' ? 'secundaria' : 'principal';
+  const camaraCalibrarRef = useRef(camaraCalibrar);
+  camaraCalibrarRef.current = camaraCalibrar;
 
   // --- Cámara ---
   const [estadoVision, setEstadoVision] = useState(null);
@@ -58,7 +69,7 @@ export default function CamaraBrazo({ partidaActivaId = null, onPartidaActivaCha
   const [calibrando, setCalibrando] = useState(false);
   // Video en vivo de la cámara (sin la grilla de depuración, que sigue por fotos sueltas).
   const enVivo = !pausada && !calibrando && pestana === 'camara' && !grilla;
-  const { url: urlVivo, error: errorVivo } = useFlujoVivo({ modo: 'camara', activo: enVivo });
+  const { url: urlVivo, error: errorVivo, fps: fpsVivo } = useFlujoVivo({ modo: 'camara', camara: vista, activo: enVivo });
 
   // --- Calibración del tablero (el asistente avisa mientras está abierto, para pausar la vista en vivo) ---
   const montadoRef = useRef(true);
@@ -98,8 +109,8 @@ export default function CamaraBrazo({ partidaActivaId = null, onPartidaActivaCha
     async function ciclo() {
       try {
         const [foto, estado] = await Promise.all([
-          grillaRef.current ? obtenerFotoVision(true) : Promise.resolve(null),
-          obtenerEstadoVision().catch((e) => {
+          grillaRef.current ? obtenerFotoVision(true, camaraCalibrarRef.current) : Promise.resolve(null),
+          obtenerEstadoVision(camaraCalibrarRef.current).catch((e) => {
             if (!cancelado) setErrorVision(e.message);
             return null;
           }),
@@ -122,7 +133,7 @@ export default function CamaraBrazo({ partidaActivaId = null, onPartidaActivaCha
       } catch (e) {
         if (cancelado) return;
         setErrorFoto(e.message);
-        obtenerEstadoVision()
+        obtenerEstadoVision(camaraCalibrarRef.current)
           .then((estado) => {
             if (!cancelado) {
               setEstadoVision(estado);
@@ -141,7 +152,7 @@ export default function CamaraBrazo({ partidaActivaId = null, onPartidaActivaCha
       cancelado = true;
       if (temporizador) clearTimeout(temporizador);
     };
-  }, [pausada, calibrando, pestana]);
+  }, [pausada, calibrando, pestana, camaraCalibrar]);
 
   useEffect(() => {
     montadoRef.current = true;
@@ -347,7 +358,15 @@ export default function CamaraBrazo({ partidaActivaId = null, onPartidaActivaCha
             </label>
           </div>
 
-          <div className="w-full aspect-[4/3] bg-surface-container rounded-lg overflow-hidden flex items-center justify-center">
+          <div className="relative w-full aspect-[4/3] bg-surface-container rounded-lg overflow-hidden flex items-center justify-center">
+            {enVivo && (
+              <span
+                className={`absolute top-2 left-2 z-10 px-2 py-1 rounded-lg font-mono-micro text-mono-micro ${fpsVivo > 0 ? 'bg-black/60 text-white' : 'bg-error text-on-error'}`}
+                role="status"
+              >
+                {fpsVivo > 0 ? `● EN VIVO · ${fpsVivo} fps` : '○ sin señal'}
+              </span>
+            )}
             {(grilla ? urlFoto : urlVivo) ? (
               <img
                 src={grilla ? urlFoto : urlVivo}
@@ -361,8 +380,26 @@ export default function CamaraBrazo({ partidaActivaId = null, onPartidaActivaCha
             )}
           </div>
 
+          {tieneSecundaria && (
+            <div className="flex flex-wrap items-center gap-space-xs" role="group" aria-label="Qué cámara ver">
+              <span className="font-body-sm text-body-sm text-on-surface-variant">Ver:</span>
+              {[['principal', 'Principal'], ['secundaria', 'Secundaria'], ['todas', 'Ambas']].map(([id, texto]) => (
+                <button key={id} type="button" className={vista === id ? CLASE_BOTON_PRIMARIO : CLASE_BOTON} aria-pressed={vista === id} onClick={() => setVistaElegida(id)}>
+                  {texto}
+                </button>
+              ))}
+              <span className="font-body-sm text-body-sm text-on-surface-variant">
+                Calibradas: {calibradas.length ? calibradas.join(' y ') : 'ninguna'}
+              </span>
+            </div>
+          )}
+          <SelectorCamara />
+
           {/* Paso 1: calibración del tablero (asistente en 4 pasos) */}
-          <AsistenteCalibracion onEnCursoChange={setCalibrando} />
+          <AsistenteCalibracion key={camaraCalibrar} camara={camaraCalibrar} onEnCursoChange={setCalibrando} />
+
+          <LenteYAltura key={`lente-${camaraCalibrar}`} camara={camaraCalibrar} />
+          <VerificacionUnificada />
 
           {pausada && !calibrando && (
             <p className="font-mono-micro text-mono-micro text-on-surface-variant" role="status">

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { obtenerEstadoCalibracion } from '../../../api/backend';
 import { EVENTO_CALIBRACION_CAMBIO } from './AsistenteCalibracion';
+import useCamarasConfiguradas from '../useCamarasConfiguradas';
 
 const INTERVALO_MS = 60000;
 
@@ -13,6 +14,8 @@ const INTERVALO_MS = 60000;
  */
 export default function BannerCalibracion({ onIrACalibrar }) {
   const [estado, setEstado] = useState(null);
+  const { tieneSecundaria, calibradas } = useCamarasConfiguradas();
+  const secundariaSinCalibrar = tieneSecundaria && !calibradas.includes('secundaria');
 
   useEffect(() => {
     let cancelado = false;
@@ -69,8 +72,9 @@ export default function BannerCalibracion({ onIrACalibrar }) {
         {vigente ? 'check_circle' : 'warning'}
       </span>
       <span className="font-medium">{texto}</span>
+      {secundariaSinCalibrar && <span className="min-w-0 break-words">La cámara secundaria todavía no está calibrada (no se usa hasta calibrarla).</span>}
       {!vigente && estado.motivo_no_vigente && <span className="min-w-0 break-words">{estado.motivo_no_vigente}</span>}
-      {!vigente && onIrACalibrar && (
+      {(!vigente || secundariaSinCalibrar) && onIrACalibrar && (
         <button
           type="button"
           onClick={onIrACalibrar}

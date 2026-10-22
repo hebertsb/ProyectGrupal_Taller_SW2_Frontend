@@ -42,3 +42,38 @@ export function fenConPieza(clase, casillas) {
   }
   return filas.join('/');
 }
+
+const LETRA_DE_CLASE = {
+  'white-pawn': 'P', 'white-knight': 'N', 'white-bishop': 'B', 'white-rook': 'R', 'white-queen': 'Q', 'white-king': 'K',
+  'black-pawn': 'p', 'black-knight': 'n', 'black-bishop': 'b', 'black-rook': 'r', 'black-queen': 'q', 'black-king': 'k',
+};
+
+/** Letra FEN (P, n, …) de una clase del dataset ("white-pawn" → "P"); `null` para "vacia". */
+export const letraDeClase = (clase) => LETRA_DE_CLASE[clase] ?? null;
+
+/** FEN completo de la posición reconocida a partir de `[{casilla, clase}]` (las casillas que falten quedan vacías). */
+export function fenDeCasillas(casillas) {
+  const letras = {};
+  casillas.forEach((c) => {
+    const letra = letraDeClase(c.clase);
+    if (letra) letras[c.casilla] = letra;
+  });
+  const filas = [];
+  for (let fila = 8; fila >= 1; fila -= 1) {
+    let texto = '';
+    let vacias = 0;
+    for (const columna of COLUMNAS) {
+      const letra = letras[`${columna}${fila}`];
+      if (letra) {
+        if (vacias) texto += vacias;
+        vacias = 0;
+        texto += letra;
+      } else {
+        vacias += 1;
+      }
+    }
+    if (vacias) texto += vacias;
+    filas.push(texto);
+  }
+  return `${filas.join('/')} w - - 0 1`;
+}

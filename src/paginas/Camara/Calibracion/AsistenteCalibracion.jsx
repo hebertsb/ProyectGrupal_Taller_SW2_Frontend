@@ -20,11 +20,11 @@ function textoFecha(iso) {
  *
  * `onEnCursoChange(true|false)` avisa al padre mientras el asistente está abierto (para pausar la vista en vivo).
  */
-export default function AsistenteCalibracion({ onEnCursoChange }) {
+export default function AsistenteCalibracion({ camara = 'principal', onEnCursoChange }) {
   const {
     estado, paso, foto, puntos, setPuntos, vistaUrl, resultado, comprobacion, ocupado, error,
     entradaImportarRef, ir, cerrar, congelar, previsualizar, guardar, exportar, importar, quitar, comprobar,
-  } = useAsistenteCalibracion(onEnCursoChange);
+  } = useAsistenteCalibracion(camara, onEnCursoChange);
 
   const etiquetaEstado =
     estado == null
@@ -43,7 +43,7 @@ export default function AsistenteCalibracion({ onEnCursoChange }) {
     <div className="flex flex-col gap-space-xs border-t border-outline-variant pt-space-sm" role="group" aria-labelledby="titulo-calibracion">
       <div className="flex flex-wrap items-center justify-between gap-space-xs">
         <h4 id="titulo-calibracion" className="font-body-sm text-body-sm text-on-surface font-medium">
-          Paso 1 · Calibración del tablero
+          Paso 1 · Calibración del tablero — cámara {camara}
         </h4>
         <span className={`font-body-sm text-body-sm ${colorEstado}`} role="status">
           {etiquetaEstado}

@@ -248,6 +248,7 @@ export default function SimuladorBrazoTablero3D({
   ultimoMovimiento = null,
   pensando = false,
   onCasillaClick,
+  angulosExternos = null, // [J1..J6] en grados (telemetría del brazo real/emulador): si llega, el gemelo los sigue
   className = '',
 }) {
   const mountRef = useRef(null);
@@ -286,6 +287,24 @@ export default function SimuladorBrazoTablero3D({
   const [jugadaActiva, setJugadaActiva] = useState(null);
   const [animando, setAnimando] = useState(false);
   const [inputUci, setInputUci] = useState('');
+
+  // Seguir los ángulos reales del brazo (canvas de la pantalla de conexión)
+  useEffect(() => {
+    const robotArt = robotArticuladoRef.current;
+    if (!angulosExternos || angulosExternos.length !== 6 || !robotCargado || !robotArt) return;
+    const [a1, a2, a3, a4, a5, a6] = angulosExternos.map((g) => THREE.MathUtils.degToRad(g));
+    if (robotArt.j1) robotArt.j1.rotation.y = a1;
+    if (robotArt.j2) robotArt.j2.rotation.z = a2;
+    if (robotArt.j3) robotArt.j3.rotation.z = a3;
+    if (robotArt.j4) robotArt.j4.rotation.z = a4;
+    if (robotArt.j5) robotArt.j5.rotation.y = a5;
+    if (robotArt.j6) robotArt.j6.rotation.z = a6;
+    setTelemetria((t) => ({
+      ...t,
+      estadoRobot: 'SIGUIENDO AL BRAZO',
+      juntasGrados: Object.fromEntries(angulosExternos.map((g, i) => [`j${i + 1}`, Math.round(g)])),
+    }));
+  }, [angulosExternos, robotCargado]);
 
   // Sincronizar FEN externo cuando cambie la partida
   useEffect(() => {

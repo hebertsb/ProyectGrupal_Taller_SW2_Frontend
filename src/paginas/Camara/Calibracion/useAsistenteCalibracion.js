@@ -5,8 +5,9 @@ import {
   obtenerEstadoCalibracion,
   obtenerFotoVision,
   previsualizarCalibracion,
-  quitarCalibracionTablero,
+  quitarCalibracionCamara,
 } from '../../../api/backend';
+import { EVENTO_CAMARAS_CAMBIO } from '../useCamarasConfiguradas';
 import { ESQUINAS_ORDEN, puntosAEsquinas, validarEsquinas } from './esquinas';
 
 export const EVENTO_CALIBRACION_CAMBIO = 'calibracion-cambio';
@@ -16,7 +17,7 @@ export const EVENTO_CALIBRACION_CAMBIO = 'calibracion-cambio';
  * esquinas marcadas, la vista previa de la grilla, el guardado y las acciones de reposo (exportar, importar, quitar, comprobar).
  * Avisa con `EVENTO_CALIBRACION_CAMBIO` cuando se guarda o se quita una calibración y con `onEnCursoChange` mientras está abierto.
  */
-export default function useAsistenteCalibracion(onEnCursoChange) {
+export default function useAsistenteCalibracion(camara, onEnCursoChange) {
   const [estado, setEstado] = useState(null);
   const [paso, setPaso] = useState(0); // 0 = en reposo
   const [foto, setFoto] = useState(null); // { url, blob } de la foto congelada
@@ -32,15 +33,20 @@ export default function useAsistenteCalibracion(onEnCursoChange) {
 
   const cargarEstado = useCallback(async () => {
     try {
-      const datos = await obtenerEstadoCalibracion();
+      const datos = await obtenerEstadoCalibracion(camara);
       if (montadoRef.current) setEstado(datos);
     } catch (e) {
-      if (montadoRef.current) setError(e.message);
+      if (montadoRef.current) {
+        setEstado(null);
+        setError(e.message);
+      }
     }
-  }, []);
+  }, [camara]);
 
   useEffect(() => {
     montadoRef.current = true;
+    setEstado(null);
+    setComprobacion(null);
     cargarEstado();
     const urls = urlsRef.current;
     return () => {
@@ -76,6 +82,7 @@ export default function useAsistenteCalibracion(onEnCursoChange) {
     ir(0);
     cargarEstado();
     window.dispatchEvent(new Event(EVENTO_CALIBRACION_CAMBIO));
+    window.dispatchEvent(new Event(EVENTO_CAMARAS_CAMBIO));
   }
 
   /** Ejecuta una operación con el indicador de carga y el error visibles. */
@@ -93,7 +100,7 @@ export default function useAsistenteCalibracion(onEnCursoChange) {
   }
 
   async function congelar() {
-    const nueva = await trabajar(() => obtenerFotoVision(false));
+    const nueva = await trabajar(() => obtenerFotoVision(false, camara));
     if (!nueva) return;
     guardarFotoCongelada(nueva);
     setPuntos([]);
@@ -101,17 +108,18 @@ export default function useAsistenteCalibracion(onEnCursoChange) {
   }
 
   async function previsualizar() {
-    const url = await trabajar(() => previsualizarCalibracion(puntosAEsquinas(puntos), foto.blob));
+    const url = await trabajar(() => previsualizarCalibracion(puntosAEsquinas(puntos), foto.blob, camara));
     if (!url) return;
     guardarVista(url);
     ir(3);
   }
 
   async function guardar() {
-    const guardado = await trabajar(() => guardarCalibracionConFoto(puntosAEsquinas(puntos), foto.blob));
+    const guardado = await trabajar(() => guardarCalibracionConFoto(puntosAEsquinas(puntos), foto.blob, camara));
     if (guardado) {
       setResultado(guardado);
       window.dispatchEvent(new Event(EVENTO_CALIBRACION_CAMBIO));
+      window.dispatchEvent(new Event(EVENTO_CAMARAS_CAMBIO));
     }
   }
 
@@ -121,7 +129,7 @@ export default function useAsistenteCalibracion(onEnCursoChange) {
     const url = URL.createObjectURL(blob);
     const enlace = document.createElement('a');
     enlace.href = url;
-    enlace.download = 'esquinas_tablero.json';
+    enlace.download = camara === 'principal' ? 'esquinas_tablero.json' : `esquinas_tablero_${camara}.json`;
     document.body.appendChild(enlace);
     enlace.click();
     enlace.remove();
@@ -140,12 +148,12 @@ export default function useAsistenteCalibracion(onEnCursoChange) {
       return;
     }
     // Las esquinas importadas se revisan sobre una foto nueva, que además queda como referencia al guardar.
-    const nueva = await trabajar(() => obtenerFotoVision(false));
+    const nueva = await trabajar(() => obtenerFotoVision(false, camara));
     if (!nueva) return;
     guardarFotoCongelada(nueva);
     const importados = ESQUINAS_ORDEN.map((clave) => esquinas[clave]);
     setPuntos(importados);
-    const url = await trabajar(() => previsualizarCalibracion(esquinas, nueva.blob));
+    const url = await trabajar(() => previsualizarCalibracion(esquinas, nueva.blob, camara));
     if (url) {
       guardarVista(url);
       ir(3);
@@ -155,15 +163,16 @@ export default function useAsistenteCalibracion(onEnCursoChange) {
   }
 
   async function quitar() {
-    if (!window.confirm('¿Quitar la calibración del tablero? Se vuelve a la detección automática.')) return;
-    await trabajar(() => quitarCalibracionTablero());
+    if (!window.confirm(`¿Quitar la calibración de la cámara ${camara}?${camara === 'principal' ? ' Se vuelve a la detección automática.' : ''}`)) return;
+    await trabajar(() => quitarCalibracionCamara(camara));
     await cargarEstado();
     window.dispatchEvent(new Event(EVENTO_CALIBRACION_CAMBIO));
+    window.dispatchEvent(new Event(EVENTO_CAMARAS_CAMBIO));
   }
 
   async function comprobar() {
     setComprobacion(null);
-    const datos = await trabajar(() => comprobarCalibracion());
+    const datos = await trabajar(() => comprobarCalibracion(camara));
     if (datos) setComprobacion(datos);
   }
 

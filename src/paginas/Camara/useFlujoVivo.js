@@ -26,17 +26,22 @@ const FIN_CABECERA = new TextEncoder().encode('\r\n\r\n');
  * Video EN VIVO del backend (`GET /vision/flujo`, multipart/x-mixed-replace de JPEG). Se lee con fetch (lleva el token) y
  * cada cuadro nuevo reemplaza al anterior, así que la imagen sigue a la cámara sin acumular atraso: si llegan varios cuadros
  * juntos solo se muestra el último. Devuelve `{url, datos, error}`: `url` es el object URL del cuadro actual, `datos` lo que el
- * backend adjunta (en modo `piezas`, `[[casilla, clase, confianza], …]`) y `error` el mensaje si el flujo falló (reintenta solo).
+ * backend adjunta (en modo `piezas`, `[[casilla, clase, confianza], …]`) y `fps` los cuadros por segundo mostrados, y `error` el mensaje si el flujo falló (reintenta solo).
  *
  * @param {'camara'|'piezas'|'vista'} modo
  * @param {string[]} casillas casillas a resaltar en modo `vista`
+ * @param {''|'blanca'|'negra'} auto en modo `vista`, el backend detecta solo la casilla de la pieza de ese color (`datos` = `[[casilla, estado, confianza]]`)
+ * @param {'principal'|'secundaria'|'todas'} camara qué cámara mostrar; `todas` junta las dos lado a lado (y en modo `piezas`/`vista` fusiona el resultado)
+ * @param {'plana'|'cajas'|'ambas'} vista en modo `piezas`: el tablero enderezado, la imagen de la cámara con la caja 3D de cada pieza, o ambas
  * @param {boolean} activo si es false no se conecta (y se desconecta si estaba conectado)
  */
-export default function useFlujoVivo({ modo, casillas = [], activo = true }) {
+export default function useFlujoVivo({ modo, casillas = [], auto = '', camara = 'principal', vista = 'plana', activo = true }) {
   const [url, setUrl] = useState(null);
   const [datos, setDatos] = useState(null);
   const [error, setError] = useState(null);
+  const [fps, setFps] = useState(0);
   const urlRef = useRef(null);
+  const cuadrosRef = useRef(0);
   const claveCasillas = casillas.join(',');
 
   useEffect(() => {
@@ -49,6 +54,7 @@ export default function useFlujoVivo({ modo, casillas = [], activo = true }) {
       const nueva = URL.createObjectURL(new Blob([bytes], { type: 'image/jpeg' }));
       if (urlRef.current) URL.revokeObjectURL(urlRef.current);
       urlRef.current = nueva;
+      cuadrosRef.current += 1;
       setUrl(nueva);
       if (casillasAdjuntas !== undefined) setDatos(casillasAdjuntas);
     }
@@ -57,8 +63,10 @@ export default function useFlujoVivo({ modo, casillas = [], activo = true }) {
       controlador = new AbortController();
       try {
         const token = leerSesion('access_token');
-        const consulta = new URLSearchParams({ modo });
+        const consulta = new URLSearchParams({ modo, camara });
+        if (modo === 'piezas') consulta.set('vista', vista);
         if (claveCasillas) consulta.set('casillas', claveCasillas);
+        if (auto) consulta.set('auto', auto);
         const respuesta = await fetch(`/vision/flujo?${consulta}`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
           signal: controlador.signal,
@@ -103,7 +111,7 @@ export default function useFlujoVivo({ modo, casillas = [], activo = true }) {
             pendiente = pendiente.slice(inicio + largo);
           }
           if (ultimo && !cancelado) {
-            mostrar(ultimo.bytes, modo === 'piezas' ? ultimo.casillasAdjuntas : undefined);
+            mostrar(ultimo.bytes, ultimo.casillasAdjuntas ?? undefined);
             setError(ultimo.aviso);
           }
         }
@@ -121,7 +129,20 @@ export default function useFlujoVivo({ modo, casillas = [], activo = true }) {
       if (controlador) controlador.abort();
       if (temporizador) clearTimeout(temporizador);
     };
-  }, [modo, claveCasillas, activo]);
+  }, [modo, claveCasillas, auto, camara, vista, activo]);
+
+  // Cuadros por segundo realmente mostrados (0 = sin señal): sirve para ver a ojo que el video está vivo.
+  useEffect(() => {
+    if (!activo) {
+      setFps(0);
+      return undefined;
+    }
+    const intervalo = setInterval(() => {
+      setFps(cuadrosRef.current);
+      cuadrosRef.current = 0;
+    }, 1000);
+    return () => clearInterval(intervalo);
+  }, [activo]);
 
   useEffect(
     () => () => {
@@ -131,5 +152,5 @@ export default function useFlujoVivo({ modo, casillas = [], activo = true }) {
     []
   );
 
-  return { url, datos, error };
+  return { url, datos, error, fps };
 }

@@ -303,8 +303,8 @@ export async function obtenerUrlGrillaDebug(archivoFoto) {
 }
 
 /** Estado de la cámara fija: {fuente, disponible, ancho, alto, latencia_ms, error}. */
-export function obtenerEstadoVision() {
-  return solicitar("/vision/estado", { method: "GET" });
+export function obtenerEstadoVision(camara = "principal") {
+  return solicitar(`/vision/estado?camara=${camara}`, { method: "GET" });
 }
 
 /**
@@ -325,12 +325,13 @@ export function guardarCalibracionTablero(esquinas) {
  * Estado de la calibración del tablero con su vigencia: `{calibrada, vigente, motivo_no_vigente, esquinas, fecha, resolucion,
  * fuente, advertencias}`. `vigente` es `null` si no se pudo verificar (la cámara no entrega imagen).
  */
-export function obtenerEstadoCalibracion() {
-  return solicitar("/vision/calibracion/estado", { method: "GET" });
+export function obtenerEstadoCalibracion(camara = "principal") {
+  return solicitar(`/vision/calibracion/estado?camara=${camara}`, { method: "GET" });
 }
 
-function formularioDeCalibracion(esquinas, foto) {
+function formularioDeCalibracion(esquinas, foto, camara = "principal") {
   const formulario = new FormData();
+  formulario.append("camara", camara);
   formulario.append("esquinas", JSON.stringify(esquinas));
   formulario.append("foto", foto, "foto.jpg");
   return formulario;
@@ -340,22 +341,22 @@ function formularioDeCalibracion(esquinas, foto) {
  * Guarda la calibración con la foto sobre la que se marcaron las esquinas (de ahí salen la resolución y la referencia para
  * detectar que la cámara se movió). Devuelve el estado, con `advertencias` si algo se ve dudoso; 422 = esquinas inválidas.
  */
-export function guardarCalibracionConFoto(esquinas, foto) {
-  return solicitarFormulario("/vision/calibracion/guardar", formularioDeCalibracion(esquinas, foto));
+export function guardarCalibracionConFoto(esquinas, foto, camara = "principal") {
+  return solicitarFormulario("/vision/calibracion/guardar", formularioDeCalibracion(esquinas, foto, camara));
 }
 
 /**
  * Vista previa del tablero enderezado con la grilla 8x8 para esas esquinas, sin guardar. Devuelve un object URL (JPEG); quien
  * lo use debe revocarlo con `URL.revokeObjectURL`.
  */
-export async function previsualizarCalibracion(esquinas, foto) {
+export async function previsualizarCalibracion(esquinas, foto, camara = "principal") {
   const token = leerSesion("access_token");
   const headers = {};
   if (token) headers["Authorization"] = `Bearer ${token}`;
   const respuesta = await fetch("/vision/calibracion/previsualizar", {
     method: "POST",
     headers,
-    body: formularioDeCalibracion(esquinas, foto),
+    body: formularioDeCalibracion(esquinas, foto, camara),
   });
   if (!respuesta.ok) throw await errorDeRespuesta(respuesta);
   return URL.createObjectURL(await respuesta.blob());
@@ -365,8 +366,15 @@ export async function previsualizarCalibracion(esquinas, foto) {
  * Compara una foto de la cámara fija con la de referencia de la calibración: `{movida, desplazamiento_px, coincidencias, mensaje}`.
  * `movida` es `null` si no se pudo comparar.
  */
-export function comprobarCalibracion() {
-  return solicitarFormulario("/vision/calibracion/comprobar", new FormData());
+export function comprobarCalibracion(camara = "principal") {
+  const formulario = new FormData();
+  formulario.append("camara", camara);
+  return solicitarFormulario("/vision/calibracion/comprobar", formulario);
+}
+
+/** Quita la calibración de una cámara (esquinas, metadata y referencia). La principal vuelve a la detección automática. */
+export function quitarCalibracionCamara(camara = "principal") {
+  return solicitar(`/vision/calibracion/quitar?camara=${camara}`, { method: "DELETE" });
 }
 
 /** Quita la calibración y vuelve a la detección automática. */
@@ -381,13 +389,13 @@ export function quitarCalibracionTablero() {
  * (quien lo use debe revocarlo con `URL.revokeObjectURL`) y `blob` sirve para
  * reenviar la misma foto a `reconocerTablero`.
  */
-export async function obtenerFotoVision(grilla = false) {
+export async function obtenerFotoVision(grilla = false, camara = "principal") {
   const token = leerSesion("access_token");
   const headers = {};
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
-  const respuesta = await fetch(`/vision/foto?grilla=${grilla ? "true" : "false"}`, {
+  const respuesta = await fetch(`/vision/foto?grilla=${grilla ? "true" : "false"}&camara=${camara}`, {
     headers,
     cache: "no-store",
   });
@@ -981,3 +989,60 @@ export const ensayoMoverPieza = (origen, destino, tipoPieza = "p") =>
   controlBrazo("/mover-pieza/ensayo", "POST", { origen, destino, tipo_pieza: tipoPieza });
 export const moverPiezaBrazo = (origen, destino, tipoPieza = "p") =>
   controlBrazo("/mover-pieza", "POST", { origen, destino, tipo_pieza: tipoPieza });
+
+/** Cámaras que abre el equipo: `{actual, camaras: [{indice, disponible, ancho, alto}]}`. Corta el video un instante. */
+export const listarCamaras = () => solicitar("/vision/camaras", { method: "GET" });
+/** Un cuadro (JPEG, object URL a revocar) de la cámara `indice`, para reconocer cuál es. */
+export async function fotoDeCamara(indice) {
+  const token = leerSesion("access_token");
+  const respuesta = await fetch(`/vision/camaras/${indice}/foto`, { headers: token ? { Authorization: `Bearer ${token}` } : {}, cache: "no-store" });
+  if (!respuesta.ok) throw await errorDeRespuesta(respuesta);
+  return URL.createObjectURL(await respuesta.blob());
+}
+/** Asigna una fuente (índice `"2"` o URL de stream) a la cámara `principal` o `secundaria`. Cada una necesita una fuente distinta. */
+export const seleccionarCamara = (fuente, camara = "principal") =>
+  solicitar("/vision/camara", { method: "POST", body: JSON.stringify({ fuente: String(fuente), camara }) });
+/** Deja de usar la cámara secundaria. */
+export const quitarCamaraSecundaria = () => solicitar("/vision/camara/secundaria", { method: "DELETE" });
+/** Qué cámaras hay configuradas y calibradas: `{configuradas, calibradas, fuentes, rotaciones}`. Barato: no abre ninguna cámara. */
+export const estadoDeLasCamaras = () => solicitar("/vision/camaras/estado", { method: "GET" });
+
+/** Gira la imagen de la cámara fija (0, 90, 180 o 270, horario). Después hay que volver a calibrar el tablero. */
+export const girarCamara = (grados, camara = "principal") =>
+  solicitar("/vision/camara/rotacion", { method: "POST", body: JSON.stringify({ grados, camara }) });
+
+/**
+ * Verifica que las calibraciones de las dos cámaras describen el mismo tablero y con la misma orientación. Devuelve
+ * `{nivel: "bien"|"regular"|"mal"|"orientacion", ok, mensaje, error_px, error_casillas, orientacion, imagen}` con `imagen` en base64 (JPEG 2×2:
+ * principal, secundaria, superpuestas, diferencia). 409 si falta configurar o calibrar alguna cámara.
+ */
+export const verificarCalibracionUnificada = () => solicitar("/vision/calibracion/unificada", { method: "GET" });
+
+// --- Lente y geometría 3D por cámara (`/vision/lente`) ---
+/** Lente (calibrado o supuesto), posición de la cámara respecto del tablero y fotos guardadas para calibrar. */
+export const estadoLente = (camara = "principal") => solicitar(`/vision/lente/estado?camara=${camara}`, { method: "GET" });
+/** Saca una foto y la guarda para calibrar el lente si se ven las 49 esquinas internas del tablero. */
+export const agregarFotoLente = (camara = "principal") => solicitar(`/vision/lente/foto?camara=${camara}`, { method: "POST" });
+/** Calibra el lente con las fotos guardadas. */
+export const calcularLente = (camara = "principal") => solicitar(`/vision/lente/calcular?camara=${camara}`, { method: "POST" });
+/** Fija a mano el campo de visión horizontal (grados). */
+export const fijarCampoDeVision = (grados, camara = "principal") =>
+  solicitar(`/vision/lente/fov?camara=${camara}`, { method: "POST", body: JSON.stringify({ grados }) });
+export const borrarLente = (camara = "principal") => solicitar(`/vision/lente?camara=${camara}`, { method: "DELETE" });
+/** La imagen actual con las cajas 3D de algunas casillas dibujadas (object URL a revocar). */
+export async function vistaDeCajas(camara = "principal", casillas = []) {
+  const token = leerSesion("access_token");
+  const respuesta = await fetch(`/vision/lente/vista?camara=${camara}&casillas=${casillas.join(",")}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    cache: "no-store",
+  });
+  if (!respuesta.ok) throw await errorDeRespuesta(respuesta);
+  return URL.createObjectURL(await respuesta.blob());
+}
+
+/** Qué modelos hay entrenados y con qué recorte: `{ocupacion, piezas, dos_vistas}`, cada uno `{existe, recorte}`. */
+export const estadoDeLosModelos = () => solicitar("/vision/modelos/estado", { method: "GET" });
+export const moverArticulacionesBrazo = (angulos) => controlBrazo("/mover-articulaciones", "POST", { angulos });
+export const moverRelativoBrazo = (dx = 0, dy = 0, dz = 0, velocidadMmS = 20) =>
+  controlBrazo("/mover-relativo", "POST", { dx, dy, dz, velocidad_mm_s: velocidadMmS });
+export const irAPosicionInicialBrazo = () => controlBrazo("/posicion-inicial");

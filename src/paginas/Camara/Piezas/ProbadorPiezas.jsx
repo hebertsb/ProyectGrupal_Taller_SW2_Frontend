@@ -1,25 +1,31 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { estadoDeLosModelos } from '../../../api/backend';
 import { nombreClase } from '../../EntrenarCamara/SubirFotosPieza';
-import { CLASE_AVISO, CLASE_BOTON, CLASE_TARJETA } from '../estilos';
+import { CLASE_AVISO, CLASE_BOTON, CLASE_BOTON_PRIMARIO, CLASE_TARJETA } from '../estilos';
+import useCamarasConfiguradas from '../useCamarasConfiguradas';
 import useFlujoVivo from '../useFlujoVivo';
+import TableroSoloLectura from '../../../componentes/TableroSoloLectura';
+import { fenDeCasillas } from './fenCaptura';
 
 const CUADROS_VOTO = 8;
 
 /** Mayoría por casilla entre los últimos cuadros: un error suelto de un cuadro no cambia lo que se muestra. */
 function votar(historial) {
   const porCasilla = new Map();
+  const ultimaPorCamara = new Map();
   for (const lectura of historial) {
-    for (const [casilla, clase, confianza] of lectura) {
+    for (const [casilla, clase, confianza, porCamara] of lectura) {
       const votos = porCasilla.get(casilla) ?? new Map();
       const previo = votos.get(clase) ?? { n: 0, suma: 0 };
       votos.set(clase, { n: previo.n + 1, suma: previo.suma + confianza });
       porCasilla.set(casilla, votos);
+      ultimaPorCamara.set(casilla, porCamara ?? []); // lo que vio cada cámara en el cuadro más reciente
     }
   }
   const resultado = [];
   for (const [casilla, votos] of porCasilla) {
     const [clase, { n, suma }] = [...votos.entries()].sort((a, b) => b[1].n - a[1].n || b[1].suma - a[1].suma)[0];
-    resultado.push({ casilla, clase, confianza: suma / n, estabilidad: n / historial.length, alternativas: [] });
+    resultado.push({ casilla, clase, confianza: suma / n, estabilidad: n / historial.length, alternativas: [], porCamara: ultimaPorCamara.get(casilla) ?? [] });
   }
   return resultado;
 }
@@ -39,7 +45,15 @@ const colorConfianza = (c) => (c >= 0.8 ? 'text-primary' : c >= 0.5 ? 'text-on-s
  */
 export default function ProbadorPiezas() {
   const [enVivo, setEnVivo] = useState(true);
-  const { url, datos, error: errorFlujo } = useFlujoVivo({ modo: 'piezas', activo: enVivo });
+  const { calibradas } = useCamarasConfiguradas();
+  const [modelos, setModelos] = useState(null);
+  useEffect(() => {
+    estadoDeLosModelos().then(setModelos).catch(() => setModelos(null));
+  }, []);
+  const textoModelo = (m, nombre) => (m?.existe ? `${nombre} (recorte ${m.recorte})` : `${nombre}: sin entrenar`);
+  const dosCamaras = calibradas.includes('secundaria');
+  const [vistaPiezas, setVistaPiezas] = useState('ambas');
+  const { url, datos, error: errorFlujo } = useFlujoVivo({ modo: 'piezas', camara: dosCamaras ? 'todas' : 'principal', vista: vistaPiezas, activo: enVivo });
   const error = errorFlujo ? mensajeError({ message: errorFlujo, status: /entrenado|409/.test(errorFlujo) ? 409 : 0 }) : null;
   const historialRef = useRef([]);
   const casillas = useMemo(() => {
@@ -47,6 +61,8 @@ export default function ProbadorPiezas() {
     historialRef.current = [...historialRef.current, datos].slice(-CUADROS_VOTO);
     return votar(historialRef.current);
   }, [datos]);
+  const desacuerdos = casillas.filter((c) => new Set(c.porCamara).size > 1);
+  const fenReconocido = useMemo(() => fenDeCasillas(casillas), [casillas]);
   const ocupadas = casillas.filter((c) => c.clase !== 'vacia');
 
   return (
@@ -55,6 +71,19 @@ export default function ProbadorPiezas() {
         Poné una pieza en el tablero y mirá (en vivo) qué reconoce el modelo en cada casilla. El color del círculo indica la confianza:
         verde (80 % o más), ámbar (50–80 %) o rojo (menos). Requiere el tablero calibrado y un modelo entrenado.
       </p>
+      <div className="flex flex-wrap items-center gap-space-xs" role="group" aria-label="Cómo mostrar el reconocimiento">
+        <span className="font-body-sm text-body-sm text-on-surface-variant">Ver:</span>
+        {[['plana', 'Tablero plano'], ['cajas', 'Cajas 3D sobre la cámara'], ['ambas', 'Ambas']].map(([id, texto]) => (
+          <button key={id} type="button" className={vistaPiezas === id ? CLASE_BOTON_PRIMARIO : CLASE_BOTON} aria-pressed={vistaPiezas === id} onClick={() => setVistaPiezas(id)}>
+            {texto}
+          </button>
+        ))}
+      </div>
+      {modelos && (
+        <p className="font-body-sm text-body-sm text-on-surface-variant m-0" role="status">
+          Modelos: {textoModelo(modelos.ocupacion, 'ocupación')} · {textoModelo(modelos.piezas, 'piezas')} · {modelos.dos_vistas?.existe ? `dos vistas (recorte ${modelos.dos_vistas.recorte}) — es el que decide` : modelos.dos_vistas?.ignorado ? `dos vistas: no se usa (${modelos.dos_vistas.ignorado})` : 'dos vistas: sin entrenar'}
+        </p>
+      )}
       <div className="flex flex-wrap gap-space-xs">
         <button type="button" className={CLASE_BOTON} onClick={() => setEnVivo((v) => !v)} aria-pressed={enVivo}>
           <span className="inline-flex items-center gap-1">
@@ -69,11 +98,11 @@ export default function ProbadorPiezas() {
         </p>
       )}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-space-md">
-        <section className={CLASE_TARJETA} aria-labelledby="titulo-probador-imagen">
+        <section className={`${CLASE_TARJETA} xl:col-span-2`} aria-labelledby="titulo-probador-imagen">
           <h3 id="titulo-probador-imagen" className="font-body-md text-body-md text-on-surface font-medium">
-            Lo que ve la cámara
+            Lo que ve la cámara{dosCamaras ? ' (principal y secundaria, resultado combinado)' : ''}
           </h3>
-          <div className="w-full max-w-lg bg-surface-container rounded-lg overflow-hidden flex items-center justify-center min-h-[8rem]">
+          <div className="w-full bg-surface-container rounded-lg overflow-hidden flex items-center justify-center min-h-[8rem]">
             {url ? (
               <img
                 src={url}
@@ -86,7 +115,37 @@ export default function ProbadorPiezas() {
           </div>
           <p className="font-body-sm text-body-sm text-on-surface-variant m-0">
             Mayúscula = blanca, minúscula = negra (P peón, N caballo, B alfil, R torre, Q dama, K rey).
+            {dosCamaras ? ' Un cuadro magenta marca las casillas donde las dos cámaras no coinciden.' : ''}
           </p>
+        </section>
+        <section className={CLASE_TARJETA} aria-labelledby="titulo-probador-tablero">
+          <h3 id="titulo-probador-tablero" className="font-body-md text-body-md text-on-surface font-medium">
+            Posición reconocida{dosCamaras ? ' (decisión entre las dos cámaras)' : ''}
+          </h3>
+          <div className="w-full flex justify-center">
+            <TableroSoloLectura fen={fenReconocido} />
+          </div>
+          {dosCamaras && (
+            <div role="status" aria-live="polite">
+              {desacuerdos.length === 0 ? (
+                <p className="font-body-sm text-body-sm text-on-surface-variant m-0">Las dos cámaras coinciden en todas las casillas.</p>
+              ) : (
+                <>
+                  <p className="font-body-sm text-body-sm text-on-surface m-0">
+                    Casillas donde las cámaras no coinciden ({desacuerdos.length}):
+                  </p>
+                  <ul className="list-none p-0 m-0 flex flex-col gap-1 font-body-sm text-body-sm">
+                    {desacuerdos.map((c) => (
+                      <li key={c.casilla} className="text-on-surface-variant">
+                        <strong className="text-on-surface">{c.casilla}</strong> · principal: {nombreClase(c.porCamara[0])} · secundaria: {nombreClase(c.porCamara[1])} →{' '}
+                        <strong className="text-on-surface">{nombreClase(c.clase)}</strong>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+          )}
         </section>
         <section className={CLASE_TARJETA} aria-labelledby="titulo-probador-lista">
           <h3 id="titulo-probador-lista" className="font-body-md text-body-md text-on-surface font-medium">
