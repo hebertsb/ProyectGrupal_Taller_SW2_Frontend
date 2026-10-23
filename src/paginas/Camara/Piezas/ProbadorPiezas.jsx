@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { estadoDeLosModelos } from '../../../api/backend';
+import { estadoDeLosModelos, problemasDePosicion } from '../../../api/backend';
 import { nombreClase } from '../../EntrenarCamara/SubirFotosPieza';
 import { CLASE_AVISO, CLASE_BOTON, CLASE_BOTON_PRIMARIO, CLASE_TARJETA } from '../estilos';
 import useCamarasConfiguradas from '../useCamarasConfiguradas';
@@ -64,12 +64,31 @@ export default function ProbadorPiezas() {
   const desacuerdos = casillas.filter((c) => new Set(c.porCamara).size > 1);
   const fenReconocido = useMemo(() => fenDeCasillas(casillas), [casillas]);
   const ocupadas = casillas.filter((c) => c.clase !== 'vacia');
+  // Validaciones lógicas de la posición reconocida (se piden solo cuando cambia la posición, no en cada cuadro).
+  const [problemas, setProblemas] = useState([]);
+  const piezasFen = ocupadas.length ? fenReconocido.split(' ')[0] : '';
+  useEffect(() => {
+    if (!piezasFen) {
+      setProblemas([]);
+      return undefined;
+    }
+    let vigente = true;
+    problemasDePosicion(piezasFen)
+      .then((r) => vigente && setProblemas(r.problemas ?? []))
+      .catch(() => vigente && setProblemas([]));
+    return () => {
+      vigente = false;
+    };
+  }, [piezasFen]);
 
   return (
     <div className="flex flex-col gap-space-md">
       <p className="font-body-sm text-body-sm text-on-surface-variant">
         Poné una pieza en el tablero y mirá (en vivo) qué reconoce el modelo en cada casilla. El color del círculo indica la confianza:
-        verde (80 % o más), ámbar (50–80 %) o rojo (menos). Requiere el tablero calibrado y un modelo entrenado.
+        verde (80 % o más), ámbar (50–80 %) o rojo (menos). Requiere el tablero calibrado y un modelo entrenado. Qué casillas tienen
+        pieza lo decide la cámara que mira más desde arriba, comparando con la foto del tablero vacío (se renueva al capturar «Casilla
+        vacía»); el resultado ya respeta las reglas del ajedrez: un rey por bando, hasta 8 peones y nunca en la fila 1 u 8, y piezas de
+        más (como un segundo alfil en el mismo color de casilla) solo si faltan peones que hayan coronado.
       </p>
       <div className="flex flex-wrap items-center gap-space-xs" role="group" aria-label="Cómo mostrar el reconocimiento">
         <span className="font-body-sm text-body-sm text-on-surface-variant">Ver:</span>
@@ -125,6 +144,16 @@ export default function ProbadorPiezas() {
           <div className="w-full flex justify-center">
             <TableroSoloLectura fen={fenReconocido} />
           </div>
+          {problemas.length > 0 && (
+            <div className={CLASE_AVISO} role="status" aria-live="polite">
+              <p className="m-0 font-medium">Esta posición no puede darse en una partida:</p>
+              <ul className="m-0 pl-space-md">
+                {problemas.map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           {dosCamaras && (
             <div role="status" aria-live="polite">
               {desacuerdos.length === 0 ? (

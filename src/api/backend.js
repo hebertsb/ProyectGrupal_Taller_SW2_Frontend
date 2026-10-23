@@ -1150,6 +1150,12 @@ export const verificarCalibracionUnificada = () => solicitar("/vision/calibracio
  */
 export const ajustarEsquinasCalibracion = (camara = "principal") =>
   solicitar(`/vision/calibracion/ajustar?camara=${camara}`, { method: "POST" });
+/**
+ * Por qué una posición reconocida no puede darse en una partida (peones en la fila 1 u 8, más de un rey, material de más, jaques imposibles).
+ * `fen` puede ser completo o solo las piezas. Devuelve `{problemas: [...]}`; con `exigirReyes` también avisa si falta un rey.
+ */
+export const problemasDePosicion = (fen, exigirReyes = false) =>
+  solicitar("/vision/posicion/problemas", { method: "POST", body: JSON.stringify({ fen, exigir_reyes: exigirReyes }) });
 
 // --- Lente y geometría 3D por cámara (`/vision/lente`) ---
 /** Lente (calibrado o supuesto), posición de la cámara respecto del tablero y fotos guardadas para calibrar. */
