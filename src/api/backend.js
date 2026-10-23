@@ -1138,10 +1138,18 @@ export const girarCamara = (grados, camara = "principal") =>
 
 /**
  * Verifica que las calibraciones de las dos cámaras describen el mismo tablero y con la misma orientación. Devuelve
- * `{nivel: "bien"|"regular"|"mal"|"orientacion", ok, mensaje, error_px, error_casillas, orientacion, imagen}` con `imagen` en base64 (JPEG 2×2:
- * principal, secundaria, superpuestas, diferencia). 409 si falta configurar o calibrar alguna cámara.
+ * `{nivel: "bien"|"regular"|"mal"|"orientacion", ok, mensaje, error_px, error_casillas, orientacion, por_esquina, corrimiento_global, camaras,
+ * imagen}`: `error_casillas` es el de la peor de las 49 esquinas internas; `camaras.{principal,secundaria}` dice cuánto se aleja cada una de su
+ * propia grilla (`error_max_casillas`, `peor_esquina`) y `sugeridas` (`{esquinas, error_casillas}` o null). `imagen` en base64 (JPEG 2×2:
+ * principal, secundaria, superpuestas y el mapa de esquinas). 409 si falta configurar o calibrar alguna cámara.
  */
 export const verificarCalibracionUnificada = () => solicitar("/vision/calibracion/unificada", { method: "GET" });
+/**
+ * Recalcula al subpíxel las 4 esquinas de la cámara con las 49 esquinas internas del damero y las guarda si mejoran. Con el tablero vacío.
+ * Devuelve `{aplicada, error_antes_casillas, error_despues_casillas, esquinas, mensaje}`; 409 si se ven pocas esquinas (piezas encima).
+ */
+export const ajustarEsquinasCalibracion = (camara = "principal") =>
+  solicitar(`/vision/calibracion/ajustar?camara=${camara}`, { method: "POST" });
 
 // --- Lente y geometría 3D por cámara (`/vision/lente`) ---
 /** Lente (calibrado o supuesto), posición de la cámara respecto del tablero y fotos guardadas para calibrar. */
