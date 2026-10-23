@@ -284,8 +284,9 @@ export default function FiguritasMedallas() {
           info
         </span>
         <p className="m-0 font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
-          Imagen cuadrada de 512×512 px, PNG con fondo transparente (recomendado). Máx. 2 MB. Reemplaza la figurita para
-          todos los jugadores.
+          Subí solo la ilustración del centro: el escudo, su color y su brillo los pone el sistema según el nivel y son
+          iguales para todas. Imagen cuadrada de 512×512 px, PNG con fondo transparente, dibujo centrado y sin marco ni
+          texto. Máx. 2 MB. Reemplaza la silueta de la pieza para todos los jugadores.
         </p>
       </div>
 

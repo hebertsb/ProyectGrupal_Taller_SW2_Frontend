@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import './MedallaFigurita.css';
 import { SILUETAS_PIEZA } from './figuritaPiezas';
 import {
@@ -17,6 +17,8 @@ const TAMANOS = ['xs', 'sm', 'md', 'lg'];
 
 /** Cuánto se agranda la silueta de la pieza (caja de 48 x 48) para llenar el campo del escudo. */
 const ESCALA_PIEZA = 1.2;
+/** Lado (en la caja de 100) de la ilustración subida: entra en el campo del escudo sin tocar el candado ni las estrellas. */
+const LADO_ILUSTRACION = 48;
 
 /** Destello de cuatro puntas (las chispas de las legendarias). */
 const FORMA_CHISPA = 'M0 -3.4L0.95 -0.95L3.4 0L0.95 0.95L0 3.4L-0.95 0.95L-3.4 0L-0.95 -0.95Z';
@@ -71,8 +73,11 @@ function Candado() {
   );
 }
 
-/** Arte por defecto: escudo con marco y campo degradados según el nivel, y la silueta de la pieza en el centro. */
-function ArteEscudo({ uid, nivel, pieza, bloqueada, tamano }) {
+/**
+ * Escudo con marco y campo degradados según el nivel (igual para todas las medallas) y, en el centro, la silueta de la
+ * pieza o, si hay `imagenUrl`, la ilustración que subió el facilitador (cuadrada, recortada al campo del escudo).
+ */
+function ArteEscudo({ uid, nivel, pieza, bloqueada, tamano, imagenUrl = null }) {
   const detallado = tamano === 'md' || tamano === 'lg';
   const conBrillos = !bloqueada && tamano !== 'xs';
   const conCandado = bloqueada && tamano !== 'xs';
@@ -150,15 +155,29 @@ function ArteEscudo({ uid, nivel, pieza, bloqueada, tamano }) {
         </g>
       )}
 
-      <g
-        className="fig-pieza"
-        fill={ref('pieza')}
-        transform={`translate(${desplazamientoX} ${desplazamientoY}) scale(${ESCALA_PIEZA})`}
-      >
-        {SILUETAS_PIEZA[pieza].map((forma, indice) => (
-          <Forma key={indice} forma={forma} />
-        ))}
-      </g>
+      {imagenUrl ? (
+        <g clipPath={ref('recorte-campo')}>
+          <image
+            className="fig-ilustracion"
+            href={imagenUrl}
+            x={50 - LADO_ILUSTRACION / 2}
+            y={conCandado ? 22 : !bloqueada && detallado ? 28 : 26}
+            width={LADO_ILUSTRACION}
+            height={LADO_ILUSTRACION}
+            preserveAspectRatio="xMidYMid meet"
+          />
+        </g>
+      ) : (
+        <g
+          className="fig-pieza"
+          fill={ref('pieza')}
+          transform={`translate(${desplazamientoX} ${desplazamientoY}) scale(${ESCALA_PIEZA})`}
+        >
+          {SILUETAS_PIEZA[pieza].map((forma, indice) => (
+            <Forma key={indice} forma={forma} />
+          ))}
+        </g>
+      )}
 
       {conBrillos && <path d={FORMA_CAMPO} fill={ref('gloss')} />}
       <path className="fig-resalte-campo" d={FORMA_CAMPO} />
@@ -187,9 +206,9 @@ function ArteEscudo({ uid, nivel, pieza, bloqueada, tamano }) {
 
 /**
  * Una figurita coleccionable a partir de una medalla del contrato (`GET /usuario/medallas`). Sirve para cualquier
- * medalla que mande el backend: usa su `nivel` y su `pieza` para dibujar el arte por defecto (SVG en línea, sin archivos
- * de imagen) o, si trae `imagen_url`, esa imagen dentro de un marco con el color del nivel (si la imagen falla al
- * cargar, vuelve al arte por defecto). Ganada: a todo color y con un brillo sutil. Bloqueada: gris, con candado y, si
+ * medalla que mande el backend: el escudo (forma, color y brillo según el `nivel`) es el mismo para todas, dibujado en
+ * SVG en línea; en el centro va la silueta de su `pieza` o, si trae `imagen_url`, la ilustración que subió el facilitador
+ * (si no carga, vuelve a la silueta). Ganada: a todo color y con un brillo sutil. Bloqueada: gris, con candado y, si
  * se mide con un contador (`meta` > 1), una barra fina con el avance.
  *
  * Props:
@@ -215,23 +234,34 @@ export default function MedallaFigurita({
   // `useId` puede traer ":" o "«»": se limpian para usar el id dentro de `url(#...)`.
   const uid = `fig${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const [urlRota, setUrlRota] = useState(null);
+  const urlImagen = typeof medalla?.imagen_url === 'string' && medalla.imagen_url !== '' ? medalla.imagen_url : null;
+
+  // Una imagen que no carga (archivo borrado, red) no deja la figurita vacía: vuelve a la silueta de la pieza.
+  useEffect(() => {
+    if (!urlImagen) return undefined;
+    let activa = true;
+    const prueba = new Image();
+    prueba.onerror = () => {
+      if (activa) setUrlRota(urlImagen);
+    };
+    prueba.src = urlImagen;
+    return () => {
+      activa = false;
+    };
+  }, [urlImagen]);
 
   const nivel = normalizarNivel(medalla?.nivel);
   const pieza = normalizarPieza(medalla?.pieza);
   const tam = TAMANOS.includes(tamano) ? tamano : 'md';
   const ganada = vistaPrevia || medalla?.ganada === true;
   const bloqueada = !ganada;
-  const imagenUrl = typeof medalla?.imagen_url === 'string' && medalla.imagen_url !== '' ? medalla.imagen_url : null;
-  const usaImagen = imagenUrl !== null && urlRota !== imagenUrl;
+  const imagenUrl = urlImagen !== null && urlRota !== urlImagen ? urlImagen : null;
   const etiqueta = describirMedalla(medalla, { vistaPrevia });
   const { actual, meta, proporcion } = progresoDeMedalla(medalla);
   const mostrarBarra = bloqueada && mostrarProgreso && tam !== 'xs' && meta > 1;
   const conTexto = tam === 'md' || tam === 'lg';
 
-  let accesibilidad;
-  if (decorativa) accesibilidad = { 'aria-hidden': 'true' };
-  else if (usaImagen) accesibilidad = {};
-  else accesibilidad = { role: 'img', 'aria-label': etiqueta };
+  const accesibilidad = decorativa ? { 'aria-hidden': 'true' } : { role: 'img', 'aria-label': etiqueta };
 
   const clases = [
     'figurita',
@@ -251,28 +281,7 @@ export default function MedallaFigurita({
       {...accesibilidad}
     >
       <span className="figurita__arte">
-        {usaImagen ? (
-          <>
-            <span className="figurita__marco">
-              <img
-                className="figurita__imagen"
-                src={imagenUrl}
-                alt={decorativa ? '' : etiqueta}
-                loading="lazy"
-                decoding="async"
-                draggable="false"
-                onError={() => setUrlRota(imagenUrl)}
-              />
-            </span>
-            {bloqueada && tam !== 'xs' && (
-              <svg className="figurita__capa" viewBox="0 0 100 100" focusable="false" aria-hidden="true">
-                <Candado />
-              </svg>
-            )}
-          </>
-        ) : (
-          <ArteEscudo uid={uid} nivel={nivel} pieza={pieza} bloqueada={bloqueada} tamano={tam} />
-        )}
+        <ArteEscudo uid={uid} nivel={nivel} pieza={pieza} bloqueada={bloqueada} tamano={tam} imagenUrl={imagenUrl} />
       </span>
 
       {mostrarBarra && (
