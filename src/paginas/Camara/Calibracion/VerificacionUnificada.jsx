@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ajustarEsquinasCalibracion, verificarCalibracionUnificada } from '../../../api/backend';
+import { ajustarEsquinasCalibracion, aplicarOrientacionCalibracion, verificarCalibracionUnificada } from '../../../api/backend';
 import { CLASE_AVISO, CLASE_BOTON, CLASE_BOTON_PRIMARIO } from '../estilos';
 import useCamarasConfiguradas from '../useCamarasConfiguradas';
 
@@ -80,6 +80,21 @@ export default function VerificacionUnificada() {
     }
   }
 
+  async function corregirOrientacion() {
+    setOcupado(true);
+    setError(null);
+    setAjuste(null);
+    try {
+      const resultado = await aplicarOrientacionCalibracion();
+      setAjuste(`Secundaria: ${resultado.mensaje}`);
+      setInforme(await verificarCalibracionUnificada());
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setOcupado(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-space-xs border-t border-outline-variant pt-space-sm" role="group" aria-labelledby="titulo-unificada">
       <h4 id="titulo-unificada" className="font-body-sm text-body-sm text-on-surface font-medium m-0">
@@ -113,6 +128,13 @@ export default function VerificacionUnificada() {
             <p className="font-body-sm text-body-sm text-on-surface m-0" role="status">
               {ajuste}
             </p>
+          )}
+          {informe.corregida && (
+            <div>
+              <button type="button" className={CLASE_BOTON_PRIMARIO} onClick={corregirOrientacion} disabled={ocupado}>
+                Aplicar esquinas corregidas a la secundaria
+              </button>
+            </div>
           )}
           {informe.camaras && informe.nivel !== 'orientacion' && (
             <ul className="font-body-sm text-body-sm text-on-surface-variant m-0 pl-space-md flex flex-col gap-space-xs">

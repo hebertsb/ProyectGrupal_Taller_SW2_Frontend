@@ -447,6 +447,22 @@ export function subirFotosPieza(clase, fotos) {
 }
 
 /**
+ * Guarda como muestra de `clase` (ej. "black-pawn", o "vacia") la casilla `casilla` tal como la ven ahora las cámaras, para que el
+ * reentrenamiento aprenda de un error del reconocimiento. Devuelve `{guardadas, camaras, avisos, total_clase}`.
+ */
+export const corregirCasillaDataset = (casilla, clase) =>
+  solicitar("/vision/dataset/casilla", { method: "POST", body: JSON.stringify({ casilla, clase }) });
+
+/**
+ * Lanza el entrenamiento de un modelo candidato con el dataset propio (incluidas las casillas corregidas), en la GPU del Mac si hay. Solo reemplaza al
+ * modelo actual si lo supera en validación. Devuelve `{estado: "en_curso"}`; 409 = ya hay uno corriendo, 400 = faltan muestras.
+ */
+export const entrenarCandidatoPiezas = () => solicitar("/vision/dataset/candidato", { method: "POST" });
+
+/** Estado del entrenamiento del candidato: `{estado: "inactivo"|"en_curso"|"terminado"|"error", progreso, resultado, log}`. */
+export const estadoCandidatoPiezas = () => solicitar("/vision/dataset/candidato/estado", { method: "GET" });
+
+/**
  * Sube una foto del tablero entero (hecha a mano) etiquetada con la colocación de piezas del FEN.
  * Devuelve `{captura_id, guardadas, total}`; 422 = FEN inválido o tablero no detectado, 413 = muy grande.
  */
@@ -1242,6 +1258,7 @@ export const verificarCalibracionUnificada = () => solicitar("/vision/calibracio
  */
 export const ajustarEsquinasCalibracion = (camara = "principal") =>
   solicitar(`/vision/calibracion/ajustar?camara=${camara}`, { method: "POST" });
+export const aplicarOrientacionCalibracion = () => solicitar("/vision/calibracion/aplicar-orientacion", { method: "POST" });
 /**
  * Por qué una posición reconocida no puede darse en una partida (peones en la fila 1 u 8, más de un rey, material de más, jaques imposibles).
  * `fen` puede ser completo o solo las piezas. Devuelve `{problemas: [...]}`; con `exigirReyes` también avisa si falta un rey.
@@ -1277,3 +1294,20 @@ export const moverArticulacionesBrazo = (angulos) => controlBrazo("/mover-articu
 export const moverRelativoBrazo = (dx = 0, dy = 0, dz = 0, velocidadMmS = 20) =>
   controlBrazo("/mover-relativo", "POST", { dx, dy, dz, velocidad_mm_s: velocidadMmS });
 export const irAPosicionInicialBrazo = () => controlBrazo("/posicion-inicial");
+
+/** Límites de las articulaciones y distancias de seguridad que validan las poses: `{limites_articulaciones, margen_mesa_m, distancia_minima_eslabones_m, punta_minima_m, z_tope_mm}`. */
+export const limitesBrazo = () => controlBrazo("/limites", "GET");
+/** Con el brazo real conectado: compara la pose del controlador con la del modelo para los mismos ángulos. `{coincide, conclusion, error_mm, ...}`. */
+export const verificarGeometriaBrazo = () => controlBrazo("/verificar-geometria", "GET");
+
+// --- Rutinas del brazo (`/brazo/control/rutinas`) ---
+/** Las rutinas guardadas: `[{nombre, pasos (cantidad), validada, actualizada}]`. `validada` = ya corrió completa en el emulador (requisito para el brazo real). */
+export const listarRutinasBrazo = () => controlBrazo("/rutinas", "GET");
+/** Una rutina: `{nombre, pasos, validada, actualizada}`. */
+export const obtenerRutinaBrazo = (nombre) => controlBrazo(`/rutinas/${encodeURIComponent(nombre)}`, "GET");
+/** Guarda (o reemplaza) una rutina. Pasos: `{tipo: "articulaciones", angulos, velocidad}`, `{tipo: "pinza", apertura, fuerza?, velocidad?}`, `{tipo: "esperar", segundos}` o `{tipo: "rutina", nombre}`. */
+export const guardarRutinaBrazo = (nombre, pasos) => controlBrazo(`/rutinas/${encodeURIComponent(nombre)}`, "PUT", { pasos });
+export const borrarRutinaBrazo = (nombre) => controlBrazo(`/rutinas/${encodeURIComponent(nombre)}`, "DELETE");
+/** Ejecuta la rutina. En el brazo real exige que esté validada y `confirmar: true`; `factor` (0,25 a 2) multiplica la velocidad. */
+export const ejecutarRutinaBrazo = (nombre, factor = 1, confirmar = false) =>
+  controlBrazo(`/rutinas/${encodeURIComponent(nombre)}/ejecutar`, "POST", { factor, confirmar });

@@ -35,8 +35,9 @@ const VARIANTES = {
 /**
  * `flechas`: lista opcional de `{ uci, color, punteada }` que se dibujan encima del tablero (jugada
  * real, mejor jugada, etc.). Una jugada con `uci` inválido o vacío se omite sin romper nada.
+ * `resaltadas`: casillas (ej. `['h7']`) que se marcan con un borde ámbar, por ejemplo las que el reconocimiento no tiene claras.
  */
-export default function TableroSoloLectura({ fen, tamano = 'grande', className = '', flechas = [] }) {
+export default function TableroSoloLectura({ fen, tamano = 'grande', className = '', flechas = [], resaltadas = [] }) {
   const matriz = fen ? fenAMatriz(fen) : null;
   const idBase = useId().replace(/:/g, '');
   const flechasValidas = flechas
@@ -69,7 +70,7 @@ export default function TableroSoloLectura({ fen, tamano = 'grande', className =
                     <div
                       key={casilla}
                       aria-label={`Casilla ${casilla}${pieza ? ', pieza ' + pieza : ', vacía'}`}
-                      className={`relative flex items-center justify-center ${clara ? 'bg-[#b89772]' : 'bg-[#543423]'}`}
+                      className={`relative flex items-center justify-center ${clara ? 'bg-[#b89772]' : 'bg-[#543423]'} ${resaltadas.includes(casilla) ? 'ring-[3px] ring-inset ring-amber-400' : ''}`}
                     >
                       {pieza && (
                         <div className={claseDePieza(pieza)}>

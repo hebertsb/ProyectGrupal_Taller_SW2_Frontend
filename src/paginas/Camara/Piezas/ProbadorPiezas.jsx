@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { estadoDeLosModelos, problemasDePosicion } from '../../../api/backend';
+import { corregirCasillaDataset, entrenarCandidatoPiezas, estadoCandidatoPiezas, estadoDeLosModelos, problemasDePosicion } from '../../../api/backend';
 import { nombreClase } from '../../EntrenarCamara/SubirFotosPieza';
 import { CLASE_AVISO, CLASE_BOTON, CLASE_BOTON_PRIMARIO, CLASE_TARJETA } from '../estilos';
 import useCamarasConfiguradas from '../useCamarasConfiguradas';
 import useFlujoVivo from '../useFlujoVivo';
 import TableroSoloLectura from '../../../componentes/TableroSoloLectura';
-import { fenDeCasillas } from './fenCaptura';
+import { CLASE_VACIA, CLASES_BLANCAS, CLASES_NEGRAS, COLUMNAS, fenDeCasillas } from './fenCaptura';
 
-const CUADROS_VOTO = 8;
+const CUADROS_VOTO = 5;
+const CONFIANZA_CLARA = 0.8;
+const CLASES_A_ELEGIR = [...CLASES_BLANCAS, ...CLASES_NEGRAS, CLASE_VACIA];
+const CASILLAS = [8, 7, 6, 5, 4, 3, 2, 1].flatMap((fila) => [...COLUMNAS].map((columna) => `${columna}${fila}`));
 
 /** Mayoría por casilla entre los últimos cuadros: un error suelto de un cuadro no cambia lo que se muestra. */
 function votar(historial) {
@@ -41,7 +44,7 @@ const colorConfianza = (c) => (c >= 0.8 ? 'text-primary' : c >= 0.5 ? 'text-on-s
 
 /**
  * Probador de piezas: la cámara mira el tablero calibrado y el modelo dice qué reconoce en cada casilla (pieza, color y confianza).
- * Poné una pieza en cualquier casilla y mirá si la reconoce. Es video en vivo y se vota entre los últimos 8 cuadros para que un error suelto no cambie el resultado; no guarda nada.
+ * Poné una pieza en cualquier casilla y mirá si la reconoce. Es video en vivo y se vota entre los últimos 5 cuadros para que un error suelto no cambie el resultado; no guarda nada.
  */
 export default function ProbadorPiezas() {
   const [enVivo, setEnVivo] = useState(true);
@@ -64,6 +67,55 @@ export default function ProbadorPiezas() {
   const desacuerdos = casillas.filter((c) => new Set(c.porCamara).size > 1);
   const fenReconocido = useMemo(() => fenDeCasillas(casillas), [casillas]);
   const ocupadas = casillas.filter((c) => c.clase !== 'vacia');
+  const dudosas = ocupadas.filter((c) => c.confianza < CONFIANZA_CLARA).map((c) => c.casilla);
+  // Entrenamiento de un modelo candidato (GPU del Mac): solo reemplaza al actual si lo supera en validación.
+  const [candidato, setCandidato] = useState(null);
+  const [errorCandidato, setErrorCandidato] = useState(null);
+  const entrenando = candidato?.estado === 'en_curso';
+  useEffect(() => {
+    estadoCandidatoPiezas().then(setCandidato).catch(() => setCandidato(null));
+  }, []);
+  useEffect(() => {
+    if (!entrenando) return undefined;
+    const intervalo = setInterval(() => {
+      estadoCandidatoPiezas()
+        .then((estado) => {
+          setCandidato(estado);
+          if (estado.estado !== 'en_curso') estadoDeLosModelos().then(setModelos).catch(() => {});
+        })
+        .catch(() => {});
+    }, 2000);
+    return () => clearInterval(intervalo);
+  }, [entrenando]);
+  async function entrenarCandidato() {
+    setErrorCandidato(null);
+    try {
+      await entrenarCandidatoPiezas();
+      setCandidato(await estadoCandidatoPiezas());
+    } catch (e) {
+      setErrorCandidato(e.status === 400 ? `Todavía hay pocas muestras: ${e.message}` : e.message);
+    }
+  }
+  // Corrección de una casilla mal leída: guarda su recorte (de las dos cámaras) con la clase correcta para el próximo reentrenamiento.
+  const [casillaCorregida, setCasillaCorregida] = useState('');
+  const [claseCorrecta, setClaseCorrecta] = useState('');
+  const [guardandoCorreccion, setGuardandoCorreccion] = useState(false);
+  const [resultadoCorreccion, setResultadoCorreccion] = useState(null);
+  async function guardarCorreccion() {
+    setGuardandoCorreccion(true);
+    setResultadoCorreccion(null);
+    try {
+      const r = await corregirCasillaDataset(casillaCorregida, claseCorrecta);
+      setResultadoCorreccion({
+        ok: true,
+        texto: `Guardado: ${casillaCorregida} como «${nombreClase(claseCorrecta)}» (${r.guardadas} ${r.guardadas === 1 ? 'foto' : 'fotos'}, ${r.total_clase} en esa clase). Se usa en el próximo reentrenamiento.${r.avisos?.length ? ` ${r.avisos.join(' ')}` : ''}`,
+      });
+    } catch (e) {
+      setResultadoCorreccion({ ok: false, texto: e.message });
+    } finally {
+      setGuardandoCorreccion(false);
+    }
+  }
   // Validaciones lógicas de la posición reconocida (se piden solo cuando cambia la posición, no en cada cuadro).
   const [problemas, setProblemas] = useState([]);
   const piezasFen = ocupadas.length ? fenReconocido.split(' ')[0] : '';
@@ -116,8 +168,8 @@ export default function ProbadorPiezas() {
           {error}
         </p>
       )}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-space-md">
-        <section className={`${CLASE_TARJETA} xl:col-span-2`} aria-labelledby="titulo-probador-imagen">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-space-md items-start">
+        <section className={`${CLASE_TARJETA} min-w-0`} aria-labelledby="titulo-probador-imagen">
           <h3 id="titulo-probador-imagen" className="font-body-md text-body-md text-on-surface font-medium">
             Lo que ve la cámara{dosCamaras ? ' (principal y secundaria, resultado combinado)' : ''}
           </h3>
@@ -137,13 +189,18 @@ export default function ProbadorPiezas() {
             {dosCamaras ? ' Un cuadro magenta marca las casillas donde las dos cámaras no coinciden.' : ''}
           </p>
         </section>
-        <section className={CLASE_TARJETA} aria-labelledby="titulo-probador-tablero">
+        <section className={`${CLASE_TARJETA} min-w-0`} aria-labelledby="titulo-probador-tablero">
           <h3 id="titulo-probador-tablero" className="font-body-md text-body-md text-on-surface font-medium">
             Posición reconocida{dosCamaras ? ' (decisión entre las dos cámaras)' : ''}
           </h3>
           <div className="w-full flex justify-center">
-            <TableroSoloLectura fen={fenReconocido} />
+            <TableroSoloLectura fen={fenReconocido} resaltadas={dudosas} />
           </div>
+          {dudosas.length > 0 && (
+            <p className="font-body-sm text-body-sm text-on-surface-variant m-0" role="status">
+              Borde ámbar: casillas con confianza menor a {Math.round(CONFIANZA_CLARA * 100)} % ({dudosas.join(', ')}). Si alguna está mal, corregila abajo.
+            </p>
+          )}
           {problemas.length > 0 && (
             <div className={CLASE_AVISO} role="status" aria-live="polite">
               <p className="m-0 font-medium">Esta posición no puede darse en una partida:</p>
@@ -176,12 +233,75 @@ export default function ProbadorPiezas() {
             </div>
           )}
         </section>
-        <section className={CLASE_TARJETA} aria-labelledby="titulo-probador-lista">
+        <section className={`${CLASE_TARJETA} lg:col-span-2`} aria-labelledby="titulo-probador-entrenar">
+          <h3 id="titulo-probador-entrenar" className="font-body-md text-body-md text-on-surface font-medium">
+            Entrenar con mis correcciones
+          </h3>
+          <p className="font-body-sm text-body-sm text-on-surface-variant m-0">
+            Entrena un modelo nuevo con todas tus fotos y las casillas corregidas, usando la GPU del Mac (unos pocos minutos). El modelo actual solo se
+            reemplaza si el nuevo reconoce mejor las mismas casillas apartadas para validar; si no, queda como está (y el actual se respalda al reemplazarlo).
+          </p>
+          <div>
+            <button type="button" className={CLASE_BOTON_PRIMARIO} onClick={entrenarCandidato} disabled={entrenando}>
+              {entrenando ? 'Entrenando…' : 'Entrenar con mis correcciones'}
+            </button>
+          </div>
+          {entrenando && (
+            <p className="font-body-sm text-body-sm text-on-surface m-0" role="status">
+              {candidato.progreso ?? 'Preparando los datos…'}
+            </p>
+          )}
+          {candidato?.estado === 'terminado' && candidato.resultado && (
+            <p className="font-body-sm text-body-sm text-on-surface m-0" role="status">
+              {candidato.resultado.startsWith('reemplazado') ? '✓ ' : ''}
+              {candidato.resultado}
+            </p>
+          )}
+          {candidato?.estado === 'error' && (
+            <p className={CLASE_AVISO} role="alert">
+              El entrenamiento falló. {candidato.log.split('\n').slice(-3).join(' · ')}
+            </p>
+          )}
+          {errorCandidato && (
+            <p className={CLASE_AVISO} role="alert">
+              {errorCandidato}
+            </p>
+          )}
+        </section>
+        <section className={`${CLASE_TARJETA} lg:col-span-2`} aria-labelledby="titulo-probador-lista">
           <h3 id="titulo-probador-lista" className="font-body-md text-body-md text-on-surface font-medium">
             Piezas reconocidas ({ocupadas.length})
           </h3>
           {datos && ocupadas.length === 0 && (
             <p className="font-body-sm text-body-sm text-on-surface-variant m-0">No reconoce ninguna pieza: el tablero se ve vacío.</p>
+          )}
+          <div className="flex flex-wrap items-end gap-space-xs" role="group" aria-label="Corregir una casilla mal reconocida">
+            <label className="flex flex-col gap-1 font-body-sm text-body-sm text-on-surface-variant">
+              Casilla
+              <select className="min-h-[44px] rounded-xl border border-outline-variant bg-surface-container text-on-surface px-space-xs" value={casillaCorregida} onChange={(e) => setCasillaCorregida(e.target.value)}>
+                <option value="">Elegí…</option>
+                {CASILLAS.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 font-body-sm text-body-sm text-on-surface-variant">
+              Lo que hay de verdad
+              <select className="min-h-[44px] rounded-xl border border-outline-variant bg-surface-container text-on-surface px-space-xs" value={claseCorrecta} onChange={(e) => setClaseCorrecta(e.target.value)}>
+                <option value="">Elegí…</option>
+                {CLASES_A_ELEGIR.map((clase) => (
+                  <option key={clase} value={clase}>{nombreClase(clase)}</option>
+                ))}
+              </select>
+            </label>
+            <button type="button" className={CLASE_BOTON_PRIMARIO} onClick={guardarCorreccion} disabled={!casillaCorregida || !claseCorrecta || guardandoCorreccion}>
+              {guardandoCorreccion ? 'Guardando…' : 'Guardar corrección'}
+            </button>
+          </div>
+          {resultadoCorreccion && (
+            <p className={resultadoCorreccion.ok ? 'font-body-sm text-body-sm text-on-surface m-0' : CLASE_AVISO} role={resultadoCorreccion.ok ? 'status' : 'alert'}>
+              {resultadoCorreccion.texto}
+            </p>
           )}
           <ul className="list-none p-0 m-0 flex flex-col gap-1">
             {ocupadas.map((c) => (
@@ -189,7 +309,19 @@ export default function ProbadorPiezas() {
                 <span className="text-on-surface">
                   <strong>{c.casilla}</strong> · {nombreClase(c.clase)}
                 </span>
-                <span className={colorConfianza(c.confianza)}>
+                <span className={`inline-flex items-center gap-space-xs ${colorConfianza(c.confianza)}`}>
+                  <button
+                    type="button"
+                    className="min-h-[44px] px-space-xs font-body-sm text-body-sm text-primary underline"
+                    onClick={() => {
+                      setCasillaCorregida(c.casilla);
+                      setClaseCorrecta('');
+                      setResultadoCorreccion(null);
+                    }}
+                    aria-label={`Corregir la casilla ${c.casilla}`}
+                  >
+                    Corregir
+                  </button>
                   {Math.round(c.confianza * 100)} %
                   {c.confianza < 0.8 && c.alternativas[0] ? (
                     <span className="text-on-surface-variant"> (¿{nombreClase(c.alternativas[0].clase)}?)</span>
