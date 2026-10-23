@@ -14,6 +14,9 @@ import TarjetaUnirseCurso from './TarjetaUnirseCurso';
 import EstadisticasPersonales from './EstadisticasPersonales';
 import TuNivel from './TuNivel';
 import CaminoAprendizaje from './CaminoAprendizaje';
+import RankingJugadores from './RankingJugadores';
+import AlbumFiguritas from './AlbumFiguritas';
+import { pedirRevisionMedallas } from '../../medallas';
 import { PIEZAS } from '../../contenido/piezas';
 import { clasificarJugada, esDelJugador, notaDeTiempoDeJugada } from '../../aprendizaje';
 
@@ -117,6 +120,7 @@ const SECCIONES = [
   { id: 'resumen', titulo: 'Resumen del tutor', icono: 'menu_book' },
   { id: 'turing', titulo: 'Preguntale a Turing', icono: 'forum' },
   { id: 'logros', titulo: 'Tus logros', icono: 'emoji_events' },
+  { id: 'ranking', titulo: 'Ranking', icono: 'leaderboard' },
   { id: 'proximamente', titulo: 'Próximamente', icono: 'lock' },
 ];
 
@@ -126,7 +130,6 @@ const SECCIONES_CON_ANALISIS = ['repaso', 'resumen', 'logros'];
 const BOTONES_PROXIMAMENTE = [
   { titulo: 'Invitar a un amigo', icono: 'person_add' },
   { titulo: 'Buscar rival de mi nivel', icono: 'search' },
-  { titulo: 'Ranking', icono: 'leaderboard' },
 ];
 
 function clavePiezasVistas(usuarioId) {
@@ -775,6 +778,12 @@ export default function PanelAprendizaje({
     }
   }
 
+  // Al abrir el panel se le pide al notificador global que revise si hay medallas nuevas (por ejemplo ganadas con la
+  // última partida): si las hay, avisa con la tarjeta de arriba o con la revelación de la primera medalla.
+  useEffect(() => {
+    pedirRevisionMedallas();
+  }, []);
+
   const [historial, setHistorial] = useState(null);
   const [cargandoHistorial, setCargandoHistorial] = useState(true);
   const [errorHistorial, setErrorHistorial] = useState(null);
@@ -1334,27 +1343,48 @@ export default function PanelAprendizaje({
             onToggle={() => alternarSeccion('logros')}
             innerRef={(el) => { refsSeccion.current.logros = el; }}
           >
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-space-xs">
-              {insigniasVisibles.map((insignia) => (
-                <div
-                  key={insignia.id}
-                  className={`flex flex-col items-center gap-space-2xs p-space-sm rounded-xl border text-center ${
-                    insignia.desbloqueada
-                      ? 'bg-primary/10 border-primary text-primary'
-                      : 'bg-surface-container-lowest border-outline-variant/20 text-on-surface-variant'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[26px]">{insignia.desbloqueada ? insignia.icono : 'lock'}</span>
-                  <span className="font-body-sm text-body-sm font-medium">{insignia.titulo}</span>
-                  <span className="font-mono-micro text-[10px] uppercase tracking-wider">
-                    {insignia.desbloqueada ? 'Desbloqueada' : 'Todavía no'}
-                  </span>
-                </div>
-              ))}
-            </div>
+            {/* Álbum de figuritas: se monta (y pide las medallas) recién cuando se abre esta sección. */}
+            <AlbumFiguritas />
+
+            {/* Los logros de antes se conservan, ahora aparte del álbum. */}
+            <section aria-labelledby="titulo-otros-logros" className="flex flex-col gap-space-xs pt-space-sm border-t border-outline-variant/20">
+              <h3 id="titulo-otros-logros" className="m-0 font-headline-sm text-headline-sm text-on-surface">
+                Otros logros
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-space-xs">
+                {insigniasVisibles.map((insignia) => (
+                  <div
+                    key={insignia.id}
+                    className={`flex flex-col items-center gap-space-2xs p-space-sm rounded-xl border text-center ${
+                      insignia.desbloqueada
+                        ? 'bg-primary/10 border-primary text-primary'
+                        : 'bg-surface-container-lowest border-outline-variant/20 text-on-surface-variant'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[26px]">{insignia.desbloqueada ? insignia.icono : 'lock'}</span>
+                    <span className="font-body-sm text-body-sm font-medium">{insignia.titulo}</span>
+                    <span className="font-mono-micro text-[10px] uppercase tracking-wider">
+                      {insignia.desbloqueada ? 'Desbloqueada' : 'Todavía no'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </section>
           </SeccionAcordeon>
 
-          {/* 7. Próximamente */}
+          {/* 7. Ranking (se pide al abrir la sección, no al cargar el panel) */}
+          <SeccionAcordeon
+            id="ranking"
+            titulo="Ranking"
+            icono="leaderboard"
+            abierta={seccionAbierta === 'ranking'}
+            onToggle={() => alternarSeccion('ranking')}
+            innerRef={(el) => { refsSeccion.current.ranking = el; }}
+          >
+            <RankingJugadores claseTexto={claseTextoContenido} />
+          </SeccionAcordeon>
+
+          {/* 8. Próximamente */}
           <SeccionAcordeon
             id="proximamente"
             titulo="Próximamente"
@@ -1365,7 +1395,7 @@ export default function PanelAprendizaje({
           >
             <div className="opacity-60 flex flex-col gap-space-sm">
               <p className="font-body-sm text-body-sm text-on-surface-variant">Estas funciones todavía no están disponibles.</p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-space-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-space-xs">
                 {BOTONES_PROXIMAMENTE.map((b) => (
                   <button
                     key={b.titulo}

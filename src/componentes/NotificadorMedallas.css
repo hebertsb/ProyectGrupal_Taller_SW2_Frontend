@@ -1,0 +1,271 @@
+/*
+ * Avisos de medalla nueva (NotificadorMedallas.jsx): la revelación a pantalla completa de la primera medalla y la
+ * tarjeta que entra desde arriba para las siguientes.
+ *
+ * Los colores del nivel salen de las variables `--fig-*` de MedallaFigurita.css (el contenedor lleva
+ * `data-nivel-medalla`). El estado base de cada elemento es el FINAL: las animaciones solo recorren el camino hasta ahí
+ * (`animation-fill-mode: both`), así que con "reducir movimiento" (animation: none) todo aparece ya completo.
+ */
+
+/* ===== Revelación de la primera medalla ===== */
+
+.rev-resplandor {
+  position: absolute;
+  left: 50%;
+  top: 36%;
+  width: min(150vmin, 1100px);
+  aspect-ratio: 1 / 1;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, var(--fig-brillo) 0%, transparent 62%);
+  pointer-events: none;
+  animation: rev-respira 4.2s ease-in-out infinite;
+}
+
+.rev-rayos {
+  position: absolute;
+  left: 50%;
+  top: 36%;
+  width: min(130vmax, 1700px);
+  aspect-ratio: 1 / 1;
+  transform: translate(-50%, -50%);
+  background: repeating-conic-gradient(from 0deg, rgba(255, 255, 255, 0.1) 0deg 8deg, transparent 8deg 20deg);
+  -webkit-mask-image: radial-gradient(circle, #000 0%, transparent 60%);
+  mask-image: radial-gradient(circle, #000 0%, transparent 60%);
+  pointer-events: none;
+  animation: rev-gira 80s linear infinite;
+}
+
+/* Estrellitas que titilan de fondo. */
+.rev-titilo {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: var(--t);
+  height: var(--t);
+  background: var(--fig-rim-1);
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+  opacity: 0.85;
+  pointer-events: none;
+  animation: rev-titila 2.8s ease-in-out infinite;
+  animation-delay: var(--d);
+}
+
+.rev-escena {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Destello blanco en el momento en que la figurita pasa de silueta a color. */
+.rev-destello {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  margin: -50% 0 0 -50%;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 0%, var(--fig-rim-1) 35%, transparent 70%);
+  opacity: 0;
+  pointer-events: none;
+  animation: rev-destella 1s 1.3s ease-out both;
+}
+
+/* Chispas que salen disparadas desde la figurita. */
+.rev-particula {
+  --radio: min(40vmin, 170px);
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--t);
+  height: var(--t);
+  margin: calc(var(--t) / -2) 0 0 calc(var(--t) / -2);
+  background: var(--fig-rim-1);
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+  opacity: 0;
+  pointer-events: none;
+  animation: rev-estalla 1.4s 1.38s cubic-bezier(0.15, 0.7, 0.3, 1) both;
+}
+
+/* La figurita: aparece como silueta oscura, gira, destella y recién ahí muestra el color. */
+.rev-figurita {
+  display: block;
+  animation: rev-figurita 1.9s 0.2s cubic-bezier(0.25, 0.8, 0.3, 1) both;
+}
+
+.rev-texto {
+  animation: rev-sube 0.6s calc(1.45s + var(--orden, 0) * 0.14s) ease-out both;
+}
+
+.rev-titulo-anim {
+  animation: rev-sube 0.6s 0.1s ease-out both;
+}
+
+@keyframes rev-figurita {
+  0% {
+    opacity: 0;
+    transform: perspective(900px) rotateY(-300deg) scale(0.35);
+    filter: brightness(0.12) saturate(0);
+  }
+  40% {
+    opacity: 1;
+    transform: perspective(900px) rotateY(0deg) scale(1.05);
+    filter: brightness(0.12) saturate(0);
+  }
+  62% {
+    opacity: 1;
+    transform: perspective(900px) rotateY(0deg) scale(1.05);
+    filter: brightness(0.12) saturate(0);
+  }
+  74% {
+    transform: perspective(900px) rotateY(0deg) scale(1.2);
+    filter: brightness(2.2) saturate(0.4);
+  }
+  100% {
+    opacity: 1;
+    transform: perspective(900px) rotateY(0deg) scale(1);
+    filter: brightness(1) saturate(1);
+  }
+}
+
+@keyframes rev-destella {
+  0% {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+  25% {
+    opacity: 0.95;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(3.2);
+  }
+}
+
+@keyframes rev-estalla {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0) rotate(0deg);
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(var(--cx) * var(--radio)), calc(var(--cy) * var(--radio))) scale(1) rotate(160deg);
+  }
+}
+
+@keyframes rev-sube {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes rev-titila {
+  0%,
+  100% {
+    opacity: 0.2;
+    transform: scale(0.55);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes rev-respira {
+  0%,
+  100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes rev-gira {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+/* ===== Aviso de medalla nueva (tarjeta que baja desde arriba) ===== */
+
+.medalla-aviso {
+  border-color: var(--fig-rim-2);
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.45),
+    0 0 0 1px var(--fig-brillo);
+  animation: medalla-aviso-entra 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.05) both;
+}
+
+.medalla-aviso--sale {
+  animation: medalla-aviso-sale 0.25s ease-in both;
+}
+
+/* La figurita da un saltito al llegar. */
+.medalla-aviso .figurita {
+  animation: medalla-aviso-pop 0.65s 0.25s cubic-bezier(0.3, 1.6, 0.5, 1) both;
+}
+
+@keyframes medalla-aviso-entra {
+  from {
+    opacity: 0;
+    transform: translateY(-130%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes medalla-aviso-sale {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-40%);
+  }
+}
+
+@keyframes medalla-aviso-pop {
+  from {
+    transform: scale(0.55) rotate(-12deg);
+  }
+  to {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+/* ===== "Reducir movimiento": todo se ve ya terminado y quieto ===== */
+
+@media (prefers-reduced-motion: reduce) {
+  .rev-resplandor,
+  .rev-rayos,
+  .rev-titilo,
+  .rev-figurita,
+  .rev-texto,
+  .rev-titulo-anim,
+  .medalla-aviso,
+  .medalla-aviso--sale,
+  .medalla-aviso .figurita {
+    animation: none;
+  }
+  /* Sin movimiento no hay estallido ni destello: se esconden en vez de quedar congelados a medias. */
+  .rev-destello,
+  .rev-particula {
+    display: none;
+  }
+}

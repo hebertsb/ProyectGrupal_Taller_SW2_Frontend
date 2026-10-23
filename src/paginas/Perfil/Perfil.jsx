@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { actualizarPerfil, guardarNivelEstimado, subirFotoPerfil } from '../../api/backend';
 import MiCurso from './MiCurso';
+import TarjetaMisMedallas from './TarjetaMisMedallas';
 
 const EDAD_MIN = 0;
 const EDAD_MAX = 120;
@@ -25,7 +26,7 @@ function mensajeError(err, mensajePorDefecto) {
   return err?.message || mensajePorDefecto;
 }
 
-export default function Perfil({ usuario, alActualizarUsuario }) {
+export default function Perfil({ usuario, alActualizarUsuario, alVerAlbum }) {
   const [nombre, setNombre] = useState(usuario?.nombre ?? '');
   const [edad, setEdad] = useState(usuario?.edad != null ? String(usuario.edad) : '');
   const [descripcion, setDescripcion] = useState(usuario?.descripcion ?? '');
@@ -370,6 +371,9 @@ export default function Perfil({ usuario, alActualizarUsuario }) {
           </div>
         </div>
       )}
+
+      {/* Medallas del jugador — resumen del álbum de figuritas y acceso a él (ver TarjetaMisMedallas.jsx). */}
+      {!esFacilitador && <TarjetaMisMedallas alVerAlbum={alVerAlbum} />}
 
       {/* Curso del jugador — entra con el código de su facilitador (ver MiCurso.jsx). */}
       {!esFacilitador && <MiCurso />}

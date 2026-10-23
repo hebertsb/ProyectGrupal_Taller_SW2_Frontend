@@ -9,9 +9,10 @@ const BASE_BOTON =
  * El código se escribe en cualquier formato (mayúsculas, minúsculas, con o sin guion). Si el backend lo rechaza
  * (código inválido, curso cerrado, demasiados intentos) muestra su mensaje tal cual. Al entrar llama a
  * `alUnido(curso)` con `{id, nombre, facilitador_nombre, facilitador_avatar_url, preset_ensenanza}`.
- * `idCampo` tiene que ser único en la pantalla (lo usa el `<label>`).
+ * `idCampo` tiene que ser único en la pantalla (lo usa el `<label>`). `autoEnfocar` pone el cursor en el campo al
+ * aparecer (para cuando el formulario se despliega al tocar un botón).
  */
-export default function FormularioUnirseCurso({ alUnido, idCampo = 'curso-codigo' }) {
+export default function FormularioUnirseCurso({ alUnido, idCampo = 'curso-codigo', autoEnfocar = false }) {
   const [codigo, setCodigo] = useState('');
   const [uniendo, setUniendo] = useState(false);
   const [error, setError] = useState(null);
@@ -45,6 +46,7 @@ export default function FormularioUnirseCurso({ alUnido, idCampo = 'curso-codigo
           </label>
           <input
             id={idCampo}
+            autoFocus={autoEnfocar}
             value={codigo}
             onChange={(e) => setCodigo(e.target.value)}
             maxLength={20}

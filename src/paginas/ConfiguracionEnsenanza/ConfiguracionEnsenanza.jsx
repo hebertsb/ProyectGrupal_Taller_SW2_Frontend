@@ -9,6 +9,9 @@ import {
   subirVideoPieza,
 } from '../../api/backend';
 import { rutaImagenPieza } from '../../ajedrez';
+import InsigniaTonoCurso from '../../componentes/InsigniaTonoCurso';
+import { PRESETS_TONO } from '../../tonoTuring';
+import FiguritasMedallas from './FiguritasMedallas';
 
 /** 6 piezas — mismo vocabulario que `TIPOS_PIEZA_VALIDOS` en el backend
  * (`backend/servicios/facilitador/servicio_videos.py`). `letra` en
@@ -20,31 +23,6 @@ const PIEZAS = [
   { tipo: 'alfil', nombre: 'Alfil', letra: 'B' },
   { tipo: 'caballo', nombre: 'Caballo', letra: 'N' },
   { tipo: 'peon', nombre: 'Peón', letra: 'P' },
-];
-
-/** Mismos 3 valores que `PresetEnsenanza` en `backend/esquemas/auth_esquema.py`. */
-const PRESETS_TONO = [
-  {
-    id: 'infantil',
-    titulo: 'Modo Infantil',
-    icono: 'child_care',
-    descripcion: 'Frases cortas, con ánimo y sin números — para los más chicos.',
-    ejemplo: '¡Cuidado! Tu torre en d5 quedó sola y el rival te la puede comer gratis.',
-  },
-  {
-    id: 'estandar',
-    titulo: 'Modo Estándar',
-    icono: 'balance',
-    descripcion: 'El equilibrio de siempre: claro, ni muy infantil ni muy técnico.',
-    ejemplo: 'Dejaste tu torre en d5 bajo ataque rival sin defensores suficientes.',
-  },
-  {
-    id: 'adultos',
-    titulo: 'Modo Adultos',
-    icono: 'school',
-    descripcion: 'Vocabulario técnico y directo — para quien ya conoce los términos.',
-    ejemplo: 'Pieza colgada: torre en d5 sin defensa suficiente ante el ataque rival.',
-  },
 ];
 
 function mensajeError(err, mensajePorDefecto) {
@@ -371,9 +349,10 @@ function TarjetaPreset({ preset, seleccionado, onSeleccionar }) {
  * Videos: los del facilitador PRINCIPAL son los generales y los ve todo jugador;
  * el de otro facilitador reemplaza al general solo en esa pieza, para los
  * jugadores de sus cursos (por eso cada pieza dice si tiene "Video propio", si
- * "Se usa el video general" o si está "Sin video"). El tono llega a los jugadores
- * inscritos en sus cursos (los cursos se crean en Gestión de Usuarios, ver
- * PanelCursos.jsx); la pantalla lista sus cursos reales para que se vea a quiénes llega.
+ * "Se usa el video general" o si está "Sin video"). El tono que se elige acá es el de
+ * sus cursos que no tengan uno propio: cada curso puede tener el suyo desde Gestión de
+ * Usuarios → Mis cursos (ver PanelCursos.jsx). La pantalla lista sus cursos reales con el
+ * tono vigente de cada uno (`preset_efectivo`).
  */
 export default function ConfiguracionEnsenanza({ usuario, alActualizarUsuario }) {
   const [ayudaAbierta, setAyudaAbierta] = useState(false);
@@ -432,14 +411,25 @@ export default function ConfiguracionEnsenanza({ usuario, alActualizarUsuario })
     };
   }, []);
 
-  // Cursos del facilitador: a quiénes les llega el tono y los videos de esta pantalla.
-  useEffect(() => {
-    setCargandoCursos(true);
+  /**
+   * Pide los cursos del facilitador, cada uno con el tono que se usa en él (`preset_efectivo`). `mostrarCarga` solo
+   * en la primera carga: al refrescar después de guardar el tono propio no se tapa la lista con el indicador.
+   */
+  async function cargarCursos(mostrarCarga) {
+    if (mostrarCarga) setCargandoCursos(true);
     setErrorCursos(null);
-    listarCursos()
-      .then((datos) => setCursos(datos || []))
-      .catch((err) => setErrorCursos(err))
-      .finally(() => setCargandoCursos(false));
+    try {
+      setCursos((await listarCursos()) || []);
+    } catch (err) {
+      setErrorCursos(err);
+    } finally {
+      setCargandoCursos(false);
+    }
+  }
+
+  // Cursos del facilitador: a quiénes les llegan los videos de esta pantalla y con qué tono les habla Turing.
+  useEffect(() => {
+    cargarCursos(true);
   }, []);
 
   async function manejarSubirVideo(tipoPieza, archivo) {
@@ -489,6 +479,7 @@ export default function ConfiguracionEnsenanza({ usuario, alActualizarUsuario })
       const actualizado = await actualizarPerfil({ preset_ensenanza: presetSeleccionado });
       alActualizarUsuario?.(actualizado);
       setPresetGuardadoOk(true);
+      cargarCursos(false); // los cursos que heredan este tono pasan a mostrar el nuevo
     } catch (err) {
       setErrorPreset(mensajeError(err, 'No se pudo guardar la preferencia de tono.'));
     } finally {
@@ -532,12 +523,15 @@ export default function ConfiguracionEnsenanza({ usuario, alActualizarUsuario })
             </p>
             <p className="font-body-sm text-body-sm text-on-surface leading-relaxed">
               <strong className="text-primary">2.</strong> Elegí cómo querés que Turing (el tutor) le hable a tus
-              estudiantes: con más ánimo y simple, con el tono de siempre, o más técnico.
+              estudiantes: con más ánimo y simple, con el tono de siempre, o más técnico. Ese es el tono de tus cursos
+              que no tengan uno propio; cada curso puede tener el suyo desde Gestión de Usuarios → Mis cursos.
             </p>
             <p className="font-body-sm text-body-sm text-on-surface leading-relaxed">
-              <strong className="text-primary">3.</strong> El tono (y tus videos propios, si no sos el principal) les
-              llegan a los jugadores inscritos en tus cursos. Creás los cursos en Gestión de Usuarios y se los
-              compartís con su código.
+              <strong className="text-primary">3.</strong> Los cursos los creás en Gestión de Usuarios y se los
+              compartís a tus estudiantes con su código.{' '}
+              {esPrincipal
+                ? 'El tono de cada curso les llega a los jugadores inscritos en él.'
+                : 'El tono de cada curso (y tus videos propios) les llegan a los jugadores inscritos en él.'}
             </p>
           </div>
         )}
@@ -604,8 +598,8 @@ export default function ConfiguracionEnsenanza({ usuario, alActualizarUsuario })
             info
           </span>
           <p className="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
-            Este tono se aplica a <strong className="text-on-surface">los jugadores inscritos en tus cursos</strong>:
-            Turing les habla así a todos. Abajo ves cuáles son.
+            Este es el tono de <strong className="text-on-surface">tus cursos que no tengan uno propio</strong>. Cada
+            curso puede tener el suyo desde Gestión de Usuarios → Mis cursos. Abajo ves qué tono usa cada uno.
           </p>
         </div>
 
@@ -616,7 +610,7 @@ export default function ConfiguracionEnsenanza({ usuario, alActualizarUsuario })
             className="p-space-md rounded-xl bg-surface-bright text-primary font-body-sm text-body-sm flex items-center gap-space-xs"
           >
             <span className="material-symbols-outlined text-[18px] shrink-0">check_circle</span>
-            <span>Listo, guardamos cómo le habla Turing a tus estudiantes.</span>
+            <span>Listo, guardamos tu tono. Lo usan tus cursos que no tengan uno propio.</span>
           </div>
         )}
 
@@ -644,8 +638,8 @@ export default function ConfiguracionEnsenanza({ usuario, alActualizarUsuario })
           <h2 className="font-headline-sm text-headline-sm text-on-surface">Tus cursos</h2>
         </div>
         <p className="font-body-sm text-body-sm text-on-surface-variant">
-          Turing les habla con tu tono a los jugadores inscritos en estos cursos
-          {esPrincipal ? '.' : ', y en las piezas donde subiste un video propio ven el tuyo en lugar del general.'}
+          Cada curso muestra con qué tono les habla Turing a sus jugadores: el propio del curso o, si no tiene, el tuyo
+          {esPrincipal ? '.' : '. En las piezas donde subiste un video propio, los jugadores ven el tuyo en lugar del general.'}
         </p>
 
         {cargandoCursos && <CargandoInline texto="Buscando tus cursos…" />}
@@ -669,19 +663,25 @@ export default function ConfiguracionEnsenanza({ usuario, alActualizarUsuario })
             {cursos.map((curso) => (
               <li
                 key={curso.id}
-                className="flex items-center justify-between gap-space-sm px-space-sm py-space-xs min-h-10 rounded-lg bg-surface-container"
+                className="flex flex-col gap-space-2xs px-space-sm py-space-xs min-h-10 rounded-lg bg-surface-container min-w-0"
               >
-                <span className="font-body-sm text-body-sm font-medium text-on-surface min-w-0 break-words">
-                  {curso.nombre}
-                </span>
-                <span className="font-mono-micro text-mono-micro text-on-surface-variant shrink-0">
-                  {curso.estudiantes} {curso.estudiantes === 1 ? 'estudiante' : 'estudiantes'}
-                </span>
+                <div className="flex items-center justify-between gap-space-sm">
+                  <span className="font-body-sm text-body-sm font-medium text-on-surface min-w-0 break-words">
+                    {curso.nombre}
+                  </span>
+                  <span className="font-mono-micro text-mono-micro text-on-surface-variant shrink-0">
+                    {curso.estudiantes} {curso.estudiantes === 1 ? 'estudiante' : 'estudiantes'}
+                  </span>
+                </div>
+                <InsigniaTonoCurso curso={curso} />
               </li>
             ))}
           </ul>
         )}
       </section>
+
+      {/* Imágenes de las figuritas de las medallas: solo el facilitador principal (ver FiguritasMedallas.jsx). */}
+      {esPrincipal && <FiguritasMedallas />}
     </div>
   );
 }

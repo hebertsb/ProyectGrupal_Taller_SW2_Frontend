@@ -1,0 +1,418 @@
+/*
+ * Figurita de una medalla (MedallaFigurita.jsx).
+ *
+ * Los colores del arte viven acá como variables `--fig-*`, una paleta por nivel (`data-nivel-medalla`), y el SVG solo
+ * las referencia: ningún color queda escrito dentro del componente. Los acentos usan los tokens del tema
+ * (`--color-neon-*`, `--color-primary-fixed-dim`...) con un valor de respaldo, porque Tailwind solo emite al CSS final
+ * los tokens que alguna clase usa. Los metales (bronce, plata, oro) no existen en la paleta de la app, así que son
+ * propios. El contorno oscuro de la figurita la separa del fondo, sea claro u oscuro.
+ *
+ * Estos estilos van sin capa (como SalaControl.css): ganan a las utilidades de Tailwind, pero todas las clases son
+ * propias (`figurita*`, `fig-*`).
+ */
+
+/* ===== Paletas por nivel ===== */
+
+[data-nivel-medalla='bronce'] {
+  --fig-rim-1: #f3b98a;
+  --fig-rim-2: #c47a3f;
+  --fig-rim-3: #7a3f17;
+  --fig-campo-1: #b4682f;
+  --fig-campo-2: #5e2c0f;
+  --fig-pieza-1: #ffe6c8;
+  --fig-pieza-2: #e49a5c;
+  --fig-trazo: #3e1b07;
+  --fig-corte: #5e2c0f;
+  --fig-contorno: #2e1305;
+  --fig-brillo: rgba(214, 133, 66, 0.55);
+}
+
+[data-nivel-medalla='plata'] {
+  --fig-rim-1: #fafbfc;
+  --fig-rim-2: #b4bcc6;
+  --fig-rim-3: #6c7684;
+  --fig-campo-1: #8995a3;
+  --fig-campo-2: #3c4551;
+  --fig-pieza-1: #ffffff;
+  --fig-pieza-2: #d3dae2;
+  --fig-trazo: #222831;
+  --fig-corte: #3c4551;
+  --fig-contorno: #1b2028;
+  --fig-brillo: rgba(205, 214, 226, 0.5);
+}
+
+[data-nivel-medalla='oro'] {
+  --fig-rim-1: #fff3b0;
+  --fig-rim-2: #eab72a;
+  --fig-rim-3: #8f5f00;
+  --fig-campo-1: #cf9712;
+  --fig-campo-2: #6d4600;
+  --fig-pieza-1: #fffbe0;
+  --fig-pieza-2: #f6cf55;
+  --fig-trazo: #3d2800;
+  --fig-corte: #6d4600;
+  --fig-contorno: #2c1c00;
+  --fig-brillo: rgba(247, 201, 72, 0.6);
+}
+
+[data-nivel-medalla='legendaria'] {
+  --fig-rim-1: #b4f5ff;
+  --fig-rim-2: var(--color-neon-purple, #7c4dff);
+  --fig-rim-3: var(--color-neon-cyan, #00e5ff);
+  --fig-campo-1: #34168a;
+  --fig-campo-2: #07243f;
+  --fig-pieza-1: #ffffff;
+  --fig-pieza-2: #cdbdff;
+  --fig-trazo: #140a38;
+  --fig-corte: #1d0f5c;
+  --fig-contorno: #0d0526;
+  --fig-brillo: rgba(124, 77, 255, 0.6);
+  --fig-holo-1: var(--color-neon-cyan, #00e5ff);
+  --fig-holo-2: var(--color-neon-purple, #7c4dff);
+  --fig-holo-3: #ff6ad5;
+  --fig-holo-4: var(--color-neon-lime, #76ff03);
+}
+
+/* Bloqueada: gris oscuro, sin el color del nivel (el estado no depende solo del color: también lleva candado). */
+.figurita.figurita--bloqueada[data-nivel-medalla] {
+  --fig-rim-1: #7a8290;
+  --fig-rim-2: #565d6a;
+  --fig-rim-3: #373c47;
+  --fig-campo-1: #2a2e37;
+  --fig-campo-2: #171a20;
+  --fig-pieza-1: #727a88;
+  --fig-pieza-2: #565d6a;
+  --fig-trazo: #0e1014;
+  --fig-corte: #171a20;
+  --fig-contorno: #0b0c10;
+  --fig-brillo: transparent;
+}
+
+/* ===== Caja de la figurita ===== */
+
+.figurita {
+  --fig-tam: 96px;
+  --fig-pista: rgba(150, 160, 175, 0.3);
+  --fig-avance: var(--color-primary-fixed-dim, #00daf3);
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  width: var(--fig-tam);
+  max-width: 100%;
+  flex: none;
+  vertical-align: middle;
+}
+
+.figurita--xs {
+  --fig-tam: 28px;
+}
+.figurita--sm {
+  --fig-tam: 56px;
+}
+.figurita--md {
+  --fig-tam: 96px;
+}
+/* Grande: ~200 px, pero nunca más del 56 % del ancho ni del 36 % del alto de la pantalla (celulares chicos o apaisados). */
+.figurita--lg {
+  --fig-tam: min(200px, 56vw, 36dvh);
+}
+
+.figurita__arte {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  isolation: isolate;
+}
+
+.figurita__svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35));
+}
+
+/* Brillo suave detrás de las ganadas (la opacidad respira; con "reducir movimiento" queda fijo). */
+.figurita--ganada:not(.figurita--xs) .figurita__arte::before {
+  content: '';
+  position: absolute;
+  inset: -10%;
+  z-index: -1;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--fig-brillo) 0%, transparent 68%);
+  opacity: 0.85;
+  pointer-events: none;
+  animation: figurita-respira 3.6s ease-in-out infinite;
+  animation-delay: calc(var(--fig-fase, 0) * -1s);
+}
+
+/* ===== Piezas de colores del SVG (todo sale de las variables de arriba) ===== */
+
+.fig-parada-rim-1 {
+  stop-color: var(--fig-rim-1);
+}
+.fig-parada-rim-2 {
+  stop-color: var(--fig-rim-2);
+}
+.fig-parada-rim-3 {
+  stop-color: var(--fig-rim-3);
+}
+.fig-parada-campo-1 {
+  stop-color: var(--fig-campo-1);
+}
+.fig-parada-campo-2 {
+  stop-color: var(--fig-campo-2);
+}
+.fig-parada-pieza-1 {
+  stop-color: var(--fig-pieza-1);
+}
+.fig-parada-pieza-2 {
+  stop-color: var(--fig-pieza-2);
+}
+.fig-parada-holo-1 {
+  stop-color: var(--fig-holo-1);
+}
+.fig-parada-holo-2 {
+  stop-color: var(--fig-holo-2);
+}
+.fig-parada-holo-3 {
+  stop-color: var(--fig-holo-3);
+}
+.fig-parada-holo-4 {
+  stop-color: var(--fig-holo-4);
+}
+
+.fig-contorno {
+  fill: none;
+  stroke: var(--fig-contorno);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+
+.fig-borde-campo {
+  fill: none;
+  stroke: var(--fig-contorno);
+  stroke-opacity: 0.55;
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+
+.fig-resalte-campo {
+  fill: none;
+  stroke: #fff;
+  stroke-opacity: 0.28;
+  stroke-width: 0.8;
+  stroke-linejoin: round;
+}
+
+.fig-pieza > * {
+  stroke: var(--fig-trazo);
+  stroke-width: 1.1;
+  stroke-linejoin: round;
+  paint-order: stroke;
+}
+.fig-pieza > .fig-forma-s {
+  fill: none;
+  stroke: var(--fig-corte);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+.fig-pieza > .fig-forma-o {
+  fill: var(--fig-corte);
+  stroke: none;
+}
+
+.fig-estrella {
+  fill: var(--fig-pieza-1);
+  stroke: var(--fig-trazo);
+  stroke-width: 0.9;
+  stroke-linejoin: round;
+  paint-order: stroke;
+}
+
+/* Candado de las bloqueadas: fondo oscuro, aro y trazo claros (se lee sobre el gris). */
+.fig-candado-fondo {
+  fill: var(--color-surface-container-lowest, #0c0e14);
+  stroke: var(--color-outline, #849396);
+  stroke-width: 1.4;
+}
+.fig-candado-arco {
+  fill: none;
+  stroke: var(--color-inverse-surface, #e2e2eb);
+  stroke-width: 1.9;
+  stroke-linecap: round;
+}
+.fig-candado-cuerpo {
+  fill: var(--color-inverse-surface, #e2e2eb);
+}
+.fig-candado-ojo {
+  fill: var(--color-surface-container-lowest, #0c0e14);
+}
+
+/* Destellos de las ganadas: un barrido de luz cada tanto y, en las legendarias, el holograma. */
+.figurita__barrido {
+  transform: translateX(-80px) skewX(-20deg);
+  animation: figurita-barrido 6.5s ease-in-out infinite;
+  animation-delay: calc(var(--fig-fase, 0) * -1s);
+}
+
+.figurita__holo {
+  opacity: 0.42;
+  transform: translateX(-45px);
+  animation: figurita-holo 7s ease-in-out infinite alternate;
+  animation-delay: calc(var(--fig-fase, 0) * -1s);
+}
+
+.figurita__chispa {
+  fill: #fff;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: figurita-chispa 2.4s ease-in-out infinite;
+  animation-delay: calc(var(--fig-fase, 0) * -0.4s);
+}
+.figurita__chispa:nth-of-type(2n) {
+  animation-duration: 3.1s;
+}
+
+/* ===== Con imagen del facilitador ===== */
+
+.figurita__marco {
+  position: absolute;
+  inset: 5%;
+  display: block;
+  padding: 4.5%;
+  border-radius: 22%;
+  background: linear-gradient(135deg, var(--fig-rim-1), var(--fig-rim-2) 50%, var(--fig-rim-3));
+  box-shadow:
+    0 0 0 1.5px var(--fig-contorno),
+    0 2px 5px rgba(0, 0, 0, 0.35);
+}
+
+.figurita__imagen {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 17%;
+  background: linear-gradient(180deg, var(--fig-campo-1), var(--fig-campo-2));
+  user-select: none;
+}
+
+.figurita--bloqueada .figurita__imagen {
+  filter: grayscale(1) brightness(0.45) contrast(0.9);
+}
+
+/* Candado encima de la imagen de una bloqueada. */
+.figurita__capa {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* ===== Avance (3 / 5) ===== */
+
+.figurita__progreso {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+}
+
+.figurita__pista {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--fig-pista);
+  overflow: hidden;
+}
+.figurita--lg .figurita__pista {
+  height: 6px;
+}
+
+.figurita__relleno {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--fig-avance);
+}
+
+.figurita__progreso-texto {
+  flex: none;
+  font-family: var(--font-mono-micro, monospace);
+  font-size: 10px;
+  line-height: 1;
+  color: var(--color-on-surface-variant, #bac9cc);
+}
+.figurita--lg .figurita__progreso-texto {
+  font-size: 12px;
+}
+
+/* ===== Animaciones ===== */
+
+@keyframes figurita-respira {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+}
+
+@keyframes figurita-barrido {
+  0%,
+  55% {
+    transform: translateX(-80px) skewX(-20deg);
+  }
+  100% {
+    transform: translateX(180px) skewX(-20deg);
+  }
+}
+
+@keyframes figurita-holo {
+  from {
+    transform: translateX(-90px);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes figurita-chispa {
+  0%,
+  100% {
+    opacity: 0.15;
+    transform: scale(0.5);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* "Reducir movimiento": la figurita se ve igual de completa pero sin ningún movimiento. */
+@media (prefers-reduced-motion: reduce) {
+  .figurita--ganada .figurita__arte::before,
+  .figurita__barrido,
+  .figurita__holo,
+  .figurita__chispa {
+    animation: none;
+  }
+  .figurita__barrido {
+    /* Sin movimiento no hay nada que barrer: se esconde en vez de dejar una franja quieta. */
+    display: none;
+  }
+  .figurita__holo {
+    transform: translateX(-45px);
+  }
+  .figurita__chispa {
+    opacity: 0.8;
+    transform: none;
+  }
+}

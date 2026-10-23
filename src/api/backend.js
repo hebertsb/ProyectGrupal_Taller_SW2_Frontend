@@ -830,29 +830,41 @@ async function solicitarAuthSinCuerpo(endpoint, opciones = {}) {
 /** Cursos: el facilitador arma grupos con un código y el jugador entra con él */
 
 /**
- * Crea un curso (facilitador). Devuelve `{id, nombre, codigo, acepta_ingresos, estudiantes, creado_en,
- * facilitador_id, facilitador_nombre}`; el código viene con guion (ej. `K7Q-M4T`). Máximo 20 cursos por
- * facilitador (400 con mensaje). Un facilitador principal puede pasar `facilitadorId` para crearlo a nombre de
- * otro facilitador activo (403 si no es principal; 400 si el destino no sirve).
+ * Crea un curso (facilitador). Devuelve `{id, nombre, codigo, acepta_ingresos, estudiantes, cupo, creado_en,
+ * facilitador_id, facilitador_nombre, preset_ensenanza, preset_efectivo}`; el código viene con guion (ej.
+ * `K7Q-M4T`). Máximo 20 cursos por facilitador (400 con mensaje). Un facilitador principal puede pasar
+ * `facilitadorId` para crearlo a nombre de otro facilitador activo (403 si no es principal; 400 si el destino no
+ * sirve). `cupo` (entero de 1 a 120) es la cantidad máxima de alumnos: solo se manda si viene, y sin él el backend
+ * usa 60 (422 si está fuera de rango). `presetEnsenanza` (`"infantil" | "estandar" | "adultos"`) es el tono con el
+ * que Turing les habla a los alumnos del curso: solo se manda si viene, y sin él el curso hereda el tono del perfil
+ * del facilitador.
  */
-export function crearCurso(nombre, facilitadorId = null) {
+export function crearCurso(nombre, facilitadorId = null, cupo = null, presetEnsenanza = null) {
   const cuerpo = { nombre };
   if (facilitadorId != null) cuerpo.facilitador_id = facilitadorId;
+  if (cupo != null) cuerpo.cupo = cupo;
+  if (presetEnsenanza != null) cuerpo.preset_ensenanza = presetEnsenanza;
   return solicitarAuth("/cursos", { method: "POST", body: JSON.stringify(cuerpo) });
 }
 
 /**
- * Cursos del facilitador autenticado, con su código y cuántos estudiantes tiene cada uno. Con `todos` un
- * facilitador principal pide los de todos los facilitadores (`?todos=true`; 403 si no es principal).
+ * Cursos del facilitador autenticado, con su código, cuántos estudiantes tiene cada uno y su `cupo`. Cada curso trae
+ * además `preset_ensenanza` (el tono propio del curso, o `null` si hereda) y `preset_efectivo` (el tono que realmente
+ * se usa: el del curso, o el del perfil del facilitador, o `null` si ninguno eligió). Con `todos` un facilitador
+ * principal pide los de todos los facilitadores (`?todos=true`; 403 si no es principal).
  */
 export function listarCursos(todos = false) {
   return solicitarAuth(todos ? "/cursos?todos=true" : "/cursos");
 }
 
 /**
- * Renombra un curso, abre o cierra los ingresos y/o lo reasigna (facilitador). `campos` lleva solo lo que
- * cambia: `{nombre}`, `{acepta_ingresos}` y/o `{facilitador_id}`. Con `acepta_ingresos: false` el código deja de
- * servir hasta reabrir. `facilitador_id` solo lo puede mandar un facilitador principal (403 si no lo es).
+ * Renombra un curso, abre o cierra los ingresos, cambia su cupo, su tono y/o lo reasigna (facilitador). `campos`
+ * lleva solo lo que cambia: `{nombre}`, `{acepta_ingresos}`, `{cupo}`, `{preset_ensenanza}` y/o `{facilitador_id}`.
+ * Con `acepta_ingresos: false` el código deja de servir hasta reabrir. `cupo` es un entero de 1 a 120 (422 si está
+ * fuera de rango; 400 con mensaje si es menor que los alumnos ya inscritos). `preset_ensenanza` es el tono con el
+ * que Turing les habla a los alumnos del curso: `"infantil" | "estandar" | "adultos"`, o `"facilitador"` para que el
+ * curso vuelva a heredar el del perfil del facilitador; omitirlo no cambia nada. `facilitador_id` solo lo puede
+ * mandar un facilitador principal (403 si no lo es).
  */
 export function editarCurso(cursoId, campos) {
   return solicitarAuth(`/cursos/${cursoId}`, { method: "PATCH", body: JSON.stringify(campos) });
@@ -890,10 +902,23 @@ export function sacarEstudianteDeCurso(cursoId, usuarioId) {
 }
 
 /**
+ * Reporte de un curso para su facilitador (el dueño o el principal; 403 si no lo es, 404 si no existe):
+ * `{curso: {id, nombre, cupo, alumnos}, resumen: {alumnos_activos_7_dias, porcentaje_activos, partidas_7_dias,
+ * partidas_por_alumno_semana, precision_primera_semana, precision_ultima_semana, variacion_precision},
+ * alumnos: [{id, nombre, activo, nivel, rango, puesto, confirmado, precision, partidas, partidas_7_dias,
+ * ultima_partida}]}`. Los indicadores del resumen pueden venir en `null` (curso vacío o sin dos semanas con datos)
+ * y `alumnos` viene ordenado por puesto, con los que no tienen puesto al final.
+ */
+export function obtenerReporteCurso(cursoId) {
+  return solicitarAuth(`/cursos/${cursoId}/reporte`);
+}
+
+/**
  * Entra a un curso con el código que dio el facilitador (jugador): acepta mayúsculas, minúsculas y con o
  * sin guion. Si ya estaba en otro, lo mueve. Devuelve `{id, nombre, facilitador_nombre,
- * facilitador_avatar_url, preset_ensenanza}`. 400 si el código no existe o el curso cerró ingresos, y 429
- * si gastó sus intentos fallidos: el `message` del error ya está listo para mostrarse.
+ * facilitador_avatar_url, preset_ensenanza}`. 400 si el código no existe, el curso cerró ingresos o el curso
+ * está completo (llegó a su cupo), y 429 si gastó sus intentos fallidos: el `message` del error ya está listo
+ * para mostrarse.
  */
 export function unirseACurso(codigo) {
   return solicitarAuth("/cursos/unirse", { method: "POST", body: JSON.stringify({ codigo }) });
@@ -910,6 +935,17 @@ export function salirDelCurso() {
 }
 
 /**
+ * Ranking de jugadores por nivel (cualquier usuario autenticado): el de su curso si está inscrito
+ * (`alcance: "curso"`) o el de los jugadores sin curso (`alcance: "general"`). Devuelve `{alcance, curso, total,
+ * jugadores: [{puesto, nombre, nivel, rango, confirmado, partidas_calibradas, soy_yo}], mi_puesto}`. `limite` son
+ * los primeros que se piden (el backend lo acota a 1-20); `mi_puesto` solo viene si el jugador quedó fuera de ese
+ * tope. Los nombres ya llegan abreviados ("Ana P.") y los puestos pueden repetirse (empate exacto).
+ */
+export function obtenerRanking(limite = 10) {
+  return solicitarAuth(`/cursos/ranking?limite=${encodeURIComponent(limite)}`);
+}
+
+/**
  * Videos por pieza que ve el usuario autenticado: `{tipo_pieza: url}` (con `?v=…`) con claves
  * `rey | dama | torre | alfil | caballo | peon`, solo las que existen. Son los videos generales del facilitador
  * principal, que ve todo jugador esté o no en un curso; si el facilitador de su curso subió uno propio de una
@@ -918,6 +954,62 @@ export function salirDelCurso() {
  */
 export function obtenerVideosDeMiCurso() {
   return solicitarAuth("/cursos/mio/videos");
+}
+
+/** Medallas ("figuritas" del álbum) */
+
+/**
+ * Medallas del usuario autenticado: `{medallas: [{codigo, nombre, descripcion, nivel, pieza, meta, progreso, ganada,
+ * ganada_en, nueva, imagen_url}], total, ganadas, nuevas: [codigo], es_primera}`. `nivel` es `bronce | plata | oro |
+ * legendaria` y `pieza` es `peon | caballo | alfil | torre | dama | rey`. `imagen_url` (o `null`) es la imagen que subió
+ * el facilitador principal y reemplaza a la figurita dibujada. Al pedirlas, el backend evalúa y otorga las que
+ * correspondan: `nuevas` son las ganadas que todavía no se le avisaron al jugador y `es_primera` indica que entre ellas
+ * está la primera medalla de su vida. A un facilitador le devuelve el catálogo completo, sin ganadas.
+ */
+export function obtenerMedallas() {
+  return solicitarAuth("/usuario/medallas");
+}
+
+/**
+ * Marca medallas como ya avisadas para que no se repita el aviso: `{marcadas: n}`. Con una lista marca solo esas;
+ * sin argumento (`null`) las marca todas. Una lista vacía no marca nada (no se manda al backend, donde `{}` significaría
+ * "todas").
+ */
+export function marcarMedallasVistas(codigos = null) {
+  if (Array.isArray(codigos) && codigos.length === 0) return Promise.resolve({ marcadas: 0 });
+  const cuerpo = Array.isArray(codigos) ? { codigos } : {};
+  return solicitarAuth("/usuario/medallas/vistas", { method: "POST", body: JSON.stringify(cuerpo) });
+}
+
+/**
+ * Sube (o reemplaza) la imagen de una medalla (solo el facilitador PRINCIPAL; 403 si no lo es): reemplaza a la figurita
+ * dibujada para todos los jugadores. Multipart con el campo `archivo` (PNG, JPG o WEBP de hasta 2 MB); el
+ * content-type con boundary lo arma el navegador. Devuelve `{codigo, imagen_url}` (la URL trae `?v=…`, así que se
+ * refresca sola). 400 con un mensaje legible si el archivo no sirve.
+ */
+export async function subirImagenMedalla(codigo, archivo) {
+  const token = leerSesion("access_token");
+  const datos = new FormData();
+  datos.append("archivo", archivo);
+  const headers = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  const respuesta = await fetch(`/facilitador/medallas/${encodeURIComponent(codigo)}/imagen`, {
+    method: "POST",
+    body: datos,
+    headers,
+  });
+  if (!respuesta.ok) throw await errorDeRespuesta(respuesta);
+  return respuesta.json();
+}
+
+/**
+ * Borra la imagen subida de una medalla (solo el facilitador principal): vuelve la figurita de fábrica. 204 sin
+ * cuerpo; 404 si no tenía imagen subida.
+ */
+export function quitarImagenMedalla(codigo) {
+  return solicitarAuthSinCuerpo(`/facilitador/medallas/${encodeURIComponent(codigo)}/imagen`, { method: "DELETE" });
 }
 
 /** Tutor conversacional "Turing" (Panel de Aprendizaje) */

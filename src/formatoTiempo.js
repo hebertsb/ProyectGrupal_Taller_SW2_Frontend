@@ -37,6 +37,21 @@ export function tiempoRelativo(iso, ahora = Date.now()) {
   return `hace ${dias} ${dias === 1 ? 'día' : 'días'}`;
 }
 
+/**
+ * Cuándo fue la última actividad, contando días de calendario locales: "hoy", "ayer", "hace 2 días" (y "hace 3
+ * meses" pasados los dos meses). "nunca" si no hay fecha (por ejemplo un alumno que no jugó ninguna partida).
+ */
+export function textoUltimaActividad(iso, ahora = Date.now()) {
+  const fecha = fechaDesdeIso(iso);
+  if (!fecha) return 'nunca';
+  const inicioDelDia = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const dias = Math.max(0, Math.round((inicioDelDia(new Date(ahora)) - inicioDelDia(fecha)) / 86400000));
+  if (dias === 0) return 'hoy';
+  if (dias === 1) return 'ayer';
+  if (dias < 60) return `hace ${dias} días`;
+  return `hace ${Math.round(dias / 30)} meses`;
+}
+
 /** Fecha y hora locales legibles ("28/09/2026, 14:03"), o el texto original si no se puede leer. */
 export function fechaHoraLegible(iso) {
   const fecha = fechaDesdeIso(iso);

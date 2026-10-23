@@ -1,0 +1,58 @@
+/*
+ * Álbum de figuritas (AlbumFiguritas.jsx) y su hoja de detalle (DetalleMedalla.jsx).
+ * Solo lo que Tailwind no cubre: las animaciones. El estado base es el final; con "reducir movimiento" no hay animación.
+ */
+
+/* En celular el detalle sube desde abajo como una hoja; desde 640 px aparece en el centro con un fundido. */
+.album-hoja {
+  animation: album-hoja-sube 0.32s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+@keyframes album-hoja-sube {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes album-hoja-aparece {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (min-width: 640px) {
+  .album-hoja {
+    animation-name: album-hoja-aparece;
+    animation-duration: 0.22s;
+  }
+}
+
+/* Insignia "Nueva": un aro que late despacio para llamar la atención sin molestar. */
+.album-nueva {
+  animation: album-nueva-late 2.4s ease-in-out infinite;
+}
+
+@keyframes album-nueva-late {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--color-primary, #c3f5ff);
+  }
+  60% {
+    box-shadow: 0 0 0 5px transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .album-hoja,
+  .album-nueva {
+    animation: none;
+  }
+}

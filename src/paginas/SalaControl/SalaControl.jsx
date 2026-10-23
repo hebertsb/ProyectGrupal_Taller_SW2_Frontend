@@ -7,6 +7,7 @@ import SimuladorBrazoTablero3D from '../../componentes/SimuladorBrazoTablero3D';
 import { useRazonamiento } from '../../contexto/ContextoRazonamiento';
 import { useEstadoModelo } from '../../contexto/ContextoEstadoModelo';
 import AvisoNivelCalculado, { EstadoCalibracionPartida } from './AvisoNivelCalculado';
+import InvitacionCursoSalaControl from './InvitacionCursoSalaControl';
 import ModalRetomarPartida from './ModalRetomarPartida';
 import PanelPlegable from './PanelPlegable';
 import RelojAjedrez from './RelojAjedrez';
@@ -42,6 +43,7 @@ import { aplicarJugadaUciAFen,
 } from '../../ajedrez';
 import { NIVEL_DIAGNOSTICO, NIVEL_MAX_MODELO, NIVEL_MAX_STOCKFISH } from '../../nivelJugador';
 import { CATEGORIAS, clasificarJugada, comoMejorarPorCategoria, ESTILO_CATEGORIA, winPercent } from '../../aprendizaje';
+import { pedirRevisionMedallas } from '../../medallas';
 
 gsap.registerPlugin(useGSAP);
 
@@ -234,6 +236,10 @@ export default function SalaControl({
   // Hay una transmisión en vivo activa de una partida que NO es esta (si fuera la misma partida que
   // ya se está mirando acá, no hace falta bloquear nada — de hecho sería redundante con la vista normal).
   const demostracionDeOtraPartida = Boolean(demostracionActiva?.id) && demostracionActiva.id !== partidaId;
+  // Invitación opcional a un curso (franja compacta en la columna lateral): solo para el jugador en su propia
+  // partida; nunca al facilitador, ni mirando una partida ajena, ni en una demostración (propia o ajena).
+  const puedeInvitarACurso =
+    !esFacilitador && Boolean(usuario) && !viendoPartidaAjena && !esDemostracion && !demostracionDeOtraPartida;
   // Rival y nivel con los que se creó (o cargó) la partida actual. Es la fuente de verdad de lo
   // que se muestra "de la partida" (cabecera, tarjeta final, selectores bloqueados): la selección
   // de arriba puede cambiar después sin que eso cambie la partida ya creada.
@@ -653,6 +659,9 @@ export default function SalaControl({
     if (partidasCalibracionIniciadaRef.current.has(partidaId)) return;
     partidasCalibracionIniciadaRef.current.add(partidaId);
     calibrarPartidaTerminada(partidaId);
+    // La partida acaba de terminar: el notificador global revisa si ganó alguna medalla (figurita). Al terminar la
+    // calibración se vuelve a pedir, porque algunas medallas dependen del análisis de la partida.
+    pedirRevisionMedallas();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partidaId, terminada, esFacilitador, viendoPartidaAjena]);
 
@@ -903,6 +912,9 @@ export default function SalaControl({
         return;
       }
       setEstadoCalibracion({ partidaId: idPartida, fase: 'error', mensaje: err?.message ?? null });
+    } finally {
+      // Con el nivel ya calculado (o aunque haya fallado) se revisan de nuevo las medallas de la partida.
+      pedirRevisionMedallas();
     }
   }
 
@@ -1436,6 +1448,10 @@ export default function SalaControl({
               )}
             </div>
           )}
+
+          {/* Invitación opcional a un curso: franja delgada, solo si todavía no está en uno y no la descartó
+              (misma memoria que la tarjeta del Panel de Aprendizaje). No toca el flujo de la partida. */}
+          {puedeInvitarACurso && <InvitacionCursoSalaControl usuarioId={usuario.id ?? null} />}
 
           {/* Paneles secundarios, plegados por defecto salvo RIVAL DIGITAL (se
               usa para elegir rival antes de cada partida nueva) — así el panel

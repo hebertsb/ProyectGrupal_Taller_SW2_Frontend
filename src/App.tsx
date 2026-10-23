@@ -22,6 +22,7 @@ import EntrenamientoModelo from './paginas/EntrenamientoModelo/EntrenamientoMode
 import Perfil from './paginas/Perfil/Perfil';
 import Login from './paginas/Login/Login';
 import AccesoRestringido from './componentes/AccesoRestringido';
+import NotificadorMedallas from './componentes/NotificadorMedallas';
 import { backendEnLinea, obtenerDemostracionActiva, obtenerEstadoEntrenamiento, obtenerPerfil } from './api/backend';
 import { ProveedorRazonamiento } from './contexto/ContextoRazonamiento';
 import { ProveedorEstadoModelo } from './contexto/ContextoEstadoModelo';
@@ -290,6 +291,11 @@ export default function App() {
             setSeccionPanelAprendizaje('piezas');
           }}
         />
+      )}
+      {/* Aviso de medallas nuevas (figuritas): solo jugadores. Una vez por sesión de cuenta; otras pantallas le piden
+          revisar con `pedirRevisionMedallas()` (medallas.js), por ejemplo al terminar una partida. */}
+      {!esFacilitador && (
+        <NotificadorMedallas key={`medallas-${usuario.id ?? 'anon'}`} alVerAlbum={() => irAPanelAprendizaje('logros')} />
       )}
       {isSidebarOpen && (
         <button
@@ -699,7 +705,11 @@ export default function App() {
             )
           )}
           {pantallaActiva === 'perfil' && (
-            <Perfil usuario={usuario} alActualizarUsuario={manejarActualizarUsuario} />
+            <Perfil
+              usuario={usuario}
+              alActualizarUsuario={manejarActualizarUsuario}
+              alVerAlbum={esFacilitador ? null : () => irAPanelAprendizaje('logros')}
+            />
           )}
           {pantallaActiva === 'usuarios' && esFacilitador && (
             <Suspense fallback={

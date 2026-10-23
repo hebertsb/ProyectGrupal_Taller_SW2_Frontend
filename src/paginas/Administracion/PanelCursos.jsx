@@ -12,9 +12,46 @@ import {
   sacarEstudianteDeCurso,
 } from '../../api/backend';
 import AvatarUsuario from '../../componentes/AvatarUsuario';
+import InsigniaTonoCurso from '../../componentes/InsigniaTonoCurso';
+import { buscarTono, PRESETS_TONO, TONO_HEREDADO, tonoPropioDeCurso } from '../../tonoTuring';
+import ReporteCurso from './ReporteCurso';
 
 const NOMBRE_MIN = 2;
 const NOMBRE_MAX = 80;
+
+// Cupo de alumnos de un curso: lo define quien lo crea y el backend lo exige entre 1 y 120.
+const CUPO_MIN = 1;
+const CUPO_MAX = 120;
+const CUPO_POR_DEFECTO = 60;
+const MENSAJE_CUPO_INVALIDO = `El cupo tiene que ser un número entero entre ${CUPO_MIN} y ${CUPO_MAX}.`;
+const AYUDA_CUPO = `Cuántos alumnos pueden inscribirse. Máximo ${CUPO_MAX}.`;
+
+// Tono de Turing del curso: `''` en los selectores = "hereda el del perfil del facilitador" (al crear no se manda
+// nada; al editar se manda `TONO_HEREDADO`).
+const AYUDA_TONO = 'Cómo les habla Turing a los alumnos de este curso.';
+const AYUDA_TONO_HEREDADO = 'Usa el tono que el facilitador eligió en Configuración de Enseñanza.';
+
+/** Opciones de un selector de tono: la de heredar (valor `''`) y los tres tonos. */
+function OpcionesTono({ etiquetaHeredar }) {
+  return (
+    <>
+      <option value="">{etiquetaHeredar}</option>
+      {PRESETS_TONO.map((preset) => (
+        <option key={preset.id} value={preset.id}>
+          {preset.nombre}
+        </option>
+      ))}
+    </>
+  );
+}
+
+/** Cupo escrito en un campo de texto como entero de `CUPO_MIN` a `CUPO_MAX`, o `null` si no sirve (vacío, decimal, fuera de rango). */
+function leerCupo(texto) {
+  const limpio = String(texto ?? '').trim();
+  if (!/^\d+$/.test(limpio)) return null;
+  const cupo = Number(limpio);
+  return cupo >= CUPO_MIN && cupo <= CUPO_MAX ? cupo : null;
+}
 
 const BASE_BOTON =
   'flex items-center justify-center gap-1 px-space-sm py-space-2xs min-h-10 rounded-lg font-mono-label text-mono-label transition-colors motion-reduce:transition-none disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary';
@@ -26,6 +63,12 @@ const CLASE_INPUT =
 
 function plural(cantidad, singular, pluralTexto) {
   return `${cantidad} ${cantidad === 1 ? singular : pluralTexto}`;
+}
+
+/** "7 / 60 alumnos" (inscritos sobre cupo). Si el backend todavía no manda el cupo, queda el conteo de siempre. */
+function textoOcupacion(curso) {
+  if (curso.cupo == null) return plural(curso.estudiantes, 'estudiante', 'estudiantes');
+  return `${curso.estudiantes} / ${curso.cupo} alumnos`;
 }
 
 /** Texto de un facilitador en los selectores: el nombre solo puede repetirse, así que va con su correo. */
@@ -290,14 +333,26 @@ function TarjetaCurso({
 }) {
   const [renombrando, setRenombrando] = useState(false);
   const [nombreEdicion, setNombreEdicion] = useState(curso.nombre);
+  // Cupo: el texto del campo vive acá (no en `curso`), así el sondeo de 8 s no lo pisa mientras se escribe.
+  const [editandoCupo, setEditandoCupo] = useState(false);
+  const [cupoEdicion, setCupoEdicion] = useState('');
+  const [errorCupo, setErrorCupo] = useState(null);
+  // Tono de Turing: igual que el cupo, la opción elegida vive acá para que el sondeo de 8 s no la pise mientras se edita.
+  const [editandoTono, setEditandoTono] = useState(false);
+  const [tonoEdicion, setTonoEdicion] = useState(''); // '' = hereda el del perfil del facilitador
+  const [errorTono, setErrorTono] = useState(null);
   const [confirmando, setConfirmando] = useState(null); // 'codigo' | 'eliminar' | 'asignar' | null
   const [destinoId, setDestinoId] = useState(''); // facilitador elegido en "Asignar a…"
   const [ocupado, setOcupado] = useState(false);
   const [error, setError] = useState(null);
   const [copiado, setCopiado] = useState(false);
+  // Qué está desplegado en la tarjeta. Vive acá (no en `curso`) para que el sondeo de 8 s, que solo reemplaza los
+  // datos del curso, no cierre ni pise la lista de estudiantes ni el reporte que el facilitador tiene abiertos.
   const [verEstudiantes, setVerEstudiantes] = useState(false);
+  const [verReporte, setVerReporte] = useState(false);
   const temporizadorCopiado = useRef(null);
   const idEstudiantes = `estudiantes-curso-${curso.id}`;
+  const idReporte = `reporte-curso-${curso.id}`;
 
   useEffect(() => () => clearTimeout(temporizadorCopiado.current), []);
 
@@ -307,14 +362,19 @@ function TarjetaCurso({
     [alSincronizarCantidad, curso.id]
   );
 
-  /** Corre una acción de red marcando el curso como ocupado y mostrando el error en la tarjeta si falla. */
-  async function ejecutar(accion, mensajePorDefecto) {
+  /**
+   * Corre una acción de red marcando el curso como ocupado y mostrando el error en la tarjeta si falla.
+   * `fijarError` dice dónde se muestra: por defecto en la tarjeta; los formularios del cupo y del tono usan el suyo.
+   */
+  async function ejecutar(accion, mensajePorDefecto, fijarError = setError) {
     setOcupado(true);
     setError(null);
+    setErrorCupo(null);
+    setErrorTono(null);
     try {
       return await accion();
     } catch (err) {
-      setError(err.message || mensajePorDefecto);
+      fijarError(err.message || mensajePorDefecto);
       return undefined;
     } finally {
       setOcupado(false);
@@ -365,6 +425,63 @@ function TarjetaCurso({
     }
   }
 
+  function empezarEditarCupo() {
+    setCupoEdicion(String(curso.cupo ?? CUPO_POR_DEFECTO));
+    setError(null);
+    setErrorCupo(null);
+    setConfirmando(null);
+    setEditandoCupo(true);
+  }
+
+  async function guardarCupo(evento) {
+    evento.preventDefault();
+    const cupo = leerCupo(cupoEdicion);
+    if (cupo === null) {
+      setErrorCupo(MENSAJE_CUPO_INVALIDO);
+      return;
+    }
+    if (cupo === curso.cupo) {
+      setEditandoCupo(false);
+      return;
+    }
+    // Si el backend lo rechaza (por ejemplo, menos que los alumnos ya inscritos) su mensaje se muestra tal cual.
+    const actualizado = await ejecutar(
+      () => editarCurso(curso.id, { cupo }),
+      'No se pudo cambiar el cupo del curso.',
+      setErrorCupo
+    );
+    if (actualizado) {
+      alCambiar(curso.id, actualizado); // refresca la tarjeta con lo que respondió el servidor (cupo y estudiantes)
+      setEditandoCupo(false);
+    }
+  }
+
+  function empezarEditarTono() {
+    setTonoEdicion(tonoPropioDeCurso(curso));
+    setError(null);
+    setErrorTono(null);
+    setConfirmando(null);
+    setEditandoTono(true);
+  }
+
+  async function guardarTono(evento) {
+    evento.preventDefault();
+    if (tonoEdicion === tonoPropioDeCurso(curso)) {
+      setEditandoTono(false); // no cambió nada: no hace falta pedirle nada al servidor
+      return;
+    }
+    // Si el backend lo rechaza, su mensaje se muestra tal cual en el formulario del tono.
+    const actualizado = await ejecutar(
+      () => editarCurso(curso.id, { preset_ensenanza: tonoEdicion === '' ? TONO_HEREDADO : tonoEdicion }),
+      'No se pudo cambiar el tono del curso.',
+      setErrorTono
+    );
+    if (actualizado) {
+      alCambiar(curso.id, actualizado); // refresca la insignia con `preset_ensenanza` y `preset_efectivo` del servidor
+      setEditandoTono(false);
+    }
+  }
+
   async function generarCodigoNuevo() {
     const actualizado = await ejecutar(() => regenerarCodigoCurso(curso.id), 'No se pudo generar un código nuevo.');
     if (actualizado) {
@@ -400,7 +517,16 @@ function TarjetaCurso({
     }
   }
 
+  // Si el curso es de otro facilitador (el principal viendo los de todos), "el de mi perfil" sería mentira: el tono
+  // heredado es el del perfil de su dueño.
+  const duenoAjeno =
+    miId != null && curso.facilitador_id != null && curso.facilitador_id !== miId
+      ? curso.facilitador_nombre || 'otro facilitador'
+      : null;
+  const etiquetaHeredarTono = duenoAjeno ? `El del perfil de ${duenoAjeno}` : 'El de mi perfil';
+  const tonoElegido = buscarTono(tonoEdicion);
   const abierto = curso.acepta_ingresos;
+  const completo =curso.cupo != null && curso.estudiantes >= curso.cupo;
   // Destinos posibles: los facilitadores activos que no son el dueño actual del curso.
   const destinos = (facilitadores?.lista ?? []).filter((f) => f.id !== curso.facilitador_id);
   const destino = destinos.find((f) => String(f.id) === destinoId) ?? null;
@@ -470,6 +596,9 @@ function TarjetaCurso({
         </p>
       )}
 
+      {/* Tono de Turing vigente en el curso (el propio, o el del perfil del facilitador, o el por defecto) */}
+      <InsigniaTonoCurso curso={curso} duenoAjeno={duenoAjeno} />
+
       {/* Código */}
       <div className="flex flex-col gap-space-2xs p-space-sm rounded-lg bg-surface-container-lowest border border-outline-variant/30">
         <span className="font-mono-micro text-mono-micro uppercase tracking-wider text-on-surface-variant">
@@ -524,21 +653,49 @@ function TarjetaCurso({
           <span className="font-mono-micro text-mono-micro uppercase text-on-surface-variant">{abierto ? 'Sí' : 'No'}</span>
         </button>
 
-        <button
-          type="button"
-          onClick={() => setVerEstudiantes((v) => !v)}
-          aria-expanded={verEstudiantes}
-          aria-controls={idEstudiantes}
-          className={BOTON_NEUTRO}
-        >
-          <span className="material-symbols-outlined text-[16px] text-primary" aria-hidden="true">
-            groups
-          </span>
-          {plural(curso.estudiantes, 'estudiante', 'estudiantes')}
-          <span className="material-symbols-outlined text-[16px]" aria-hidden="true">
-            {verEstudiantes ? 'expand_less' : 'expand_more'}
-          </span>
-        </button>
+        <div className="flex flex-wrap items-center gap-space-xs">
+          {completo && (
+            <span
+              className="flex items-center gap-1 font-mono-micro text-mono-micro tracking-wide uppercase px-space-xs py-space-2xs rounded-full font-medium shrink-0 bg-tertiary/10 text-tertiary border border-tertiary/40"
+              title="El curso llegó a su cupo: nadie más puede entrar hasta que subas el cupo o saques a alguien."
+            >
+              <span className="material-symbols-outlined text-[14px]" aria-hidden="true">
+                event_busy
+              </span>
+              Completo
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => setVerEstudiantes((v) => !v)}
+            aria-expanded={verEstudiantes}
+            aria-controls={idEstudiantes}
+            className={BOTON_NEUTRO}
+          >
+            <span className="material-symbols-outlined text-[16px] text-primary" aria-hidden="true">
+              groups
+            </span>
+            {textoOcupacion(curso)}
+            <span className="material-symbols-outlined text-[16px]" aria-hidden="true">
+              {verEstudiantes ? 'expand_less' : 'expand_more'}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setVerReporte((v) => !v)}
+            aria-expanded={verReporte}
+            aria-controls={idReporte}
+            className={BOTON_NEUTRO}
+          >
+            <span className="material-symbols-outlined text-[16px] text-primary" aria-hidden="true">
+              monitoring
+            </span>
+            Reporte
+            <span className="material-symbols-outlined text-[16px]" aria-hidden="true">
+              {verReporte ? 'expand_less' : 'expand_more'}
+            </span>
+          </button>
+        </div>
       </div>
 
       {error && <AvisoError mensaje={error} />}
@@ -550,6 +707,18 @@ function TarjetaCurso({
             edit
           </span>
           Renombrar
+        </button>
+        <button type="button" onClick={empezarEditarCupo} disabled={ocupado || editandoCupo} className={BOTON_NEUTRO}>
+          <span className="material-symbols-outlined text-[16px] text-primary" aria-hidden="true">
+            event_seat
+          </span>
+          Cupo
+        </button>
+        <button type="button" onClick={empezarEditarTono} disabled={ocupado || editandoTono} className={BOTON_NEUTRO}>
+          <span className="material-symbols-outlined text-[16px] text-primary" aria-hidden="true">
+            record_voice_over
+          </span>
+          Tono
         </button>
         <button
           type="button"
@@ -590,6 +759,87 @@ function TarjetaCurso({
           Eliminar
         </button>
       </div>
+
+      {/* Cupo: mismo patrón que "Renombrar" (campo + Guardar/Cancelar), justo debajo de las acciones */}
+      {editandoCupo && (
+        <div className="flex flex-col gap-space-xs">
+          {/* noValidate: el error de cupo fuera de rango se muestra abajo, igual que los del servidor */}
+          <form onSubmit={guardarCupo} noValidate className="flex flex-col sm:flex-row sm:items-end gap-space-xs">
+            <div className="flex flex-col gap-1 flex-1 min-w-0">
+              <label
+                htmlFor={`curso-cupo-${curso.id}`}
+                className="font-mono-micro text-mono-micro uppercase tracking-wider text-on-surface-variant"
+              >
+                Cupo de alumnos
+              </label>
+              <input
+                id={`curso-cupo-${curso.id}`}
+                type="number"
+                inputMode="numeric"
+                min={CUPO_MIN}
+                max={CUPO_MAX}
+                step={1}
+                value={cupoEdicion}
+                onChange={(e) => setCupoEdicion(e.target.value)}
+                autoFocus
+                aria-describedby={`curso-cupo-ayuda-${curso.id}`}
+                className={CLASE_INPUT}
+              />
+            </div>
+            <div className="flex gap-space-xs">
+              <button type="submit" disabled={ocupado} className={BOTON_PRINCIPAL}>
+                {ocupado ? 'Guardando…' : 'Guardar'}
+              </button>
+              <button type="button" onClick={() => setEditandoCupo(false)} disabled={ocupado} className={BOTON_NEUTRO}>
+                Cancelar
+              </button>
+            </div>
+          </form>
+          <p id={`curso-cupo-ayuda-${curso.id}`} className="m-0 font-mono-micro text-mono-micro text-on-surface-variant">
+            {AYUDA_CUPO} Ahora hay {plural(curso.estudiantes, 'inscrito', 'inscritos')}: el cupo no puede ser menor.
+          </p>
+          {errorCupo && <AvisoError mensaje={errorCupo} />}
+        </div>
+      )}
+
+      {/* Tono: mismo patrón que el cupo (selector + Guardar/Cancelar), justo debajo de las acciones */}
+      {editandoTono && (
+        <div className="flex flex-col gap-space-xs">
+          <form onSubmit={guardarTono} className="flex flex-col sm:flex-row sm:items-end gap-space-xs">
+            <div className="flex flex-col gap-1 flex-1 min-w-0">
+              <label
+                htmlFor={`curso-tono-${curso.id}`}
+                className="font-mono-micro text-mono-micro uppercase tracking-wider text-on-surface-variant"
+              >
+                Tono de Turing en este curso
+              </label>
+              <select
+                id={`curso-tono-${curso.id}`}
+                value={tonoEdicion}
+                onChange={(e) => setTonoEdicion(e.target.value)}
+                disabled={ocupado}
+                autoFocus
+                aria-describedby={`curso-tono-ayuda-${curso.id}`}
+                className={CLASE_INPUT}
+              >
+                <OpcionesTono etiquetaHeredar={etiquetaHeredarTono} />
+              </select>
+            </div>
+            <div className="flex gap-space-xs">
+              <button type="submit" disabled={ocupado} className={BOTON_PRINCIPAL}>
+                {ocupado ? 'Guardando…' : 'Guardar'}
+              </button>
+              <button type="button" onClick={() => setEditandoTono(false)} disabled={ocupado} className={BOTON_NEUTRO}>
+                Cancelar
+              </button>
+            </div>
+          </form>
+          <p id={`curso-tono-ayuda-${curso.id}`} className="m-0 font-mono-micro text-mono-micro text-on-surface-variant">
+            {AYUDA_TONO} {tonoElegido ? tonoElegido.descripcion : AYUDA_TONO_HEREDADO}
+          </p>
+          {errorTono && <AvisoError mensaje={errorTono} />}
+        </div>
+      )}
 
       {confirmando === 'codigo' && (
         <Confirmacion
@@ -683,6 +933,12 @@ function TarjetaCurso({
           <ListaEstudiantes cursoId={curso.id} alActualizarCantidad={actualizarCantidad} />
         </div>
       )}
+
+      {verReporte && (
+        <div id={idReporte} className="min-w-0">
+          <ReporteCurso cursoId={curso.id} />
+        </div>
+      )}
     </li>
   );
 }
@@ -701,6 +957,8 @@ export default function PanelCursos({ usuarioActual = null }) {
   const [cargando, setCargando] = useState(false);
   const [errorLista, setErrorLista] = useState(null);
   const [nombreNuevo, setNombreNuevo] = useState('');
+  const [cupoNuevo, setCupoNuevo] = useState(String(CUPO_POR_DEFECTO)); // texto del campo; se valida al crear
+  const [tonoNuevo, setTonoNuevo] = useState(''); // '' = hereda el tono del perfil del facilitador (no se manda)
   const [creando, setCreando] = useState(false);
   const [errorCrear, setErrorCrear] = useState(null);
   const [aviso, setAviso] = useState(null);
@@ -781,6 +1039,8 @@ export default function PanelCursos({ usuarioActual = null }) {
     recargar: () => setRecargaFacilitadores((n) => n + 1),
   };
   const otrosFacilitadores = (listaFacilitadores ?? []).filter((f) => f.id !== miId);
+  // Si el principal crea el curso a nombre de otro, "el de mi perfil" sería mentira: hereda el del perfil de ese facilitador.
+  const etiquetaHeredarTonoNuevo = esPrincipal && crearPara !== '' ? 'El del perfil del facilitador' : 'El de mi perfil';
   // Lo que se le dice al principal junto al selector "Crear para…" cuando no hay a quién elegir todavía.
   const ayudaCrearPara =
     !esPrincipal || errorFacilitadores
@@ -843,13 +1103,18 @@ export default function PanelCursos({ usuarioActual = null }) {
       setErrorCrear(`El nombre tiene que tener al menos ${NOMBRE_MIN} caracteres.`);
       return;
     }
+    const cupo = leerCupo(cupoNuevo);
+    if (cupo === null) {
+      setErrorCrear(MENSAJE_CUPO_INVALIDO);
+      return;
+    }
     setCreando(true);
     setErrorCrear(null);
     setAviso(null);
     try {
       const paraOtro = esPrincipal && crearPara !== '';
       versionLocalRef.current += 1;
-      const creado = await crearCurso(nombre, paraOtro ? Number(crearPara) : null);
+      const creado = await crearCurso(nombre, paraOtro ? Number(crearPara) : null, cupo, tonoNuevo || null);
       versionLocalRef.current += 1;
       // Un curso creado a nombre de otro facilitador no es de "mis cursos": solo se agrega si se ven todos.
       if (!paraOtro || pedirTodos) setCursos((lista) => [...(lista ?? []), creado]);
@@ -954,8 +1219,8 @@ export default function PanelCursos({ usuarioActual = null }) {
             </div>
           )}
 
-          <form onSubmit={crear} className="flex flex-col sm:flex-row sm:items-end gap-space-xs">
-            <div className="flex flex-col gap-1 flex-1 min-w-0">
+          <form onSubmit={crear} noValidate className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-space-xs">
+            <div className="flex flex-col gap-1 flex-1 min-w-0 sm:min-w-56">
               <label
                 htmlFor="curso-nombre-nuevo"
                 className="font-mono-micro text-mono-micro uppercase tracking-wider text-on-surface-variant"
@@ -970,6 +1235,43 @@ export default function PanelCursos({ usuarioActual = null }) {
                 placeholder="Ej.: Ajedrez 2do año B"
                 className={CLASE_INPUT}
               />
+            </div>
+            <div className="flex flex-col gap-1 sm:w-36 min-w-0">
+              <label
+                htmlFor="curso-cupo-nuevo"
+                className="font-mono-micro text-mono-micro uppercase tracking-wider text-on-surface-variant"
+              >
+                Cupo de alumnos
+              </label>
+              <input
+                id="curso-cupo-nuevo"
+                type="number"
+                inputMode="numeric"
+                min={CUPO_MIN}
+                max={CUPO_MAX}
+                step={1}
+                value={cupoNuevo}
+                onChange={(e) => setCupoNuevo(e.target.value)}
+                aria-describedby="curso-cupo-nuevo-ayuda"
+                className={CLASE_INPUT}
+              />
+            </div>
+            <div className="flex flex-col gap-1 sm:w-52 min-w-0">
+              <label
+                htmlFor="curso-tono-nuevo"
+                className="font-mono-micro text-mono-micro uppercase tracking-wider text-on-surface-variant"
+              >
+                Tono de Turing en este curso
+              </label>
+              <select
+                id="curso-tono-nuevo"
+                value={tonoNuevo}
+                onChange={(e) => setTonoNuevo(e.target.value)}
+                aria-describedby="curso-tono-nuevo-ayuda"
+                className={CLASE_INPUT}
+              >
+                <OpcionesTono etiquetaHeredar={etiquetaHeredarTonoNuevo} />
+              </select>
             </div>
             {esPrincipal && (
               <div className="flex flex-col gap-1 sm:w-64 min-w-0">
@@ -1006,6 +1308,15 @@ export default function PanelCursos({ usuarioActual = null }) {
               {creando ? 'Creando…' : 'Crear curso'}
             </button>
           </form>
+
+          <div className="flex flex-col gap-space-2xs -mt-2">
+            <p id="curso-cupo-nuevo-ayuda" className="m-0 font-mono-micro text-mono-micro text-on-surface-variant">
+              {AYUDA_CUPO}
+            </p>
+            <p id="curso-tono-nuevo-ayuda" className="m-0 font-mono-micro text-mono-micro text-on-surface-variant">
+              {AYUDA_TONO}
+            </p>
+          </div>
 
           {ayudaCrearPara && (
             <p className="m-0 font-mono-micro text-mono-micro text-on-surface-variant" role="status">

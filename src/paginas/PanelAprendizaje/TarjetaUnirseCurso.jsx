@@ -1,40 +1,38 @@
 import { useState } from 'react';
 import FormularioUnirseCurso from '../../componentes/FormularioUnirseCurso';
+import { cargarDescartada, guardarDescartada } from './invitacionCurso';
 
-function claveSinCurso(usuarioId) {
-  return `panel_aprendizaje_sin_curso_${usuarioId ?? 'anon'}`;
-}
-
-/** `true` si el jugador ya dijo "No, juego por mi cuenta" (se recuerda por usuario; si el storage falla, `false`). */
-function cargarDescartada(usuarioId) {
-  try {
-    return localStorage.getItem(claveSinCurso(usuarioId)) === '1';
-  } catch {
-    return false;
-  }
-}
-
-function guardarDescartada(usuarioId) {
-  try {
-    localStorage.setItem(claveSinCurso(usuarioId), '1');
-  } catch {
-    // localStorage puede fallar (modo privado, cuota): la tarjeta igual se oculta mientras dure la pantalla.
-  }
-}
+// Sin colores ni relleno propios para poder combinarlos sin que dos clases del mismo tipo se pisen.
+const BASE_BOTON =
+  'min-h-10 rounded-lg font-body-sm text-body-sm transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary';
+const COLOR_NEUTRO = 'bg-surface-container-high hover:bg-surface-bright text-on-surface';
+const COLOR_PRINCIPAL = 'bg-primary hover:bg-primary-fixed text-on-primary font-medium';
+const BOTON_NEUTRO = `${BASE_BOTON} ${COLOR_NEUTRO} px-space-md py-space-xs`;
 
 /**
- * Invitación discreta y opcional a entrar a un curso, para el Panel de Aprendizaje del jugador. Jugar por cuenta
- * propia es una experiencia completa: por eso solo aparece si el jugador NO está en un curso y todavía no la
- * descartó, y nunca se muestra al registrarse ni al iniciar sesión.
+ * Invitación discreta y opcional a entrar a un curso, para el jugador. Jugar por cuenta propia es una experiencia
+ * completa: por eso solo aparece si el jugador NO está en un curso y todavía no la descartó, y nunca se muestra al
+ * registrarse ni al iniciar sesión.
  *
  * `miCurso`: `undefined` = todavía no se sabe (o falló el pedido: no se invita sin saberlo), `null` = no está en
  * ninguno, o el curso en el que ya está (entonces no se muestra nada). `alUnirse(curso)` avisa a la pantalla
  * cuando entró. `alIrAPerfil` es opcional: si viene, "Mi Perfil" es un enlace.
+ *
+ * `compacta` es la versión en una franja delgada (Sala de Control): "Unirme" despliega el campo del código y
+ * "No, juego por mi cuenta" la descarta. Las dos versiones recuerdan el descarte con la misma clave, así que
+ * descartarla en una pantalla la oculta también en la otra.
  */
-export default function TarjetaUnirseCurso({ usuarioId = null, miCurso, alUnirse, alIrAPerfil = null }) {
+export default function TarjetaUnirseCurso({
+  usuarioId = null,
+  miCurso,
+  alUnirse,
+  alIrAPerfil = null,
+  compacta = false,
+}) {
   const [descartada, setDescartada] = useState(() => cargarDescartada(usuarioId));
   const [unido, setUnido] = useState(null); // el curso al que entró desde esta tarjeta
   const [confirmacionCerrada, setConfirmacionCerrada] = useState(false);
+  const [desplegada, setDesplegada] = useState(false); // solo en la versión compacta: campo del código a la vista
 
   const enlacePerfil = alIrAPerfil ? (
     <button
@@ -67,7 +65,7 @@ export default function TarjetaUnirseCurso({ usuarioId = null, miCurso, alUnirse
         <button
           type="button"
           onClick={() => setConfirmacionCerrada(true)}
-          className="self-start min-h-10 px-space-md py-space-xs rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface font-body-sm text-body-sm transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+          className={`${BOTON_NEUTRO} self-start`}
         >
           Listo
         </button>
@@ -85,6 +83,58 @@ export default function TarjetaUnirseCurso({ usuarioId = null, miCurso, alUnirse
   function manejarUnido(curso) {
     setUnido(curso);
     alUnirse?.(curso);
+  }
+
+  if (compacta) {
+    return (
+      <section
+        aria-labelledby="tarjeta-unirse-curso-compacta-titulo"
+        className="flex flex-col gap-space-xs bg-surface-container-low/70 backdrop-blur-md rounded-xl px-space-md py-space-sm shadow-md min-w-0"
+      >
+        <div className="flex flex-wrap items-center gap-x-space-sm gap-y-space-xs">
+          <div className="flex items-start gap-space-xs grow basis-48 min-w-0">
+            <span className="material-symbols-outlined text-[18px] text-primary shrink-0 mt-0.5" aria-hidden="true">
+              groups
+            </span>
+            <div className="flex flex-col min-w-0">
+              <h2
+                id="tarjeta-unirse-curso-compacta-titulo"
+                className="m-0 font-body-sm text-body-sm font-medium text-on-surface"
+              >
+                ¿Tenés un código de curso?
+              </h2>
+              <p className="m-0 hidden sm:block font-mono-micro text-mono-micro text-on-surface-variant">
+                Es opcional. Podés unirte cuando quieras desde {enlacePerfil}.
+              </p>
+            </div>
+          </div>
+          {/* En celular los botones van en su propia fila y el segundo puede partir su texto en dos líneas */}
+          <div className="flex items-stretch gap-space-xs w-full sm:w-auto min-w-0">
+            <button
+              type="button"
+              onClick={() => setDesplegada((v) => !v)}
+              aria-expanded={desplegada}
+              aria-controls="tarjeta-unirse-curso-compacta-campo"
+              className={`${BASE_BOTON} ${desplegada ? COLOR_NEUTRO : COLOR_PRINCIPAL} px-space-md py-space-xs shrink-0`}
+            >
+              {desplegada ? 'Cancelar' : 'Unirme'}
+            </button>
+            <button
+              type="button"
+              onClick={jugarPorMiCuenta}
+              className={`${BASE_BOTON} ${COLOR_NEUTRO} px-space-sm py-space-2xs flex-1 min-w-0 text-center`}
+            >
+              No, juego por mi cuenta
+            </button>
+          </div>
+        </div>
+        {desplegada && (
+          <div id="tarjeta-unirse-curso-compacta-campo" className="flex flex-col gap-space-xs">
+            <FormularioUnirseCurso alUnido={manejarUnido} idCampo="sala-curso-codigo" autoEnfocar />
+          </div>
+        )}
+      </section>
+    );
   }
 
   return (
@@ -106,11 +156,7 @@ export default function TarjetaUnirseCurso({ usuarioId = null, miCurso, alUnirse
       </p>
       <FormularioUnirseCurso alUnido={manejarUnido} idCampo="panel-curso-codigo" />
       <div className="flex flex-wrap items-center gap-x-space-sm gap-y-space-2xs">
-        <button
-          type="button"
-          onClick={jugarPorMiCuenta}
-          className="min-h-10 px-space-md py-space-xs rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface font-body-sm text-body-sm transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-        >
+        <button type="button" onClick={jugarPorMiCuenta} className={BOTON_NEUTRO}>
           No, juego por mi cuenta
         </button>
         <span className="font-mono-micro text-mono-micro text-on-surface-variant">
