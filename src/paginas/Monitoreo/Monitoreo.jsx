@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
-import { listarPartidas, listarUsuarios, obtenerPartida } from '../../api/backend';
+import {
+  listarCursos,
+  listarEstudiantesCurso,
+  listarPartidas,
+  listarUsuarios,
+  obtenerPartida,
+  obtenerPerfil,
+} from '../../api/backend';
 import { turnoDeFen } from '../../ajedrez';
 import { fechaDesdeIso } from '../../formatoTiempo';
 import TableroSoloLectura from '../../componentes/TableroSoloLectura';
@@ -12,6 +19,13 @@ const TAMANO_PAGINA = 4; // patrón "DVR de cámaras": hasta 4 tableros a la vez
 const INTERVALO_SONDEO_LISTA_MS = 5000; // refresca qué partidas hay activas
 const INTERVALO_SONDEO_GRANDE_MS = 1500; // mismo criterio que DemostracionEnVivo
 const INTERVALO_SONDEO_ROSTER_MS = 60000; // el roster cambia poco — alcanza con refrescarlo cada tanto
+const CLASE_SELECT =
+  'w-full min-h-10 px-space-sm py-space-xs rounded-lg bg-surface-container-lowest border border-outline-variant/40 text-on-surface font-body-sm text-body-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
+
+/** Texto de un curso en el filtro: al principal, que ve los de todos, se le agrega el facilitador dueño. */
+function etiquetaCurso(curso, conDueno) {
+  return conDueno && curso.facilitador_nombre ? `${curso.nombre} · ${curso.facilitador_nombre}` : curso.nombre;
+}
 
 /**
  * Pantalla de facilitador: ver en simultáneo hasta 4 partidas de estudiantes
@@ -27,12 +41,27 @@ const INTERVALO_SONDEO_ROSTER_MS = 60000; // el roster cambia poco — alcanza c
  * pruebas) se cuela como si fuera un estudiante jugando. Por eso se cruza
  * contra el roster real (`listarUsuarios()`, rol === 'jugador') en vez de
  * confiar en la ausencia de mi propio id.
+ *
+ * Si el facilitador tiene cursos, aparecen dos filtros en la grilla:
+ *  - "Curso": con uno elegido solo se ven los estudiantes inscritos en él (salen de
+ *    `GET /cursos/{id}/estudiantes`). Un facilitador principal (`es_principal`, releído de `GET /auth/me`)
+ *    elige entre los cursos de TODOS los facilitadores (`GET /cursos?todos=true`, con el nombre del dueño);
+ *    los demás, entre los propios.
+ *  - "Jugador": depende del curso; con uno elegido la grilla muestra solo a ese jugador.
+ * Sin cursos no se muestra ningún filtro y todo queda como siempre.
  */
 export default function Monitoreo() {
   const [partidas, setPartidas] = useState([]);
   const [jugadores, setJugadores] = useState(new Map()); // usuario_id (jugador real) -> rango_estimado
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
+  const [esPrincipal, setEsPrincipal] = useState(false);
+  const [cursos, setCursos] = useState([]); // cursos para el filtro (los propios, o todos si es principal)
+  const [cursoFiltro, setCursoFiltro] = useState('todos'); // 'todos' o el id (texto) del curso elegido
+  const [jugadorFiltro, setJugadorFiltro] = useState('todos'); // 'todos' o el id (texto) del jugador elegido
+  const [estudiantesCurso, setEstudiantesCurso] = useState(null); // inscritos en el curso elegido; null = sin filtro, cargando o con error
+  const [errorFiltro, setErrorFiltro] = useState(null);
+  const [recargaFiltro, setRecargaFiltro] = useState(0);
   const [vista, setVista] = useState('grilla'); // 'grilla' | 'grande'
   const [partidaSeleccionadaId, setPartidaSeleccionadaId] = useState(null);
   const [pagina, setPagina] = useState(0);
@@ -82,6 +111,96 @@ export default function Monitoreo() {
       clearInterval(intervalo);
     };
   }, []);
+
+  // Cursos para armar el filtro. Primero se confirma con el servidor si el usuario es facilitador principal
+  // (la sesión guardada puede ser vieja): el principal elige entre los cursos de todos los facilitadores, los
+  // demás entre los propios. Si algo falla o no hay cursos, el filtro no se muestra y la pantalla funciona igual
+  // que antes (no vale la pena un error por algo opcional).
+  useEffect(() => {
+    let cancelado = false;
+    async function cargarCursos() {
+      let principal = false;
+      try {
+        const perfil = await obtenerPerfil();
+        principal = perfil?.es_principal === true;
+      } catch {
+        // sin el perfil se sigue como facilitador común
+      }
+      if (cancelado) return;
+      setEsPrincipal(principal);
+      let lista = null;
+      try {
+        lista = await listarCursos(principal);
+      } catch {
+        if (principal) {
+          try {
+            lista = await listarCursos(false);
+          } catch {
+            // sin cursos: no hay filtro
+          }
+        }
+      }
+      if (!cancelado) setCursos(Array.isArray(lista) ? lista : []);
+    }
+    cargarCursos();
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+
+  // Estudiantes del curso elegido en el filtro. Se vuelven a pedir con el mismo ritmo que el roster: alguien
+  // puede entrar al curso o salir de él mientras esta pantalla está abierta. Si el pedido falla no se adivina:
+  // se muestra el error con "Reintentar" (y, si ya había una lista, se sigue con la que había).
+  useEffect(() => {
+    if (cursoFiltro === 'todos') return undefined;
+    let cancelado = false;
+    function sondearEstudiantes() {
+      listarEstudiantesCurso(cursoFiltro)
+        .then((estudiantes) => {
+          if (cancelado) return;
+          setEstudiantesCurso(estudiantes);
+          setErrorFiltro(null);
+        })
+        .catch((err) => {
+          if (!cancelado) setErrorFiltro(err.message || 'No se pudieron cargar los jugadores de ese curso.');
+        });
+    }
+    sondearEstudiantes();
+    const intervalo = setInterval(sondearEstudiantes, INTERVALO_SONDEO_ROSTER_MS);
+    return () => {
+      cancelado = true;
+      clearInterval(intervalo);
+    };
+  }, [cursoFiltro, recargaFiltro]);
+
+  // Si el jugador elegido ya no está en el curso (lo sacaron o salió), se vuelve a "Todos los jugadores".
+  useEffect(() => {
+    if (jugadorFiltro === 'todos' || estudiantesCurso === null) return;
+    if (!estudiantesCurso.some((e) => String(e.id) === jugadorFiltro)) setJugadorFiltro('todos');
+  }, [estudiantesCurso, jugadorFiltro]);
+
+  // Cambiar de curso reinicia el jugador a "Todos" y vuelve a la primera página.
+  function elegirCurso(valor) {
+    setErrorFiltro(null);
+    setEstudiantesCurso(null);
+    setJugadorFiltro('todos');
+    setPagina(0);
+    setCursoFiltro(valor);
+  }
+
+  function elegirJugador(valor) {
+    setPagina(0);
+    setJugadorFiltro(valor);
+  }
+
+  function reintentarFiltro() {
+    setErrorFiltro(null);
+    setRecargaFiltro((n) => n + 1);
+  }
+
+  function quitarFiltros() {
+    elegirCurso('todos');
+  }
 
   // Lista completa de partidas — corre siempre en segundo plano (aunque esté
   // en vista grande) para que la grilla ya esté al día al volver.
@@ -160,9 +279,24 @@ export default function Monitoreo() {
       return porUsuario;
     }, new Map());
 
-  const partidasActivas = Array.from(masRecientePorJugador.values()).sort(
+  const partidasActivasTodas = Array.from(masRecientePorJugador.values()).sort(
     (a, b) => (fechaDesdeIso(b.creada_en)?.getTime() ?? 0) - (fechaDesdeIso(a.creada_en)?.getTime() ?? 0)
   );
+
+  // Filtros. Con un curso elegido solo cuentan sus estudiantes (y con un jugador elegido, solo ese); mientras llega
+  // la lista del curso no se muestra ninguna partida (ni se adivina si falló).
+  const filtrandoCurso = cursoFiltro !== 'todos';
+  const filtrandoJugador = filtrandoCurso && jugadorFiltro !== 'todos';
+  const cargandoFiltro = filtrandoCurso && estudiantesCurso === null && !errorFiltro;
+  const falloFiltro = filtrandoCurso && estudiantesCurso === null && Boolean(errorFiltro);
+  const idsDelCurso = estudiantesCurso ? new Set(estudiantesCurso.map((e) => e.id)) : null;
+  const cursoElegido = filtrandoCurso ? cursos.find((c) => String(c.id) === cursoFiltro) : null;
+  const jugadorElegido = filtrandoJugador ? estudiantesCurso?.find((e) => String(e.id) === jugadorFiltro) : null;
+  const partidasActivas = filtrandoCurso
+    ? partidasActivasTodas.filter(
+        (p) => Boolean(idsDelCurso?.has(p.usuario_id)) && (!filtrandoJugador || String(p.usuario_id) === jugadorFiltro)
+      )
+    : partidasActivasTodas;
 
   const totalPaginas = Math.max(1, Math.ceil(partidasActivas.length / TAMANO_PAGINA));
   const paginaSegura = Math.min(pagina, totalPaginas - 1);
@@ -257,22 +391,137 @@ export default function Monitoreo() {
         </span>
       </div>
 
+      {/* Filtros Curso → Jugador: solo si hay cursos, y solo en la grilla (no en la vista grande) */}
+      {cursos.length > 0 && vista === 'grilla' && (
+        <div className="flex flex-col gap-space-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-space-sm">
+            <div className="flex flex-col gap-space-2xs min-w-0">
+              <label
+                htmlFor="monitoreo-curso"
+                className="font-mono-micro text-mono-micro uppercase tracking-wider text-on-surface-variant"
+              >
+                Curso
+              </label>
+              <select
+                id="monitoreo-curso"
+                value={cursoFiltro}
+                onChange={(e) => elegirCurso(e.target.value)}
+                className={CLASE_SELECT}
+              >
+                <option value="todos">Todos los cursos</option>
+                {cursos.map((curso) => (
+                  <option key={curso.id} value={String(curso.id)}>
+                    {etiquetaCurso(curso, esPrincipal)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-space-2xs min-w-0">
+              <label
+                htmlFor="monitoreo-jugador"
+                className="font-mono-micro text-mono-micro uppercase tracking-wider text-on-surface-variant"
+              >
+                Jugador
+              </label>
+              <select
+                id="monitoreo-jugador"
+                value={jugadorFiltro}
+                onChange={(e) => elegirJugador(e.target.value)}
+                disabled={!filtrandoCurso || !estudiantesCurso || estudiantesCurso.length === 0}
+                className={`${CLASE_SELECT} disabled:opacity-60 disabled:cursor-not-allowed`}
+              >
+                <option value="todos">
+                  {!filtrandoCurso
+                    ? 'Todos los jugadores'
+                    : !estudiantesCurso
+                      ? falloFiltro
+                        ? 'No se pudo cargar'
+                        : 'Cargando jugadores…'
+                      : estudiantesCurso.length === 0
+                        ? 'Sin jugadores inscritos'
+                        : 'Todos los jugadores del curso'}
+                </option>
+                {(estudiantesCurso ?? []).map((estudiante) => (
+                  <option key={estudiante.id} value={String(estudiante.id)}>
+                    {estudiante.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {filtrandoCurso && (
+            <div className="flex flex-wrap items-center gap-x-space-sm gap-y-space-2xs">
+              {estudiantesCurso && (
+                <p role="status" className="m-0 font-mono-micro text-mono-micro text-on-surface-variant">
+                  Mostrando {partidasActivas.length} de {partidasActivasTodas.length}{' '}
+                  {partidasActivasTodas.length === 1 ? 'partida en curso' : 'partidas en curso'}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={quitarFiltros}
+                className="flex items-center gap-1 px-space-sm py-space-2xs min-h-10 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface font-mono-label text-mono-label transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+              >
+                <span className="material-symbols-outlined text-[16px] text-primary" aria-hidden="true">
+                  filter_alt_off
+                </span>
+                Quitar filtros
+              </button>
+            </div>
+          )}
+
+          {errorFiltro && (
+            <div className="flex flex-col gap-space-xs">
+              <div
+                role="alert"
+                className="px-space-md py-space-xs rounded-lg bg-error-container text-on-error-container font-body-sm text-body-sm"
+              >
+                {errorFiltro}
+              </div>
+              {falloFiltro && (
+                <button
+                  type="button"
+                  onClick={reintentarFiltro}
+                  className="self-start flex items-center gap-1 px-space-sm py-space-2xs min-h-10 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface font-mono-label text-mono-label transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                >
+                  <span className="material-symbols-outlined text-[16px] text-primary" aria-hidden="true">
+                    refresh
+                  </span>
+                  Reintentar
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {error && (
         <div className="px-space-md py-space-xs rounded-lg bg-error-container text-on-error-container font-body-sm text-body-sm">
           {error}
         </div>
       )}
 
-      {cargando ? (
-        <div className="flex flex-col items-center justify-center py-space-xl text-on-surface-variant">
-          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mb-2"></div>
-          <span className="font-mono-micro text-mono-micro">Cargando partidas…</span>
+      {cargando || cargandoFiltro ? (
+        <div className="flex flex-col items-center justify-center py-space-xl text-on-surface-variant" role="status">
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin motion-reduce:animate-none mb-2"></div>
+          <span className="font-mono-micro text-mono-micro">
+            {cargandoFiltro ? 'Cargando jugadores del curso…' : 'Cargando partidas…'}
+          </span>
         </div>
-      ) : partidasActivas.length === 0 ? (
+      ) : falloFiltro ? null /* el error y "Reintentar" ya están arriba, junto a los filtros */ : partidasActivas.length === 0 ? (
         <div className="rounded-lg p-space-lg bg-surface-container-lowest text-center flex flex-col items-center gap-space-xs">
-          <span className="material-symbols-outlined text-[32px] text-outline">sports_esports</span>
+          <span className="material-symbols-outlined text-[32px] text-outline" aria-hidden="true">
+            sports_esports
+          </span>
           <p className="font-body-sm text-body-sm text-on-surface-variant">
-            No hay partidas de estudiantes en curso ahora mismo.
+            {!filtrandoCurso
+              ? 'No hay partidas de estudiantes en curso ahora mismo.'
+              : estudiantesCurso?.length === 0
+                ? `El curso «${cursoElegido?.nombre ?? ''}» todavía no tiene estudiantes inscritos.`
+                : filtrandoJugador
+                  ? `${jugadorElegido?.nombre ?? 'Ese jugador'} no está jugando ahora mismo.`
+                  : `Ningún jugador de «${cursoElegido?.nombre ?? ''}» está jugando ahora mismo.`}
           </p>
         </div>
       ) : vista === 'grande' ? (

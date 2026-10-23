@@ -678,6 +678,7 @@ export default function App() {
                 onSeccionConsumida={() => setSeccionPanelAprendizaje(null)}
                 alIrASalaControl={() => irASalaControl()}
                 alVerTutorial={() => setPedidoTutorial((n) => n + 1)}
+                alIrAPerfil={() => setPantallaActiva('perfil')}
               />
             )
           )}

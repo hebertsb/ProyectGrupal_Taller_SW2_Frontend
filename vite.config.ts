@@ -25,6 +25,7 @@ export default defineConfig({
       '/simulacion': BACKEND_URL,
       '/usuario': BACKEND_URL,
       '/facilitador': BACKEND_URL,
+      '/cursos': BACKEND_URL,
       '/media': BACKEND_URL,
       '/tutor': BACKEND_URL,
       '/entrenamiento': BACKEND_URL,

@@ -1,5 +1,13 @@
 import { useEffect, useState } from 'react';
-import { actualizarPerfil, obtenerVideosFacilitador, subirVideoPieza } from '../../api/backend';
+import {
+  actualizarPerfil,
+  listarCursos,
+  obtenerPerfil,
+  obtenerVideosDeMiCurso,
+  obtenerVideosFacilitador,
+  quitarVideoPieza,
+  subirVideoPieza,
+} from '../../api/backend';
 import { rutaImagenPieza } from '../../ajedrez';
 
 /** 6 piezas — mismo vocabulario que `TIPOS_PIEZA_VALIDOS` en el backend
@@ -70,12 +78,18 @@ function AvisoError({ mensaje }) {
 /**
  * Una tarjeta = una pieza. Maneja su propia selección de archivo y vista
  * previa (con `URL.createObjectURL`, liberada al cancelar/confirmar/desmontar);
- * la subida real y el resultado (éxito/error) los maneja el padre, que es
- * quien sabe qué video quedó guardado para cada pieza.
+ * la subida y el borrado reales y el resultado (éxito/error) los maneja el
+ * padre, que es quien sabe qué video quedó guardado para cada pieza.
+ *
+ * Estado de la pieza: "Video propio" (el facilitador subió uno), "Se usa el
+ * video general" (no tiene propio pero hay uno general del facilitador
+ * principal, que se muestra para ver qué reemplazaría) o "Sin video". Para el
+ * principal su video propio ES el general: sin propio, no hay video.
  */
-function TarjetaVideoPieza({ pieza, urlActual, estado, onSubir }) {
+function TarjetaVideoPieza({ pieza, urlPropio, urlGeneral, esPrincipal, estado, onSubir, onQuitar }) {
   const [archivo, setArchivo] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
+  const [confirmandoQuitar, setConfirmandoQuitar] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -88,6 +102,7 @@ function TarjetaVideoPieza({ pieza, urlActual, estado, onSubir }) {
     evento.target.value = ''; // permite volver a elegir el mismo archivo después
     if (!elegido) return;
     if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setConfirmandoQuitar(false);
     setArchivo(elegido);
     setPreviewUrl(URL.createObjectURL(elegido));
   }
@@ -106,31 +121,95 @@ function TarjetaVideoPieza({ pieza, urlActual, estado, onSubir }) {
     setPreviewUrl(null);
   }
 
+  async function quitar() {
+    const hecho = await onQuitar(pieza.tipo);
+    if (hecho) setConfirmandoQuitar(false);
+  }
+
   const subiendo = estado?.subiendo ?? false;
+  const quitando = estado?.quitando ?? false;
+  const ocupado = subiendo || quitando;
+  // Lo que se ve si el facilitador no tiene video propio: el general (el principal no tiene otro que el suyo).
+  const urlGeneralVisible = !urlPropio && !esPrincipal ? urlGeneral : null;
+  const etiquetaEstado = urlPropio
+    ? esPrincipal
+      ? 'Video propio · es el general'
+      : 'Video propio'
+    : urlGeneralVisible
+      ? 'Se usa el video general'
+      : 'Sin video';
+  const iconoEstado = urlPropio ? 'check_circle' : urlGeneralVisible ? 'public' : 'videocam_off';
+  const claseEstado = urlPropio
+    ? 'bg-primary-container text-primary'
+    : urlGeneralVisible
+      ? 'bg-surface-container-high text-on-surface'
+      : 'bg-surface-container-lowest text-outline border border-outline-variant/40';
+  const mensajeQuitar = esPrincipal
+    ? 'Esta pieza va a quedar sin video general: los jugadores no van a ver ningún video de ella.'
+    : urlGeneral
+      ? 'Tus jugadores van a ver el video general de esta pieza.'
+      : 'Esta pieza va a quedar sin video.';
 
   return (
-    <div className="flex flex-col gap-space-sm p-space-md rounded-xl bg-surface-container-low shadow-md">
-      <div className="flex items-center gap-space-xs">
-        <img src={rutaImagenPieza(pieza.letra)} alt="" className="w-7 h-7 shrink-0" draggable="false" />
-        <span className="font-headline-sm text-headline-sm text-on-surface">{pieza.nombre}</span>
+    <div className="flex flex-col gap-space-sm p-space-md rounded-xl bg-surface-container-low shadow-md min-w-0">
+      <div className="flex flex-wrap items-center justify-between gap-space-xs">
+        <div className="flex items-center gap-space-xs">
+          <img src={rutaImagenPieza(pieza.letra)} alt="" className="w-7 h-7 shrink-0" draggable="false" />
+          <span className="font-headline-sm text-headline-sm text-on-surface">{pieza.nombre}</span>
+        </div>
+        <span
+          className={`flex items-center gap-1 font-mono-micro text-mono-micro tracking-wide uppercase px-space-xs py-space-2xs rounded-full font-medium ${claseEstado}`}
+        >
+          <span className="material-symbols-outlined text-[14px]" aria-hidden="true">
+            {iconoEstado}
+          </span>
+          {etiquetaEstado}
+        </span>
       </div>
 
       {previewUrl ? (
-        <video controls src={previewUrl} className="w-full aspect-video rounded-lg bg-surface-container-lowest" />
-      ) : urlActual ? (
-        <video controls src={urlActual} className="w-full aspect-video rounded-lg bg-surface-container-lowest" />
+        <video
+          controls
+          preload="metadata"
+          src={previewUrl}
+          className="w-full aspect-video rounded-lg bg-surface-container-lowest"
+        />
+      ) : urlPropio ? (
+        <video
+          controls
+          preload="metadata"
+          src={urlPropio}
+          className="w-full aspect-video rounded-lg bg-surface-container-lowest"
+        />
+      ) : urlGeneralVisible ? (
+        <>
+          <video
+            controls
+            preload="metadata"
+            src={urlGeneralVisible}
+            aria-label={`Video general de ${pieza.nombre.toLowerCase()}`}
+            className="w-full aspect-video rounded-lg bg-surface-container-lowest"
+          />
+          <p className="font-mono-micro text-mono-micro text-on-surface-variant">
+            Este es el video general: tus jugadores lo ven hasta que subas el tuyo, y el tuyo lo reemplaza solo en esta
+            pieza.
+          </p>
+        </>
       ) : (
         <div className="w-full aspect-video rounded-lg bg-surface-container-lowest border border-dashed border-outline-variant/40 flex flex-col items-center justify-center gap-space-2xs text-center px-space-sm">
-          <span className="material-symbols-outlined text-[28px] text-outline">videocam</span>
+          <span className="material-symbols-outlined text-[28px] text-outline" aria-hidden="true">
+            videocam
+          </span>
           <p className="font-mono-micro text-mono-micro text-on-surface-variant">
-            Sin video propio — tus estudiantes ven el video por defecto del sistema.
+            Todavía no hay un video de esta pieza.{' '}
+            {esPrincipal ? 'Subí uno y lo ven todos los jugadores.' : 'Subí uno y lo ven los jugadores de tus cursos.'}
           </p>
         </div>
       )}
 
       {previewUrl && (
         <p className="font-mono-micro text-mono-micro text-primary-fixed-dim">
-          Vista previa, todavía sin guardar. Confirmá para reemplazar el video.
+          Vista previa, todavía sin guardar. Confirmá para {urlPropio ? 'reemplazar tu video' : 'guardarlo'}.
         </p>
       )}
 
@@ -140,36 +219,71 @@ function TarjetaVideoPieza({ pieza, urlActual, estado, onSubir }) {
           role="status"
           className="px-space-sm py-space-xs rounded-lg bg-surface-bright text-primary font-body-sm text-body-sm flex items-center gap-space-xs"
         >
-          <span className="material-symbols-outlined text-[18px] shrink-0">check_circle</span>
-          <span>Listo, tus estudiantes ya ven este video.</span>
+          <span className="material-symbols-outlined text-[18px] shrink-0" aria-hidden="true">
+            check_circle
+          </span>
+          <span>
+            {esPrincipal
+              ? 'Listo, todos los jugadores ya ven este video.'
+              : 'Listo, los jugadores de tus cursos ya ven tu video en esta pieza.'}
+          </span>
+        </div>
+      )}
+      {estado?.quitado && !previewUrl && !confirmandoQuitar && (
+        <div
+          role="status"
+          className="px-space-sm py-space-xs rounded-lg bg-surface-bright text-primary font-body-sm text-body-sm flex items-center gap-space-xs"
+        >
+          <span className="material-symbols-outlined text-[18px] shrink-0" aria-hidden="true">
+            check_circle
+          </span>
+          <span>Quitaste tu video de esta pieza.</span>
         </div>
       )}
 
       <div className="flex flex-wrap gap-space-xs pt-space-2xs">
         {!previewUrl ? (
-          <label
-            className={`flex items-center gap-space-2xs px-space-md py-space-sm rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface font-body-sm text-body-sm cursor-pointer transition-colors motion-reduce:transition-none focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-primary ${
-              subiendo ? 'opacity-50 pointer-events-none' : ''
-            }`}
-          >
-            <span className="material-symbols-outlined text-[18px]">upload</span>
-            Reemplazar video
-            <input
-              type="file"
-              accept="video/mp4,video/webm,video/quicktime"
-              className="hidden"
-              onChange={manejarSeleccion}
-              disabled={subiendo}
-              aria-label={`Elegir video de reemplazo para ${pieza.nombre.toLowerCase()}`}
-            />
-          </label>
+          <>
+            <label
+              className={`flex items-center gap-space-2xs px-space-md py-space-sm min-h-10 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface font-body-sm text-body-sm cursor-pointer transition-colors motion-reduce:transition-none focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-primary ${
+                ocupado ? 'opacity-50 pointer-events-none' : ''
+              }`}
+            >
+              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
+                upload
+              </span>
+              {urlPropio ? 'Reemplazar video' : esPrincipal ? 'Subir video' : 'Subir mi video'}
+              <input
+                type="file"
+                accept="video/mp4,video/webm,video/quicktime"
+                className="hidden"
+                onChange={manejarSeleccion}
+                disabled={ocupado}
+                aria-label={`${urlPropio ? 'Elegir video de reemplazo' : 'Elegir video'} para ${pieza.nombre.toLowerCase()}`}
+              />
+            </label>
+            {urlPropio && (
+              <button
+                type="button"
+                onClick={() => setConfirmandoQuitar((v) => !v)}
+                disabled={ocupado}
+                aria-expanded={confirmandoQuitar}
+                className="flex items-center gap-space-2xs px-space-md py-space-sm min-h-10 rounded-lg bg-error/10 hover:bg-error/20 text-error font-body-sm text-body-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              >
+                <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
+                  delete
+                </span>
+                Quitar mi video
+              </button>
+            )}
+          </>
         ) : (
           <>
             <button
               type="button"
               onClick={confirmar}
               disabled={subiendo}
-              className="flex items-center gap-space-2xs px-space-md py-space-sm rounded-lg bg-primary text-on-primary font-body-sm text-body-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              className="flex items-center gap-space-2xs px-space-md py-space-sm min-h-10 rounded-lg bg-primary text-on-primary font-body-sm text-body-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             >
               {subiendo && (
                 <div className="w-4 h-4 border-2 border-on-primary/30 border-t-on-primary rounded-full animate-spin motion-reduce:animate-none" />
@@ -180,13 +294,37 @@ function TarjetaVideoPieza({ pieza, urlActual, estado, onSubir }) {
               type="button"
               onClick={cancelar}
               disabled={subiendo}
-              className="flex items-center gap-space-2xs px-space-md py-space-sm rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface disabled:opacity-50 disabled:cursor-not-allowed font-body-sm text-body-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              className="flex items-center gap-space-2xs px-space-md py-space-sm min-h-10 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface disabled:opacity-50 disabled:cursor-not-allowed font-body-sm text-body-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             >
               Cancelar
             </button>
           </>
         )}
       </div>
+
+      {urlPropio && confirmandoQuitar && !previewUrl && (
+        <div role="alert" className="flex flex-col gap-space-xs p-space-sm rounded-lg bg-error/10 border border-error/40">
+          <p className="m-0 font-body-sm text-body-sm text-on-surface">{mensajeQuitar}</p>
+          <div className="flex flex-wrap gap-space-xs">
+            <button
+              type="button"
+              onClick={quitar}
+              disabled={quitando}
+              className="flex items-center gap-space-2xs px-space-md py-space-xs min-h-10 rounded-lg bg-error/10 hover:bg-error/20 text-error font-body-sm text-body-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+            >
+              {quitando ? 'Quitando…' : 'Sí, quitar mi video'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmandoQuitar(false)}
+              disabled={quitando}
+              className="flex items-center gap-space-2xs px-space-md py-space-xs min-h-10 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface disabled:opacity-50 disabled:cursor-not-allowed font-body-sm text-body-sm transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
 
       <span className="font-mono-micro text-[10px] text-outline">Formatos aceptados: MP4, WEBM o MOV.</span>
     </div>
@@ -228,17 +366,30 @@ function TarjetaPreset({ preset, seleccionado, onSeleccionar }) {
  * contraparte del Panel de Aprendizaje del jugador. Acá el facilitador sube
  * sus propios videos educativos por pieza y elige el tono con el que Turing
  * le explica las jugadas a sus estudiantes (RF, ver auth_esquema.py
- * `preset_ensenanza`). El vínculo formal facilitador-estudiante (cursos)
- * todavía no existe, así que el preset es una preferencia personal por
- * ahora — se lo avisamos al facilitador de forma visible, no oculta.
+ * `preset_ensenanza`).
+ *
+ * Videos: los del facilitador PRINCIPAL son los generales y los ve todo jugador;
+ * el de otro facilitador reemplaza al general solo en esa pieza, para los
+ * jugadores de sus cursos (por eso cada pieza dice si tiene "Video propio", si
+ * "Se usa el video general" o si está "Sin video"). El tono llega a los jugadores
+ * inscritos en sus cursos (los cursos se crean en Gestión de Usuarios, ver
+ * PanelCursos.jsx); la pantalla lista sus cursos reales para que se vea a quiénes llega.
  */
 export default function ConfiguracionEnsenanza({ usuario, alActualizarUsuario }) {
   const [ayudaAbierta, setAyudaAbierta] = useState(false);
 
-  const [videos, setVideos] = useState({});
+  // La sesión guardada puede ser anterior a `es_principal`: se relee el perfil del servidor al entrar.
+  const [esPrincipal, setEsPrincipal] = useState(usuario?.es_principal === true);
+  const [videos, setVideos] = useState({}); // videos PROPIOS del facilitador, por pieza
+  const [general, setGeneral] = useState({}); // videos generales (los del facilitador principal), por pieza
   const [cargandoVideos, setCargandoVideos] = useState(true);
   const [errorVideos, setErrorVideos] = useState(null);
+  const [errorGeneral, setErrorGeneral] = useState(null);
   const [estadoSubida, setEstadoSubida] = useState({});
+
+  const [cursos, setCursos] = useState([]);
+  const [cargandoCursos, setCargandoCursos] = useState(true);
+  const [errorCursos, setErrorCursos] = useState(null);
 
   const presetGuardado = usuario?.preset_ensenanza ?? 'estandar';
   const [presetSeleccionado, setPresetSeleccionado] = useState(presetGuardado);
@@ -246,13 +397,49 @@ export default function ConfiguracionEnsenanza({ usuario, alActualizarUsuario })
   const [errorPreset, setErrorPreset] = useState(null);
   const [presetGuardadoOk, setPresetGuardadoOk] = useState(false);
 
-  useEffect(() => {
-    setCargandoVideos(true);
+  /**
+   * Pide los videos propios y los generales. `mostrarCarga` solo en la primera carga: al refrescar después de
+   * subir o quitar un video no se desmontan las tarjetas (se perdería lo que el usuario tenga abierto).
+   */
+  async function cargarVideos(mostrarCarga) {
+    if (mostrarCarga) setCargandoVideos(true);
     setErrorVideos(null);
-    obtenerVideosFacilitador()
-      .then((datos) => setVideos(datos || {}))
-      .catch((err) => setErrorVideos(err))
-      .finally(() => setCargandoVideos(false));
+    const [propios, generales] = await Promise.allSettled([obtenerVideosFacilitador(), obtenerVideosDeMiCurso()]);
+    if (propios.status === 'fulfilled') setVideos(propios.value || {});
+    else setErrorVideos(propios.reason);
+    if (generales.status === 'fulfilled') {
+      setGeneral(generales.value || {});
+      setErrorGeneral(null);
+    } else {
+      setErrorGeneral(generales.reason);
+    }
+    setCargandoVideos(false);
+  }
+
+  useEffect(() => {
+    cargarVideos(true);
+  }, []);
+
+  useEffect(() => {
+    let cancelado = false;
+    obtenerPerfil()
+      .then((perfil) => {
+        if (!cancelado && perfil && typeof perfil === 'object') setEsPrincipal(perfil.es_principal === true);
+      })
+      .catch(() => {});
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+
+  // Cursos del facilitador: a quiénes les llega el tono y los videos de esta pantalla.
+  useEffect(() => {
+    setCargandoCursos(true);
+    setErrorCursos(null);
+    listarCursos()
+      .then((datos) => setCursos(datos || []))
+      .catch((err) => setErrorCursos(err))
+      .finally(() => setCargandoCursos(false));
   }, []);
 
   async function manejarSubirVideo(tipoPieza, archivo) {
@@ -261,11 +448,30 @@ export default function ConfiguracionEnsenanza({ usuario, alActualizarUsuario })
       const resultado = await subirVideoPieza(tipoPieza, archivo);
       setVideos((actual) => ({ ...actual, [resultado.tipo_pieza]: resultado.url }));
       setEstadoSubida((actual) => ({ ...actual, [tipoPieza]: { subiendo: false, error: null, exito: true } }));
+      cargarVideos(false); // el general también puede haber cambiado (si es el principal): se refrescan ambos
     } catch (err) {
       setEstadoSubida((actual) => ({
         ...actual,
         [tipoPieza]: { subiendo: false, error: mensajeError(err, 'No se pudo subir el video.'), exito: false },
       }));
+    }
+  }
+
+  /** Borra el video propio de la pieza. Devuelve `true` si se borró. Muestra el error del backend tal cual. */
+  async function manejarQuitarVideo(tipoPieza) {
+    setEstadoSubida((actual) => ({ ...actual, [tipoPieza]: { quitando: true, error: null } }));
+    try {
+      await quitarVideoPieza(tipoPieza);
+      await cargarVideos(false);
+      setEstadoSubida((actual) => ({ ...actual, [tipoPieza]: { quitado: true } }));
+      return true;
+    } catch (err) {
+      setEstadoSubida((actual) => ({
+        ...actual,
+        [tipoPieza]: { error: err.message || 'No se pudo quitar el video.' },
+      }));
+      if (err.status === 404) cargarVideos(false); // ya no tenía video propio: se pone la pantalla al día
+      return false;
     }
   }
 
@@ -319,16 +525,19 @@ export default function ConfiguracionEnsenanza({ usuario, alActualizarUsuario })
             className="p-space-md rounded-xl bg-surface-container-low border border-outline-variant/20 flex flex-col gap-space-xs"
           >
             <p className="font-body-sm text-body-sm text-on-surface leading-relaxed">
-              <strong className="text-primary">1.</strong> Subí un video corto explicando cómo se mueve cada pieza —
-              tus estudiantes lo ven en vez del video genérico del sistema.
+              <strong className="text-primary">1.</strong> Subí un video corto explicando cómo se mueve cada pieza.{' '}
+              {esPrincipal
+                ? 'Como facilitador principal, los tuyos son los generales: los ven todos los jugadores.'
+                : 'Si ya hay uno general, el tuyo lo reemplaza para tus jugadores, solo en esa pieza.'}
             </p>
             <p className="font-body-sm text-body-sm text-on-surface leading-relaxed">
               <strong className="text-primary">2.</strong> Elegí cómo querés que Turing (el tutor) le hable a tus
               estudiantes: con más ánimo y simple, con el tono de siempre, o más técnico.
             </p>
             <p className="font-body-sm text-body-sm text-on-surface leading-relaxed">
-              <strong className="text-primary">3.</strong> Por ahora esto es una preferencia tuya, personal — todavía
-              no se puede aplicar por curso (lo explicamos más abajo, junto al tono).
+              <strong className="text-primary">3.</strong> El tono (y tus videos propios, si no sos el principal) les
+              llegan a los jugadores inscritos en tus cursos. Creás los cursos en Gestión de Usuarios y se los
+              compartís con su código.
             </p>
           </div>
         )}
@@ -341,13 +550,17 @@ export default function ConfiguracionEnsenanza({ usuario, alActualizarUsuario })
           <h2 className="font-headline-sm text-headline-sm text-on-surface">Videos por pieza</h2>
         </div>
         <p className="font-body-sm text-body-sm text-on-surface-variant">
-          Subí tu propio video para cada pieza. Si no subís uno, tus estudiantes ven el video por defecto del
-          sistema.
+          {esPrincipal
+            ? 'Tus videos son los generales: los ven todos los jugadores, salvo en las piezas donde el facilitador de su curso subió el suyo.'
+            : 'Los videos generales los pone el facilitador principal. Si subís uno para una pieza, tus jugadores ven el tuyo en lugar del general, solo en esa pieza.'}
         </p>
 
         {cargandoVideos && <CargandoInline texto="Buscando tus videos…" />}
         {!cargandoVideos && errorVideos && (
           <AvisoError mensaje={mensajeError(errorVideos, 'No se pudieron cargar tus videos.')} />
+        )}
+        {!cargandoVideos && !errorVideos && errorGeneral && (
+          <AvisoError mensaje={mensajeError(errorGeneral, 'No se pudieron cargar los videos generales.')} />
         )}
 
         {!cargandoVideos && !errorVideos && (
@@ -356,9 +569,12 @@ export default function ConfiguracionEnsenanza({ usuario, alActualizarUsuario })
               <TarjetaVideoPieza
                 key={pieza.tipo}
                 pieza={pieza}
-                urlActual={videos[pieza.tipo] ?? null}
+                urlPropio={videos[pieza.tipo] ?? null}
+                urlGeneral={general[pieza.tipo] ?? null}
+                esPrincipal={esPrincipal}
                 estado={estadoSubida[pieza.tipo]}
                 onSubir={manejarSubirVideo}
+                onQuitar={manejarQuitarVideo}
               />
             ))}
           </div>
@@ -383,13 +599,13 @@ export default function ConfiguracionEnsenanza({ usuario, alActualizarUsuario })
           ))}
         </div>
 
-        {/* Nota visible — no se oculta ni se minimiza */}
         <div className="flex items-start gap-space-sm p-space-md rounded-xl bg-surface-container border border-outline-variant/30">
-          <span className="material-symbols-outlined text-primary text-[20px] shrink-0 mt-0.5">info</span>
+          <span className="material-symbols-outlined text-primary text-[20px] shrink-0 mt-0.5" aria-hidden="true">
+            info
+          </span>
           <p className="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
-            Este tono es una preferencia <strong className="text-on-surface">personal tuya</strong>, por ahora.
-            Todavía no existe una forma de agrupar a tus estudiantes por curso — así que{' '}
-            <strong className="text-on-surface">no se aplica automáticamente a nadie más</strong> todavía.
+            Este tono se aplica a <strong className="text-on-surface">los jugadores inscritos en tus cursos</strong>:
+            Turing les habla así a todos. Abajo ves cuáles son.
           </p>
         </div>
 
@@ -419,30 +635,52 @@ export default function ConfiguracionEnsenanza({ usuario, alActualizarUsuario })
         </div>
       </section>
 
-      {/* Selector de grupo/curso — placeholder visual, sin funcionalidad real todavía */}
+      {/* A quiénes les llega esta configuración: los jugadores inscritos en sus cursos */}
       <section className="flex flex-col gap-space-sm bg-surface-container-low p-space-lg rounded-xl shadow-md">
-        <div className="flex items-center justify-between gap-space-sm flex-wrap">
-          <div className="flex items-center gap-space-xs">
-            <span className="material-symbols-outlined text-[20px] text-primary">groups</span>
-            <h2 className="font-headline-sm text-headline-sm text-on-surface">Grupo o curso</h2>
-          </div>
-          <span className="font-mono-micro text-[10px] uppercase tracking-wider text-outline px-space-xs py-space-2xs rounded-full border border-outline-variant/30 flex items-center gap-1">
-            <span className="material-symbols-outlined text-[12px]">lock</span>
-            Próximamente
+        <div className="flex items-center gap-space-xs">
+          <span className="material-symbols-outlined text-[20px] text-primary" aria-hidden="true">
+            groups
           </span>
+          <h2 className="font-headline-sm text-headline-sm text-on-surface">Tus cursos</h2>
         </div>
         <p className="font-body-sm text-body-sm text-on-surface-variant">
-          Más adelante vas a poder elegir a qué grupo de estudiantes aplicar esta configuración. Todavía no existe
-          esa función.
+          Turing les habla con tu tono a los jugadores inscritos en estos cursos
+          {esPrincipal ? '.' : ', y en las piezas donde subiste un video propio ven el tuyo en lugar del general.'}
         </p>
-        <div
-          aria-disabled="true"
-          title="Próximamente"
-          className="w-full sm:w-72 flex items-center justify-between px-space-sm py-space-sm rounded-lg bg-surface-container-lowest border border-outline-variant/20 text-outline cursor-not-allowed opacity-70"
-        >
-          <span className="font-body-sm text-body-sm">Todos mis estudiantes</span>
-          <span className="material-symbols-outlined text-[18px]">expand_more</span>
-        </div>
+
+        {cargandoCursos && <CargandoInline texto="Buscando tus cursos…" />}
+        {!cargandoCursos && errorCursos && (
+          <AvisoError mensaje={mensajeError(errorCursos, 'No se pudieron cargar tus cursos.')} />
+        )}
+        {!cargandoCursos && !errorCursos && cursos.length === 0 && (
+          <div className="flex items-start gap-space-sm p-space-md rounded-xl bg-surface-container border border-outline-variant/30">
+            <span className="material-symbols-outlined text-primary text-[20px] shrink-0 mt-0.5" aria-hidden="true">
+              info
+            </span>
+            <p className="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
+              Todavía no tenés ningún curso, así que esta configuración no le llega a nadie. Creá uno en{' '}
+              <strong className="text-on-surface">Gestión de Usuarios</strong> y compartí su código con tus
+              estudiantes.
+            </p>
+          </div>
+        )}
+        {!cargandoCursos && !errorCursos && cursos.length > 0 && (
+          <ul className="m-0 p-0 list-none grid grid-cols-1 sm:grid-cols-2 gap-space-xs">
+            {cursos.map((curso) => (
+              <li
+                key={curso.id}
+                className="flex items-center justify-between gap-space-sm px-space-sm py-space-xs min-h-10 rounded-lg bg-surface-container"
+              >
+                <span className="font-body-sm text-body-sm font-medium text-on-surface min-w-0 break-words">
+                  {curso.nombre}
+                </span>
+                <span className="font-mono-micro text-mono-micro text-on-surface-variant shrink-0">
+                  {curso.estudiantes} {curso.estudiantes === 1 ? 'estudiante' : 'estudiantes'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </div>
   );

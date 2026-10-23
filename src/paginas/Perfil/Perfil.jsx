@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { actualizarPerfil, guardarNivelEstimado, subirFotoPerfil } from '../../api/backend';
+import MiCurso from './MiCurso';
 
 const EDAD_MIN = 0;
 const EDAD_MAX = 120;
@@ -369,6 +370,9 @@ export default function Perfil({ usuario, alActualizarUsuario }) {
           </div>
         </div>
       )}
+
+      {/* Curso del jugador — entra con el código de su facilitador (ver MiCurso.jsx). */}
+      {!esFacilitador && <MiCurso />}
     </div>
   );
 }

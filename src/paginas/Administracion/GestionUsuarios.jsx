@@ -3,6 +3,7 @@ import { listarUsuarios, historialPartidasUsuario } from '../../api/backend';
 import { fechaDesdeIso } from '../../formatoTiempo';
 import ModalEditarUsuario from './ModalEditarUsuario';
 import ModalEliminarUsuario from './ModalEliminarUsuario';
+import PanelCursos from './PanelCursos';
 import PanelInvitaciones from './PanelInvitaciones';
 
 function roleBadge(rol) {
@@ -171,6 +172,8 @@ export default function GestionUsuarios({ usuarioActual = null }) {
           </button>
         </div>
       )}
+
+      <PanelCursos usuarioActual={usuarioActual} />
 
       <PanelInvitaciones />
 

@@ -582,8 +582,10 @@ async function solicitarAuth(endpoint, opciones = {}) {
     ...opciones,
   });
   if (!respuesta.ok) {
+    // Un 422 de FastAPI manda `detail` como lista: mostrarla tal cual daría "[object Object]".
     const detalle = await respuesta.json().catch(() => null);
-    const error = new Error(detalle?.detail ?? `Error ${respuesta.status}`);
+    const mensaje = typeof detalle?.detail === "string" ? detalle.detail : `Error ${respuesta.status}`;
+    const error = new Error(mensaje);
     error.status = respuesta.status;
     throw error;
   }
@@ -757,9 +759,12 @@ export function obtenerEstadisticasPropias() {
 }
 
 /**
- * Videos por pieza que el facilitador autenticado ya subió — Configuración
- * de Enseñanza. Dict `tipo_pieza -> url`; una pieza ausente significa que
- * se usa el video por defecto del sistema, no que hubo un error.
+ * Videos PROPIOS por pieza que el facilitador autenticado ya subió — Configuración
+ * de Enseñanza. Dict `tipo_pieza -> url`; una pieza ausente significa que no tiene
+ * video propio de esa pieza, no que hubo un error. Los del facilitador principal
+ * son los videos generales que ve todo jugador; los de otro facilitador reemplazan
+ * al general, solo en esa pieza, para los jugadores de sus cursos. Para borrar uno,
+ * `quitarVideoPieza`.
  */
 export function obtenerVideosFacilitador() {
   return solicitarAuth("/facilitador/videos");
@@ -793,6 +798,126 @@ export async function subirVideoPieza(tipoPieza, archivo) {
     throw error;
   }
   return respuesta.json();
+}
+
+/**
+ * Borra el video PROPIO del facilitador para `tipoPieza` (solo facilitadores): sus jugadores vuelven a ver el
+ * video general de esa pieza. Para el facilitador principal su video propio ES el general, así que borrarlo
+ * deja esa pieza sin video general. 204 sin cuerpo; 404 si no tenía video propio de esa pieza; 400 si la
+ * pieza no es válida.
+ */
+export function quitarVideoPieza(tipoPieza) {
+  return solicitarAuthSinCuerpo(`/facilitador/videos/${encodeURIComponent(tipoPieza)}`, { method: "DELETE" });
+}
+
+/**
+ * Igual que `solicitarAuth` pero para los endpoints que responden 204 sin cuerpo (no hay JSON que
+ * parsear). Si falla lanza el `Error` con el `detail` del backend y el `status` HTTP.
+ */
+async function solicitarAuthSinCuerpo(endpoint, opciones = {}) {
+  const token = leerSesion("access_token");
+  const respuesta = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    ...opciones,
+  });
+  if (!respuesta.ok) throw await errorDeRespuesta(respuesta);
+}
+
+/** Cursos: el facilitador arma grupos con un código y el jugador entra con él */
+
+/**
+ * Crea un curso (facilitador). Devuelve `{id, nombre, codigo, acepta_ingresos, estudiantes, creado_en,
+ * facilitador_id, facilitador_nombre}`; el código viene con guion (ej. `K7Q-M4T`). Máximo 20 cursos por
+ * facilitador (400 con mensaje). Un facilitador principal puede pasar `facilitadorId` para crearlo a nombre de
+ * otro facilitador activo (403 si no es principal; 400 si el destino no sirve).
+ */
+export function crearCurso(nombre, facilitadorId = null) {
+  const cuerpo = { nombre };
+  if (facilitadorId != null) cuerpo.facilitador_id = facilitadorId;
+  return solicitarAuth("/cursos", { method: "POST", body: JSON.stringify(cuerpo) });
+}
+
+/**
+ * Cursos del facilitador autenticado, con su código y cuántos estudiantes tiene cada uno. Con `todos` un
+ * facilitador principal pide los de todos los facilitadores (`?todos=true`; 403 si no es principal).
+ */
+export function listarCursos(todos = false) {
+  return solicitarAuth(todos ? "/cursos?todos=true" : "/cursos");
+}
+
+/**
+ * Renombra un curso, abre o cierra los ingresos y/o lo reasigna (facilitador). `campos` lleva solo lo que
+ * cambia: `{nombre}`, `{acepta_ingresos}` y/o `{facilitador_id}`. Con `acepta_ingresos: false` el código deja de
+ * servir hasta reabrir. `facilitador_id` solo lo puede mandar un facilitador principal (403 si no lo es).
+ */
+export function editarCurso(cursoId, campos) {
+  return solicitarAuth(`/cursos/${cursoId}`, { method: "PATCH", body: JSON.stringify(campos) });
+}
+
+/**
+ * Pasa un curso a otro facilitador activo (solo facilitador principal; 400 con mensaje si el destino no sirve).
+ * Los estudiantes inscritos siguen en el curso y pasan a ver los videos y el tono del nuevo dueño.
+ */
+export function reasignarCurso(cursoId, facilitadorId) {
+  return editarCurso(cursoId, { facilitador_id: facilitadorId });
+}
+
+/** Genera un código nuevo para el curso (facilitador): el anterior deja de servir, los inscritos siguen. */
+export function regenerarCodigoCurso(cursoId) {
+  return solicitarAuth(`/cursos/${cursoId}/codigo`, { method: "POST" });
+}
+
+/** Elimina el curso (facilitador). Sus estudiantes no se borran: quedan sin curso. */
+export function eliminarCurso(cursoId) {
+  return solicitarAuthSinCuerpo(`/cursos/${cursoId}`, { method: "DELETE" });
+}
+
+/**
+ * Jugadores inscritos en un curso del facilitador: `[{id, nombre, email, avatar_url, nivel_estimado,
+ * rango_estimado, activo, unido_en}]`.
+ */
+export function listarEstudiantesCurso(cursoId) {
+  return solicitarAuth(`/cursos/${cursoId}/estudiantes`);
+}
+
+/** Saca a un jugador del curso (facilitador) sin borrar su cuenta. 404 si no estaba inscrito. */
+export function sacarEstudianteDeCurso(cursoId, usuarioId) {
+  return solicitarAuthSinCuerpo(`/cursos/${cursoId}/estudiantes/${usuarioId}`, { method: "DELETE" });
+}
+
+/**
+ * Entra a un curso con el código que dio el facilitador (jugador): acepta mayúsculas, minúsculas y con o
+ * sin guion. Si ya estaba en otro, lo mueve. Devuelve `{id, nombre, facilitador_nombre,
+ * facilitador_avatar_url, preset_ensenanza}`. 400 si el código no existe o el curso cerró ingresos, y 429
+ * si gastó sus intentos fallidos: el `message` del error ya está listo para mostrarse.
+ */
+export function unirseACurso(codigo) {
+  return solicitarAuth("/cursos/unirse", { method: "POST", body: JSON.stringify({ codigo }) });
+}
+
+/** Curso en el que está inscrito el jugador (mismo formato que `unirseACurso`), o `null` si no está en ninguno. */
+export function obtenerMiCurso() {
+  return solicitarAuth("/cursos/mio");
+}
+
+/** El jugador deja su curso. 404 si no estaba en ninguno. */
+export function salirDelCurso() {
+  return solicitarAuthSinCuerpo("/cursos/salir", { method: "POST" });
+}
+
+/**
+ * Videos por pieza que ve el usuario autenticado: `{tipo_pieza: url}` (con `?v=…`) con claves
+ * `rey | dama | torre | alfil | caballo | peon`, solo las que existen. Son los videos generales del facilitador
+ * principal, que ve todo jugador esté o no en un curso; si el facilitador de su curso subió uno propio de una
+ * pieza, ese reemplaza al general en esa pieza. A un facilitador le devuelve los generales (no está inscrito en
+ * ningún curso). `{}` si no hay ninguno.
+ */
+export function obtenerVideosDeMiCurso() {
+  return solicitarAuth("/cursos/mio/videos");
 }
 
 /** Tutor conversacional "Turing" (Panel de Aprendizaje) */

@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { analisisCompletoPartida, historialPartidasPropio } from '../../api/backend';
+import {
+  analisisCompletoPartida,
+  historialPartidasPropio,
+  obtenerMiCurso,
+  obtenerVideosDeMiCurso,
+} from '../../api/backend';
 import { casillasIlustrativas, rutaImagenPieza } from '../../ajedrez';
 import { fechaHoraLegible as fechaLegible, formatearDuracion } from '../../formatoTiempo';
 import PiezaModelo3D from '../../componentes/PiezaModelo3D';
 import FondoCapasScroll from '../../componentes/FondoCapasScroll';
 import ChatTuring from './ChatTuring';
+import TarjetaUnirseCurso from './TarjetaUnirseCurso';
 import EstadisticasPersonales from './EstadisticasPersonales';
 import TuNivel from './TuNivel';
 import CaminoAprendizaje from './CaminoAprendizaje';
@@ -476,7 +482,7 @@ function MiniTableroPieza({ pieza }) {
  * mouse o tocar, y respeta `prefers-reduced-motion` desactivando el
  * auto-avance (las flechas manuales siguen funcionando igual).
  */
-function BannerPiezas({ piezas, claseTextoContenido, onCambiarPieza }) {
+function BannerPiezas({ piezas, claseTextoContenido, onCambiarPieza, pausaExterna = false }) {
   const [indice, setIndice] = useState(0);
   const [pausado, setPausado] = useState(false);
   const cajaRef = useRef(null);
@@ -485,13 +491,15 @@ function BannerPiezas({ piezas, claseTextoContenido, onCambiarPieza }) {
     []
   );
 
+  // `pausaExterna`: el padre frena el auto-avance mientras el jugador mira el video de la pieza (si no,
+  // el video se cambiaría solo a los 5s, en medio de la reproducción).
   useEffect(() => {
-    if (pausado || prefiereMovimientoReducido) return;
+    if (pausado || pausaExterna || prefiereMovimientoReducido) return;
     const temporizador = setTimeout(() => {
       setIndice((actual) => (actual + 1) % piezas.length);
     }, 5000);
     return () => clearTimeout(temporizador);
-  }, [indice, pausado, prefiereMovimientoReducido, piezas.length]);
+  }, [indice, pausado, pausaExterna, prefiereMovimientoReducido, piezas.length]);
 
   const pieza = piezas[indice];
   const totalPiezas = piezas.length;
@@ -681,6 +689,7 @@ export default function PanelAprendizaje({
   onSeccionConsumida = null,
   alIrASalaControl = null,
   alVerTutorial = null,
+  alIrAPerfil = null,
 }) {
   const [seccionAbierta, setSeccionAbierta] = useState(() => seccionInicial || 'nivel');
   const refsSeccion = useRef({});
@@ -705,13 +714,50 @@ export default function PanelAprendizaje({
     });
   }
 
+  // Videos por pieza que ve el jugador (`{tipo_pieza: url}`): los generales del facilitador principal, que ve todo
+  // jugador esté o no en un curso; si el facilitador de su curso subió el suyo para una pieza, ese reemplaza al
+  // general solo en esa pieza (el backend ya lo resuelve). Si el pedido falla se sigue sin videos: nunca rompe la
+  // pantalla.
+  const [videosPorPieza, setVideosPorPieza] = useState({});
+  // El curso del jugador (`undefined` = todavía no se sabe o falló el pedido, `null` = no está en ninguno): lo usa
+  // solo la invitación opcional a unirse, que no aparece mientras no se sepa.
+  const [miCurso, setMiCurso] = useState(undefined);
+
+  useEffect(() => {
+    let cancelado = false;
+    obtenerVideosDeMiCurso()
+      .then((videos) => {
+        if (!cancelado) setVideosPorPieza(videos && typeof videos === 'object' ? videos : {});
+      })
+      .catch(() => {});
+    obtenerMiCurso()
+      .then((curso) => {
+        if (!cancelado) setMiCurso(curso ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+
+  // El jugador entró a un curso desde la invitación del panel: el facilitador de ese curso puede tener videos
+  // propios que reemplazan a los generales en algunas piezas, así que se vuelven a pedir.
+  function manejarUnidoACurso(curso) {
+    setMiCurso(curso);
+    obtenerVideosDeMiCurso()
+      .then((videos) => setVideosPorPieza(videos && typeof videos === 'object' ? videos : {}))
+      .catch(() => {});
+  }
+
   // Pantalla completa para el recuadro de video de "Aprendé cada pieza" —
   // Fullscreen API nativa del navegador, sin librería nueva. Colapsar el
   // sub-índice ya le da más ancho a este recuadro (efecto "modo cine"); esto
-  // suma la opción de taparlo todo, útil incluso en el placeholder de hoy y
-  // listo para cuando el video real del facilitador esté conectado acá.
+  // suma la opción de taparlo todo, con el video de la pieza adentro.
   const videoBoxRef = useRef(null);
   const [enPantallaCompleta, setEnPantallaCompleta] = useState(false);
+  // Mientras el video suena, está en pantalla completa o el cursor está sobre él, el banner no avanza solo.
+  const [videoReproduciendo, setVideoReproduciendo] = useState(false);
+  const [cursorSobreVideo, setCursorSobreVideo] = useState(false);
 
   useEffect(() => {
     function alCambiar() {
@@ -858,6 +904,13 @@ export default function PanelAprendizaje({
   }
 
   const piezaActual = PIEZAS.find((p) => p.tipo === piezaElegida) ?? null;
+  // Video de la pieza elegida (las claves de `videosPorPieza` son los `tipo` de PIEZAS).
+  const urlVideoPieza = piezaActual ? (videosPorPieza[piezaActual.tipo] ?? null) : null;
+  const mensajeSinVideo = 'Todavía no hay un video de esta pieza.';
+  // Al cambiar de video el elemento se desmonta sin avisar `pause`: se vuelve a "no suena".
+  useEffect(() => {
+    setVideoReproduciendo(false);
+  }, [urlVideoPieza]);
 
   // ===== Insignias (HU "Tus logros") — solo datos reales, sin progreso inventado =====
   const primeraPartidaDesbloqueada = (historial?.total ?? 0) > 0;
@@ -935,6 +988,14 @@ export default function PanelAprendizaje({
           La narración por voz no está disponible en este navegador — el resto del panel funciona igual.
         </p>
       )}
+
+      {/* Invitación opcional a un curso: solo si todavía no está en uno y no la descartó */}
+      <TarjetaUnirseCurso
+        usuarioId={usuario?.id ?? null}
+        miCurso={miCurso}
+        alUnirse={manejarUnidoACurso}
+        alIrAPerfil={alIrAPerfil}
+      />
 
       {/* Layout de dos columnas: sub-índice fijo + contenido en acordeón.
           El sub-índice se puede colapsar a solo íconos (botón "Colapsar/
@@ -1110,7 +1171,12 @@ export default function PanelAprendizaje({
                 o flechas) y avisa qué pieza quedó activa vía `onCambiarPieza`,
                 así la ficha de detalle de abajo y el registro de "vistas"
                 (logro "Conocé las 6 piezas") lo siguen automáticamente. */}
-            <BannerPiezas piezas={PIEZAS} claseTextoContenido={claseTextoContenido} onCambiarPieza={elegirPieza} />
+            <BannerPiezas
+              piezas={PIEZAS}
+              claseTextoContenido={claseTextoContenido}
+              onCambiarPieza={elegirPieza}
+              pausaExterna={videoReproduciendo || enPantallaCompleta || cursorSobreVideo}
+            />
 
             {alVerTutorial && (
               <button
@@ -1136,29 +1202,53 @@ export default function PanelAprendizaje({
                   </div>
                   <div
                     ref={videoBoxRef}
-                    className="relative flex flex-col items-center justify-center gap-space-xs p-space-md rounded-xl bg-surface-container overflow-hidden border border-dashed border-primary/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] text-center min-h-[160px] [&:fullscreen]:rounded-none [&:fullscreen]:min-h-screen [&:fullscreen]:justify-center [&:fullscreen]:bg-surface"
+                    onMouseEnter={() => setCursorSobreVideo(true)}
+                    onMouseLeave={() => setCursorSobreVideo(false)}
+                    onTouchStart={() => setCursorSobreVideo(true)}
+                    className={`relative flex flex-col items-center justify-center gap-space-xs rounded-xl bg-surface-container overflow-hidden border border-primary/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] text-center min-h-[160px] [&:fullscreen]:rounded-none [&:fullscreen]:min-h-screen [&:fullscreen]:justify-center [&:fullscreen]:bg-surface ${
+                      urlVideoPieza ? '' : 'p-space-md border-dashed'
+                    }`}
                   >
-                    <div
-                      aria-hidden="true"
-                      className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-secondary/10"
-                    />
+                    {!urlVideoPieza && (
+                      <div
+                        aria-hidden="true"
+                        className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-secondary/10"
+                      />
+                    )}
                     <button
                       type="button"
                       onClick={alternarPantallaCompletaVideo}
                       title={enPantallaCompleta ? 'Salir de pantalla completa' : 'Ver en pantalla completa'}
-                      className="absolute top-space-xs right-space-xs z-10 flex items-center justify-center w-8 h-8 rounded-lg bg-surface-container-lowest/70 hover:bg-surface-container-lowest text-on-surface-variant hover:text-on-surface transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                      aria-label={enPantallaCompleta ? 'Salir de pantalla completa' : 'Ver el video en pantalla completa'}
+                      className="absolute top-space-xs right-space-xs z-10 flex items-center justify-center w-10 h-10 rounded-lg bg-surface-container-lowest/70 hover:bg-surface-container-lowest text-on-surface-variant hover:text-on-surface transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                     >
                       <span className="material-symbols-outlined text-[18px]">
                         {enPantallaCompleta ? 'fullscreen_exit' : 'fullscreen'}
                       </span>
                     </button>
-                    <span className="relative material-symbols-outlined text-[32px] text-primary-fixed-dim">videocam_off</span>
-                    <p className="relative font-body-sm text-body-sm text-on-surface-variant">
-                      [Video: cómo se mueve y captura {piezaActual.articulo} {piezaActual.nombre.toLowerCase()}]
-                    </p>
-                    <span className="relative font-mono-micro text-[10px] uppercase tracking-wider text-outline px-space-xs py-space-2xs rounded-full border border-outline-variant/30">
-                      Próximamente
-                    </span>
+                    {urlVideoPieza ? (
+                      <video
+                        key={urlVideoPieza}
+                        src={urlVideoPieza}
+                        controls
+                        playsInline
+                        preload="metadata"
+                        onPlay={() => setVideoReproduciendo(true)}
+                        onPause={() => setVideoReproduciendo(false)}
+                        onEnded={() => setVideoReproduciendo(false)}
+                        aria-label={`Video: cómo se mueve y captura ${piezaActual.articulo} ${piezaActual.nombre.toLowerCase()}`}
+                        className={`relative block w-full bg-black object-contain ${
+                          enPantallaCompleta ? 'h-screen' : 'max-h-[70vh]'
+                        }`}
+                      />
+                    ) : (
+                      <>
+                        <span className="relative material-symbols-outlined text-[32px] text-primary-fixed-dim" aria-hidden="true">
+                          videocam_off
+                        </span>
+                        <p className="relative font-body-sm text-body-sm text-on-surface-variant">{mensajeSinVideo}</p>
+                      </>
+                    )}
                   </div>
                 </div>
 
