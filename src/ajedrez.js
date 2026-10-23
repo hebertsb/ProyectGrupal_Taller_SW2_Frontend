@@ -66,6 +66,17 @@ export function esPromocionDePeon(fen, origen, destino) {
   return promocionBlancas || promocionNegras;
 }
 
+/**
+ * Piezas a las que puede coronar un peón, en el orden en que se ofrecen. `letra` es la que va al final de
+ * la jugada UCI ("e7e8q", "e7e8n") y la misma que usa el servidor; el color lo da el peón que corona.
+ */
+export const PIEZAS_DE_CORONACION = [
+  { letra: "q", nombre: "Dama" },
+  { letra: "r", nombre: "Torre" },
+  { letra: "b", nombre: "Alfil" },
+  { letra: "n", nombre: "Caballo" },
+];
+
 export function extraerCasillaDestino(san) {
   const coincidencia = san.replace(/[+#]/g, "").match(/[a-h][1-8](?:=[QRBN])?$/);
   return coincidencia ? coincidencia[0].slice(0, 2) : null;

@@ -53,6 +53,14 @@ const RADIO_BASE = 130;
 const VELOCIDAD_TRANSICION = 6; // 1/seg — mismo suavizado exponencial que CerebroNeuronal
 const VELOCIDAD_POSICION = 5;
 
+// Igual que en CerebroNeuronal: con el recuadro más alto que ancho (celular) la red, que va girando, no entra
+// de costado y se recorta. Por debajo de este aspecto (ancho / alto) se aleja la vista (zoom < 1); el modo
+// compacto tiene un encuadre cerrado a propósito y no se toca.
+const ASPECTO_SILUETA_COMPLETA = 1.25;
+function zoomSegunAspecto(aspecto, compacto) {
+  return compacto ? 1 : Math.min(1, aspecto / ASPECTO_SILUETA_COMPLETA);
+}
+
 /** Distribución uniforme de N puntos sobre la esfera unitaria (espiral áurea) — igual que en CerebroNeuronal. */
 function direccionFibonacci(indice, total) {
   const anguloAureo = Math.PI * (3 - Math.sqrt(5));
@@ -332,6 +340,8 @@ export default function CerebroRed({
     scene.add(grupo);
     const camera = new THREE.PerspectiveCamera(compacto ? 48 : 42, ancho / alto, 1, 3000);
     camera.position.set(0, compacto ? 24 : 40, compacto ? 300 : 430);
+    camera.zoom = zoomSegunAspecto(ancho / alto, compacto);
+    camera.updateProjectionMatrix();
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(ancho, alto);
@@ -351,6 +361,7 @@ export default function CerebroRed({
         const { width, height } = entrada.contentRect;
         if (width > 0 && height > 0) {
           camera.aspect = width / height;
+          camera.zoom = zoomSegunAspecto(camera.aspect, compacto);
           camera.updateProjectionMatrix();
           renderer.setSize(width, height);
         }

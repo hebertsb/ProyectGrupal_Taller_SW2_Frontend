@@ -24,6 +24,7 @@ import Login from './paginas/Login/Login';
 import AccesoRestringido from './componentes/AccesoRestringido';
 import { backendEnLinea, obtenerDemostracionActiva, obtenerEstadoEntrenamiento, obtenerPerfil } from './api/backend';
 import { ProveedorRazonamiento } from './contexto/ContextoRazonamiento';
+import { ProveedorEstadoModelo } from './contexto/ContextoEstadoModelo';
 
 const GestionUsuarios = lazy(() => import('./paginas/Administracion/GestionUsuarios.jsx'));
 
@@ -277,6 +278,7 @@ export default function App() {
 
   return (
     <ProveedorRazonamiento>
+    <ProveedorEstadoModelo>
     <div className="bg-surface-container-lowest font-body-lg text-on-surface antialiased selection:bg-primary-container selection:text-on-primary-container min-h-dvh">
       {/* Tutorial de reglas básicas (HU12): solo para jugadores, una vez por usuario en este navegador. */}
       {!esFacilitador && (
@@ -494,7 +496,7 @@ export default function App() {
               {esFacilitador && (
                 <button
                   disabled
-                  title="No disponible — el brazo físico todavía no está conectado (ver CLAUDE.md)"
+                  title="No disponible — el brazo físico todavía no está conectado"
                   className="flex items-center gap-space-xs px-space-sm py-space-2xs rounded-lg bg-surface-container text-outline cursor-not-allowed font-mono-micro text-mono-micro font-medium tracking-wider uppercase"
                   type="button"
                 >
@@ -753,6 +755,7 @@ export default function App() {
         </main>
       </div>
     </div>
+    </ProveedorEstadoModelo>
     </ProveedorRazonamiento>
   );
 }

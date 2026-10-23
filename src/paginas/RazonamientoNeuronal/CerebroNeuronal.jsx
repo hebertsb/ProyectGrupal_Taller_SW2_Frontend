@@ -50,6 +50,14 @@ const RADIO_BASE = 130;
 const VELOCIDAD_TRANSICION = 6; // 1/seg — ~500ms para converger ~95% (suavizado exponencial)
 const VELOCIDAD_POSICION = 5;
 
+// Con el recuadro más alto que ancho (celular) la silueta, que va girando, no entra de costado y se
+// recorta a los lados. Por debajo de este aspecto (ancho / alto) se aleja la vista (zoom < 1) para que
+// entre completa, en vez de dejarla cortada. El modo compacto tiene un encuadre cerrado a propósito: no se toca.
+const ASPECTO_SILUETA_COMPLETA = 1.25;
+function zoomSegunAspecto(aspecto, compacto) {
+  return compacto ? 1 : Math.min(1, aspecto / ASPECTO_SILUETA_COMPLETA);
+}
+
 /** Distribución uniforme de N puntos sobre la esfera unitaria (espiral áurea). */
 function direccionFibonacci(indice, total) {
   const anguloAureo = Math.PI * (3 - Math.sqrt(5));
@@ -253,6 +261,8 @@ export default function CerebroNeuronal({
     scene.add(grupo);
     const camera = new THREE.PerspectiveCamera(compacto ? 48 : 42, ancho / alto, 1, 3000);
     camera.position.set(0, compacto ? 24 : 40, compacto ? 300 : 430);
+    camera.zoom = zoomSegunAspecto(ancho / alto, compacto);
+    camera.updateProjectionMatrix();
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(ancho, alto);
@@ -272,6 +282,7 @@ export default function CerebroNeuronal({
         const { width, height } = entrada.contentRect;
         if (width > 0 && height > 0) {
           camera.aspect = width / height;
+          camera.zoom = zoomSegunAspecto(camera.aspect, compacto);
           camera.updateProjectionMatrix();
           renderer.setSize(width, height);
         }

@@ -5,10 +5,12 @@ import './SalaControl.css';
 import AvatarAgente3D from '../../componentes/AvatarAgente3D';
 import SimuladorBrazoTablero3D from '../../componentes/SimuladorBrazoTablero3D';
 import { useRazonamiento } from '../../contexto/ContextoRazonamiento';
+import { useEstadoModelo } from '../../contexto/ContextoEstadoModelo';
 import AvisoNivelCalculado, { EstadoCalibracionPartida } from './AvisoNivelCalculado';
 import ModalRetomarPartida from './ModalRetomarPartida';
 import PanelPlegable from './PanelPlegable';
 import RelojAjedrez from './RelojAjedrez';
+import SelectorPromocion from './SelectorPromocion';
 import { useRelojAjedrez } from './useRelojAjedrez';
 import {
   abrirSimulacion3D,
@@ -118,6 +120,10 @@ export default function SalaControl({
   alVerDemostracion = null,
 }) {
   const { dispararInferencia } = useRazonamiento() ?? {};
+  // Versión real de Turing y si se puede usar (se pide una sola vez al abrir la sesión, ver ContextoEstadoModelo).
+  const { fase: faseModelo, version: versionModelo, consultando: consultandoModelo, recargar: recargarEstadoModelo } =
+    useEstadoModelo();
+  const turingNoDisponible = faseModelo === 'no_disponible';
   const [partidaId, setPartidaId] = useState(null);
   // Siempre apunta a la partida abierta ahora: una respuesta que llega tarde la compara contra esto.
   const partidaVigenteRef = useRef(null);
@@ -148,6 +154,9 @@ export default function SalaControl({
   const [vistaTablero, setVistaTablero] = useState('2d'); // '2d' (táctil estándar) o '3d' (gemelo digital Dobot CR5AS)
   const [casillaOrigen, setCasillaOrigen] = useState(null);
   const [destinosValidos, setDestinosValidos] = useState([]);
+  // Peón que llegó a la última fila y espera que se elija la pieza: `{ origen, destino, esBlanca }`.
+  // Mientras no sea null se muestra `SelectorPromocion` y NO se manda nada al servidor.
+  const [promocionPendiente, setPromocionPendiente] = useState(null);
   const [jugadas, setJugadas] = useState([]);
   const [analisis, setAnalisis] = useState(null);
   const [evaluacionesHistorial, setEvaluacionesHistorial] = useState([]);
@@ -546,6 +555,31 @@ export default function SalaControl({
     fenActualRef.current = fen;
   }, [fen]);
 
+  // Si el servidor dice que Turing no está disponible, el rival elegido pasa a ser Stockfish (el
+  // botón de Turing ya aparece deshabilitado, ver más abajo). El valor guardado en `nivel` no se toca.
+  useEffect(() => {
+    if (turingNoDisponible && tipoOponente === 'modelo') setTipoOponente('motor');
+  }, [turingNoDisponible, tipoOponente]);
+
+  // La primera partida se crea al abrir la pantalla, a veces antes de saber que no hay modelo. Si quedó
+  // creada contra Turing y todavía no se jugó nada, se rehace contra Stockfish (una sola vez por partida:
+  // si esa creación falla no se reintenta en bucle, el error queda a la vista y NUEVA PARTIDA sigue ahí).
+  const partidaRehechaSinModeloRef = useRef(null);
+  useEffect(() => {
+    if (!turingNoDisponible || !partidaId || terminada || jugadas.length > 0 || viendoPartidaAjena) return;
+    if (configPartida?.tipoOponente !== 'modelo' || cargando === 'nueva' || partidaPendienteDetectada) return;
+    if (partidaRehechaSinModeloRef.current === partidaId) return;
+    partidaRehechaSinModeloRef.current = partidaId;
+    manejarNuevaPartida('motor');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turingNoDisponible, partidaId, terminada, jugadas.length, viendoPartidaAjena, configPartida, cargando, partidaPendienteDetectada]);
+
+  // La elección de pieza solo vale para la posición en que se abrió: si cambia la partida, termina (por
+  // ejemplo, se acaba el reloj con el selector abierto) o el tablero se mueve por otro lado, se cierra.
+  useEffect(() => {
+    setPromocionPendiente(null);
+  }, [partidaId, terminada, fen]);
+
   // Sondeo en vivo de una partida AJENA — el facilitador puede abrir Sala de
   // Control con la partida de un estudiante (desde "Ver en Sala de Control" en
   // Registro de Partidas, o cargando un `partidaId` que no es el suyo) y, sin
@@ -791,7 +825,9 @@ export default function SalaControl({
     setErrorCreacion(null);
     setCargando('nueva');
     try {
-      const op = esDiagnostico ? 'motor' : oponenteDeseado !== undefined ? oponenteDeseado : tipoOponente;
+      const opElegido = esDiagnostico ? 'motor' : oponenteDeseado !== undefined ? oponenteDeseado : tipoOponente;
+      // Sin modelo disponible no se crea una partida contra Turing: fallaría en la primera jugada del rival.
+      const op = opElegido === 'modelo' && turingNoDisponible ? 'motor' : opElegido;
       const nivelPartida = esDiagnostico ? NIVEL_DIAGNOSTICO : nivelSegunOponente(nivelBase, op);
       const controlTiempoMs = esDiagnostico ? 0 : relojMin * 60_000;
       const partida = await crearPartida(nivelPartida, null, op, controlTiempoMs);
@@ -911,12 +947,47 @@ export default function SalaControl({
       return;
     }
 
+    // Un peón que llega a la última fila corona: antes de mandar nada se pregunta a qué pieza. Mientras se
+    // decide, el origen y los destinos siguen marcados (el peón no se movió). Si los destinos legales
+    // todavía no llegaron (lista vacía) también se pregunta: el servidor valida la jugada igual. Si ya
+    // llegaron y esta casilla no figura, la jugada es ilegal y se manda sin pieza para que el servidor la rechace.
+    if (esPromocionDePeon(fen, origen, casilla)) {
+      if (destinosValidos.length === 0 || destinosValidos.includes(casilla)) {
+        const peon = piezaEnCasilla(fen, origen);
+        setPromocionPendiente({ origen, destino: casilla, esBlanca: peon === peon.toUpperCase() });
+        return;
+      }
+    }
+
     setCasillaOrigen(null);
     setDestinosValidos([]);
+    await jugarMovimiento(origen, casilla);
+  }
 
-    const jugadaUci = origen + casilla + (esPromocionDePeon(fen, origen, casilla) ? 'q' : '');
+  /** El jugador eligió la pieza de la coronación: ahora sí se manda la jugada, con su letra (q, r, b o n). */
+  async function elegirPiezaDeCoronacion(letra) {
+    const pendiente = promocionPendiente;
+    setPromocionPendiente(null);
+    if (!pendiente) return;
+    setCasillaOrigen(null);
+    setDestinosValidos([]);
+    await jugarMovimiento(pendiente.origen, pendiente.destino, letra);
+  }
+
+  /** Cancelar la coronación: no se manda nada. El peón sigue en su casilla y queda seleccionado, por si se quiere otra jugada. */
+  function cancelarCoronacion() {
+    setPromocionPendiente(null);
+  }
+
+  /**
+   * Manda al servidor la jugada `origen` → `destino` (con la letra de coronación `promocion` si la hay) y
+   * muestra el resultado: la propia al instante y, tras una pausa, la respuesta del rival.
+   */
+  async function jugarMovimiento(origen, casilla, promocion = '') {
+    const jugadaUci = origen + casilla + promocion;
     const fenAntesDeLaJugada = fen;
-    // Cuánto tardó en decidir esta jugada y cuánto le queda en el reloj, medido justo al jugarla. La primera
+    // Cuánto tardó en decidir esta jugada y cuánto le queda en el reloj, medido justo al jugarla (con una
+    // coronación, al elegir la pieza: el reloj siguió corriendo mientras se decidía). La primera
     // jugada de la partida no se mide: el reloj todavía no empezó a correr.
     const { gastadoMs, tiempos: relojAlJugar } = instantaneaReloj();
     const tiemposDeLaJugada = {
@@ -1173,7 +1244,7 @@ export default function SalaControl({
           <div className="h-3 w-[1px] bg-surface-variant"></div>
           <span className="font-mono-label text-mono-label text-on-surface-variant flex items-center gap-1.5 flex-wrap">
             <span className="text-primary font-medium">
-              {oponenteMostrado === 'motor' ? 'STOCKFISH 16' : 'TURING IA (v5)'}
+              {oponenteMostrado === 'motor' ? 'STOCKFISH 16' : `TURING IA${versionModelo ? ` (v${versionModelo})` : ''}`}
             </span>
             <span>·</span>
             <span>NIVEL {nivelMostrado} ({categoriaDeNivel(nivelMostrado, oponenteMostrado === 'modelo').toUpperCase()})</span>
@@ -1284,7 +1355,7 @@ export default function SalaControl({
                 <button
                   onClick={actualizarFoto}
                   onPointerDown={manejarPulsacion}
-                  className="font-mono-micro text-mono-micro text-primary-fixed-dim px-1.5 py-0.5 rounded bg-primary/10 hover:bg-primary/20 transition-colors"
+                  className="font-mono-micro text-mono-micro text-primary-fixed-dim px-1.5 py-0.5 max-sm:min-h-10 max-sm:px-3 rounded bg-primary/10 hover:bg-primary/20 transition-colors"
                 >
                   ACTUALIZAR
                 </button>
@@ -1390,16 +1461,19 @@ export default function SalaControl({
                   manejarNuevaPartida('modelo');
                 }}
                 onPointerDown={manejarPulsacion}
-                disabled={cargando === 'nueva' || seleccionBloqueada}
+                disabled={cargando === 'nueva' || seleccionBloqueada || turingNoDisponible}
                 aria-pressed={oponenteEnSelector === 'modelo'}
-                className={claseBotonRival(oponenteEnSelector === 'modelo', seleccionBloqueada)}
+                title={turingNoDisponible ? 'Turing no está disponible en este momento' : undefined}
+                className={claseBotonRival(oponenteEnSelector === 'modelo', seleccionBloqueada || turingNoDisponible)}
               >
                 <div className="flex items-center gap-1">
                   <span className="material-symbols-outlined text-[15px]">psychology</span>
                   <span>TURING</span>
                 </div>
                 <span className="text-[9px] opacity-80 font-normal text-center leading-tight">
-                  Turing v5 · entrenado con partidas de maestros
+                  {turingNoDisponible
+                    ? 'No disponible por ahora'
+                    : `Turing${versionModelo ? ` v${versionModelo}` : ''} · entrenado con partidas de maestros`}
                 </span>
               </button>
 
@@ -1421,6 +1495,25 @@ export default function SalaControl({
                 <span className="text-[9px] opacity-80 font-normal">Minimax Alfa-Beta</span>
               </button>
             </div>
+
+            {/* Sin modelo (404/500/503, sin red o `disponible: false`): Turing no se ofrece y se juega contra
+                Stockfish. En el diagnóstico el rival ya es fijo, así que ahí no hace falta avisar. */}
+            {turingNoDisponible && !diagnosticoPendiente && (
+              <div role="status" className="flex items-center justify-between gap-2 flex-wrap">
+                <p className="font-mono-micro text-[10px] text-error leading-relaxed flex items-start gap-1 min-w-0">
+                  <span className="material-symbols-outlined text-[13px] shrink-0" aria-hidden="true">error</span>
+                  <span>Turing no está disponible en este momento.</span>
+                </p>
+                <button
+                  type="button"
+                  onClick={recargarEstadoModelo}
+                  disabled={consultandoModelo}
+                  className="min-h-10 px-space-sm rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface font-mono-micro text-[10px] uppercase tracking-wide transition-colors motion-reduce:transition-none disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                >
+                  {consultandoModelo ? 'Verificando…' : 'Reintentar'}
+                </button>
+              </div>
+            )}
 
             {seleccionBloqueada && (
               <p className="font-mono-micro text-[10px] text-outline leading-relaxed flex items-start gap-1">
@@ -1451,7 +1544,7 @@ export default function SalaControl({
               <div className="bg-surface-container-lowest p-1.5 rounded-lg flex items-center">
                 <button
                   disabled
-                  title="El kit físico todavía no llegó — ver CLAUDE.md"
+                  title="No disponible — el brazo físico todavía no está conectado"
                   className="flex-1 py-1 text-center font-mono-micro text-mono-micro rounded text-outline cursor-not-allowed"
                 >
                   FÍSICO (ROBOT)
@@ -1807,7 +1900,7 @@ export default function SalaControl({
                 </div>
               </div>
               <div className="flex items-center gap-space-xs flex-wrap w-full sm:w-auto min-w-0">
-                <div className="flex items-center gap-2 bg-surface-container-high/70 px-2 py-1 rounded-lg border border-outline-variant/30 min-w-0 max-w-full">
+                <div className="flex items-center gap-2 bg-surface-container-high/70 px-2 py-1 rounded-lg border border-outline-variant/30 min-w-0 max-w-full max-sm:w-full max-sm:flex-wrap">
                   <label className="font-mono-micro text-[10px] text-outline uppercase font-semibold whitespace-nowrap" htmlFor="nivelSlider">
                     Nivel {oponenteEnSelector === 'modelo' ? 'IA' : 'Motor'}
                   </label>
@@ -1823,7 +1916,7 @@ export default function SalaControl({
                     aria-valuetext={`Nivel ${nivelEnSelector}, ${categoriaDeNivel(nivelEnSelector, oponenteEnSelector === 'modelo')}`}
                     aria-describedby={notasNivelId}
                     title={seleccionBloqueada ? motivoBloqueoSeleccion : undefined}
-                    className="w-28 sm:w-40 min-w-0 accent-primary-container cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                    className="w-28 sm:w-40 min-w-0 max-sm:order-last max-sm:basis-full max-sm:w-full max-sm:h-10 accent-primary-container cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
                   />
                   <span className="font-mono-metric text-mono-metric text-on-surface font-semibold tabular-nums min-w-[2ch] text-right">
                     {nivelEnSelector}
@@ -1842,7 +1935,7 @@ export default function SalaControl({
                     onChange={(evento) => manejarCambioDeReloj(Number(evento.target.value))}
                     disabled={seleccionBloqueada}
                     title={diagnosticoPendiente ? 'La partida de diagnóstico se juega sin reloj.' : seleccionBloqueada ? motivoBloqueoSeleccion : undefined}
-                    className="bg-transparent font-mono-metric text-mono-metric text-on-surface font-semibold cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
+                    className="bg-transparent font-mono-metric text-mono-metric text-on-surface font-semibold cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 max-sm:min-h-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
                   >
                     {OPCIONES_RELOJ_MIN.map((minutos) => (
                       <option key={minutos} value={minutos} className="bg-surface-container-high text-on-surface">
@@ -2022,6 +2115,14 @@ export default function SalaControl({
         />
       )}
 
+      {promocionPendiente && (
+        <SelectorPromocion
+          esBlanca={promocionPendiente.esBlanca}
+          alElegir={elegirPiezaDeCoronacion}
+          alCancelar={cancelarCoronacion}
+        />
+      )}
+
       {partidaPendienteDetectada && (
         <ModalRetomarPartida
           partida={partidaPendienteDetectada}
@@ -2074,7 +2175,8 @@ function agruparJugadasPorRonda(jugadas) {
 /**
  * Switch chico para que el facilitador prenda/apague, partida por partida, un
  * permiso del jugador (cámara, simulación 3D). El estado se ve tanto por color
- * como por posición de la perilla — no depende solo del color.
+ * como por posición de la perilla — no depende solo del color. El `before:` invisible agranda la
+ * zona que responde al toque (de 36x20 a 52x40 px) sin cambiar cómo se ve.
  */
 function InterruptorPermiso({ id, etiqueta, activo, cargando, onCambiar }) {
   return (
@@ -2090,7 +2192,7 @@ function InterruptorPermiso({ id, etiqueta, activo, cargando, onCambiar }) {
         disabled={cargando}
         onClick={onCambiar}
         title={activo ? 'Tocá para apagar' : 'Tocá para prender'}
-        className={`relative w-9 h-5 rounded-full shrink-0 transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
+        className={`relative w-9 h-5 rounded-full shrink-0 transition-colors disabled:opacity-50 before:absolute before:-inset-x-2 before:-inset-y-2.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
           activo ? 'bg-primary' : 'bg-surface-container-high'
         }`}
       >

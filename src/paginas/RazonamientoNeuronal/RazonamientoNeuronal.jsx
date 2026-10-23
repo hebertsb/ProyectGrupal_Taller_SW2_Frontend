@@ -452,7 +452,7 @@ export default function RazonamientoNeuronal() {
         type="button"
         onClick={cambiarPartida}
         title="Ver la partida de un estudiante"
-        className="self-start flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface border border-outline-variant/40 font-mono-micro text-[11px] uppercase tracking-wider transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+        className="self-start flex items-center gap-1.5 min-h-10 px-3 py-1.5 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface border border-outline-variant/40 font-mono-micro text-[11px] uppercase tracking-wider transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
       >
         <span className="material-symbols-outlined text-[16px] text-neon-cyan">group</span>
         Ver partida de un estudiante
@@ -608,7 +608,7 @@ export default function RazonamientoNeuronal() {
                 <span className="font-mono-micro text-[9px] text-on-surface-variant uppercase">Turing</span>
                 <span className={`w-2 h-2 rounded-full ${estadoModeloData?.disponible ? 'bg-neon-cyan animate-ping' : 'bg-error'}`} />
               </div>
-              <span className={`font-mono-metric text-[13px] font-bold truncate ${estadoModeloData?.disponible ? 'text-neon-cyan' : 'text-error'}`}>
+              <span className={`font-mono-metric text-[13px] font-bold truncate max-sm:whitespace-normal max-sm:break-words ${estadoModeloData?.disponible ? 'text-neon-cyan' : 'text-error'}`}>
                 {cargandoEstado ? 'VERIFICANDO…' : estadoModeloData?.disponible ? 'ONLINE / INFERENCIA' : 'SIN CHECKPOINT'}
               </span>
             </div>
@@ -644,7 +644,7 @@ export default function RazonamientoNeuronal() {
                 onClick={() => fenActual && dispararInferencia?.(fenActual)}
                 disabled={estaAnalizando || !estadoModeloData?.disponible}
                 title="Ejecutar inferencia real del modelo sobre la posición actual"
-                className="flex-1 h-full min-h-[38px] px-2 rounded-lg bg-neon-cyan text-on-primary font-headline-sm text-[12px] font-bold flex items-center justify-center gap-1 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-all shadow-[0_0_12px_rgba(0,229,255,0.4)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                className="flex-1 h-full min-h-10 px-2 rounded-lg bg-neon-cyan text-on-primary font-headline-sm text-[12px] font-bold flex items-center justify-center gap-1 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-all shadow-[0_0_12px_rgba(0,229,255,0.4)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
               >
                 <span className="material-symbols-outlined text-[16px]">{estaAnalizando ? 'sync' : 'bolt'}</span>
                 {estaAnalizando ? 'Infiriendo…' : 'Inferencia'}
@@ -654,7 +654,7 @@ export default function RazonamientoNeuronal() {
                   type="button"
                   onClick={cambiarPartida}
                   title="Elegir otra partida"
-                  className="h-full min-h-[38px] px-2.5 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface transition-all border border-outline-variant/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                  className="h-full min-h-10 px-2.5 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface transition-all border border-outline-variant/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                 >
                   <span className="material-symbols-outlined text-[16px]">swap_horiz</span>
                 </button>
@@ -663,7 +663,7 @@ export default function RazonamientoNeuronal() {
                   type="button"
                   onClick={usarPosicionInicial}
                   title="Posición inicial"
-                  className="h-full min-h-[38px] px-2.5 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface transition-all border border-outline-variant/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                  className="h-full min-h-10 px-2.5 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface transition-all border border-outline-variant/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                 >
                   <span className="material-symbols-outlined text-[16px]">home</span>
                 </button>
@@ -707,7 +707,7 @@ export default function RazonamientoNeuronal() {
                 {partida?.usuario_nombre && (
                   <div className="flex items-center gap-1.5 px-0.5">
                     <span className="material-symbols-outlined text-secondary text-[14px]">person_search</span>
-                    <span className="font-mono-micro text-[10px] text-secondary uppercase tracking-wide truncate">
+                    <span className="font-mono-micro text-[10px] text-secondary uppercase tracking-wide truncate max-sm:whitespace-normal max-sm:break-words">
                       Analizando partida de: <strong className="text-on-surface">{partida.usuario_nombre}</strong>
                     </span>
                     {rolDuenoPartida && (
@@ -847,7 +847,7 @@ export default function RazonamientoNeuronal() {
                     type="button"
                     onClick={copiarFen}
                     title="Copiar FEN"
-                    className="px-1.5 py-1 rounded bg-surface-container-high hover:bg-surface-bright text-on-surface text-[10px] font-mono flex items-center gap-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                    className="px-1.5 py-1 max-sm:min-h-10 max-sm:min-w-10 max-sm:justify-center rounded bg-surface-container-high hover:bg-surface-bright text-on-surface text-[10px] font-mono flex items-center gap-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                   >
                     <span className="material-symbols-outlined text-[13px]">content_copy</span>
                   </button>
@@ -859,7 +859,7 @@ export default function RazonamientoNeuronal() {
                       key={preset.etiqueta}
                       type="button"
                       onClick={() => usarPreset(preset.fen, preset.etiqueta)}
-                      className="px-1.5 py-1 rounded bg-surface-container-lowest hover:bg-surface-container-high text-[10px] font-mono text-on-surface-variant text-center border border-outline-variant/20 truncate focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                      className="px-1.5 py-1 max-sm:min-h-10 rounded bg-surface-container-lowest hover:bg-surface-container-high text-[10px] font-mono text-on-surface-variant text-center border border-outline-variant/20 truncate focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                     >
                       {preset.etiqueta}
                     </button>
@@ -904,7 +904,7 @@ export default function RazonamientoNeuronal() {
                       title="Vista orgánica — nube de partículas"
                       aria-label="Vista orgánica (nube de partículas)"
                       aria-pressed={vistaCerebro === 'organico'}
-                      className={`p-1 rounded flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
+                      className={`p-1 max-sm:min-h-10 max-sm:min-w-10 rounded flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
                         vistaCerebro === 'organico'
                           ? 'bg-neon-cyan text-on-primary'
                           : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'
@@ -918,7 +918,7 @@ export default function RazonamientoNeuronal() {
                       title="Vista de red — nodos y conexiones"
                       aria-label="Vista de red (nodos y conexiones)"
                       aria-pressed={vistaCerebro === 'red'}
-                      className={`p-1 rounded flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
+                      className={`p-1 max-sm:min-h-10 max-sm:min-w-10 rounded flex items-center justify-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
                         vistaCerebro === 'red'
                           ? 'bg-neon-cyan text-on-primary'
                           : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'
@@ -955,7 +955,9 @@ export default function RazonamientoNeuronal() {
                 )}
 
                 {inferenciaVigente?.jugada_elegida && (
-                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 bg-surface-container-lowest/95 backdrop-blur-md px-3 py-1.5 rounded-lg border border-neon-lime/60 shadow-[0_0_18px_rgba(118,255,3,0.35)] max-w-[90%] pointer-events-none">
+                  /* `w-max`: con `left-1/2` un recuadro absoluto solo puede ocupar la mitad derecha del
+                     contenedor; en celular eso partía el texto en 4 líneas y tapaba medio cerebro. */
+                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 bg-surface-container-lowest/95 backdrop-blur-md px-3 py-1.5 rounded-lg border border-neon-lime/60 shadow-[0_0_18px_rgba(118,255,3,0.35)] w-max max-w-[90%] pointer-events-none">
                     <div className="w-2 h-2 rounded-full bg-neon-lime shrink-0" />
                     <div className="flex flex-col text-center">
                       <span className="font-mono-micro text-[10px] uppercase text-neon-lime font-bold tracking-wider">Selección Motora (real)</span>
@@ -1075,7 +1077,7 @@ export default function RazonamientoNeuronal() {
                   <span className="font-headline-sm text-[13px] font-semibold text-on-surface uppercase tracking-wide">
                     Candidatas de Turing
                   </span>
-                  <span className="font-mono-label text-[11px] text-on-surface-variant truncate">
+                  <span className="font-mono-label text-[11px] text-on-surface-variant truncate max-sm:whitespace-normal max-sm:break-words">
                     {inferenciaVigente ? (
                       <>
                         Turing jugó <span className="text-neon-cyan font-semibold">{inferenciaVigente.jugada_elegida}</span>
@@ -1281,7 +1283,8 @@ export default function RazonamientoNeuronal() {
                   type="button"
                   onClick={limpiarConsola}
                   title="Limpiar consola"
-                  className="text-outline hover:text-on-surface transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                  aria-label="Limpiar consola"
+                  className="text-outline hover:text-on-surface transition-colors max-sm:min-h-10 max-sm:min-w-10 max-sm:flex max-sm:items-center max-sm:justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                 >
                   <span className="material-symbols-outlined text-[15px]">delete_sweep</span>
                 </button>

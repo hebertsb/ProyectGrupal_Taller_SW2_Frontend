@@ -133,7 +133,7 @@ export default function PanelCalculoTuring({ calculo, analizando }) {
           type="button"
           onClick={() => setFormulaAbierta((v) => !v)}
           aria-expanded={formulaAbierta}
-          className="self-start flex items-center gap-1 font-mono-micro text-[10px] text-neon-cyan hover:underline min-h-[32px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+          className="self-start flex items-center gap-1 font-mono-micro text-[10px] text-neon-cyan hover:underline min-h-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
         >
           <span className="material-symbols-outlined text-[14px]">{formulaAbierta ? 'expand_less' : 'help'}</span>
           ¿Cómo se decide?

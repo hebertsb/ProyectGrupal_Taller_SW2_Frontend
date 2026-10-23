@@ -124,7 +124,7 @@ export default function ModalRetomarPartida({ partida, alRetomar, alEmpezarNueva
         aria-modal="true"
         aria-labelledby="titulo-retomar-partida"
         aria-describedby="descripcion-retomar-partida"
-        className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-surface-container-low border border-outline-variant/30 rounded-2xl shadow-2xl p-space-lg flex flex-col gap-space-md"
+        className="w-full max-w-md max-h-[90dvh] overflow-y-auto bg-surface-container-low border border-outline-variant/30 rounded-2xl shadow-2xl p-space-lg flex flex-col gap-space-md"
       >
         <div className="retomar-partida-bloque flex items-center gap-space-sm">
           <div className="w-11 h-11 rounded-full bg-primary/15 text-primary flex items-center justify-center shrink-0">
@@ -137,7 +137,7 @@ export default function ModalRetomarPartida({ partida, alRetomar, alEmpezarNueva
               Partida pendiente
             </span>
             <h2 id="titulo-retomar-partida" className="font-headline-sm text-headline-sm text-on-surface">
-              Tienes una partida sin terminar
+              Tenés una partida sin terminar
             </h2>
           </div>
         </div>
@@ -146,7 +146,7 @@ export default function ModalRetomarPartida({ partida, alRetomar, alEmpezarNueva
           id="descripcion-retomar-partida"
           className="retomar-partida-bloque font-body-sm text-body-sm text-on-surface-variant"
         >
-          Puedes seguir donde la dejaste o empezar una desde cero.
+          Podés seguir donde la dejaste o empezar una desde cero.
         </p>
 
         <dl className="retomar-partida-bloque grid grid-cols-2 gap-space-xs">
@@ -191,8 +191,8 @@ export default function ModalRetomarPartida({ partida, alRetomar, alEmpezarNueva
           </button>
           <p id="aviso-descartar-partida" className="font-mono-micro text-mono-micro text-on-surface-variant text-center">
             {esFacilitador
-              ? 'Si empiezas una nueva, la anterior queda descartada.'
-              : 'Si empiezas una nueva, la anterior se descarta y no cuenta para tu nivel.'}
+              ? 'Si empezás una nueva, la anterior queda descartada.'
+              : 'Si empezás una nueva, la anterior se descarta y no cuenta para tu nivel.'}
           </p>
         </div>
       </div>

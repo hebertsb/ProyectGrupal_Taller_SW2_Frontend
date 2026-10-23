@@ -2,10 +2,13 @@ import { useMemo, useRef, useState } from 'react';
 import AvatarMetaPerson3D from './AvatarMetaPerson3D';
 import CerebroNeuronal from '../paginas/RazonamientoNeuronal/CerebroNeuronal';
 import { useRazonamiento } from '../contexto/ContextoRazonamiento';
+import { useEstadoModelo } from '../contexto/ContextoEstadoModelo';
 
 /**
  * Motor de Facetas Emocionales Autónomo: calcula el estado psicológico y la expresión
  * del agente en base a la evaluación, posición, jaques y tiempo de cálculo.
+ * `versionModelo` es la versión real del checkpoint activo (o `null` si todavía no se sabe):
+ * sin número, el título dice "Cálculo Tensorial" a secas en vez de inventar uno.
  */
 function calcularFacetaEmocional({
   pensando,
@@ -15,6 +18,7 @@ function calcularFacetaEmocional({
   resultado = null,
   cantidadJugadas = 0,
   ultimoMovimiento = null,
+  versionModelo = null,
 }) {
   // 1. Partida Terminada
   if (terminada) {
@@ -66,11 +70,11 @@ function calcularFacetaEmocional({
     };
   }
 
-  // 2. IA pensando activamente en este instante (Inferencia v5)
+  // 2. IA pensando activamente en este instante (inferencia del modelo activo)
   if (pensando) {
     return {
       id: 'PENSAMIENTO_PROFUNDO',
-      titulo: 'Cálculo Tensorial v5',
+      titulo: versionModelo ? `Cálculo Tensorial v${versionModelo}` : 'Cálculo Tensorial',
       icono: '🧠',
       color: '#00e5ff', // Cian de alta concentración
       descripcion: 'Explorando matrices SE-ResNet. Ceño concentrado y análisis de tablero.',
@@ -277,6 +281,9 @@ export default function AvatarAgente3D({
   const resetCameraRef = useRef(null);
 
   const { ultimaInferencia, estaAnalizando } = useRazonamiento() ?? {};
+  // Versión real del checkpoint activo (la comparte toda la app, no se vuelve a pedir acá).
+  const { version: versionModelo } = useEstadoModelo();
+  const sufijoVersionModelo = versionModelo ? ` v${versionModelo}` : '';
 
   // Faceta Emocional calculada autónomamente a partir del juego — 100% autónomo,
   // sin ningún panel manual: las expresiones salen solas cuando pasa algo real
@@ -290,8 +297,9 @@ export default function AvatarAgente3D({
       resultado,
       cantidadJugadas,
       ultimoMovimiento,
+      versionModelo,
     });
-  }, [pensando, evaluacionCp, mateEn, terminada, resultado, cantidadJugadas, ultimoMovimiento]);
+  }, [pensando, evaluacionCp, mateEn, terminada, resultado, cantidadJugadas, ultimoMovimiento, versionModelo]);
 
   // Datos reales de la última inferencia del modelo (mismo Context que Razonamiento
   // Neuronal) — alimentan la miniatura del cerebro cuando `vista === 'cerebro'`.
@@ -334,7 +342,9 @@ export default function AvatarAgente3D({
             type="button"
             onClick={() => setVista('avatar')}
             title="Avatar del agente"
-            className={`p-1 rounded flex items-center justify-center transition-all ${
+            aria-label="Ver el avatar del agente"
+            aria-pressed={vista === 'avatar'}
+            className={`p-1 max-sm:min-h-10 max-sm:min-w-10 rounded flex items-center justify-center transition-all ${
               vista === 'avatar' ? 'bg-[#00e5ff] text-black' : 'text-slate-400 hover:text-white hover:bg-white/5'
             }`}
           >
@@ -344,7 +354,9 @@ export default function AvatarAgente3D({
             type="button"
             onClick={() => setVista('cerebro')}
             title="Cerebro de partículas — razonamiento en vivo"
-            className={`p-1 rounded flex items-center justify-center transition-all ${
+            aria-label="Ver el cerebro de partículas en vivo"
+            aria-pressed={vista === 'cerebro'}
+            className={`p-1 max-sm:min-h-10 max-sm:min-w-10 rounded flex items-center justify-center transition-all ${
               vista === 'cerebro' ? 'bg-[#00e5ff] text-black' : 'text-slate-400 hover:text-white hover:bg-white/5'
             }`}
           >
@@ -353,7 +365,7 @@ export default function AvatarAgente3D({
         </div>
 
         <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950/60 text-[#00e5ff] border border-[#00e5ff]/30 font-semibold shrink-0">
-          {tipoOponente === 'modelo' ? 'IA v5' : 'STOCKFISH'}
+          {tipoOponente === 'modelo' ? `IA${sufijoVersionModelo}` : 'STOCKFISH'}
           {nivel != null ? ` · NIVEL ${nivel}` : tipoOponente === 'modelo' ? ' AUTÓNOMA' : ' 16'}
         </span>
       </div>
@@ -416,7 +428,7 @@ export default function AvatarAgente3D({
             <button
               type="button"
               onClick={() => resetCameraRef.current?.()}
-              className="absolute bottom-2 right-2 p-1.5 rounded bg-black/60 hover:bg-[#00e5ff]/20 border border-white/10 hover:border-[#00e5ff]/40 text-slate-300 hover:text-[#00e5ff] text-[10px] font-mono transition-all z-10 flex items-center gap-1"
+              className="absolute bottom-2 right-2 p-1.5 max-sm:min-h-10 rounded bg-black/60 hover:bg-[#00e5ff]/20 border border-white/10 hover:border-[#00e5ff]/40 text-slate-300 hover:text-[#00e5ff] text-[10px] font-mono transition-all z-10 flex items-center gap-1"
               title="Centrar encuadre frontal de la cintura para arriba"
             >
               <span className="material-symbols-outlined text-[13px]">center_focus_strong</span>

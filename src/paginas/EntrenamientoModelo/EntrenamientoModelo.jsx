@@ -152,7 +152,7 @@ function mensajeExitoDescarga(estadoAlDescargar, soloNuevas) {
  * Pantalla "Entrenamiento del modelo" — exclusiva del facilitador. Deja
  * descargar el dataset (PGN + CSV) que alimenta el reentrenamiento por lotes
  * de Turing (HU4). A propósito NO ofrece entrenar desde acá: el reentrenamiento
- * en sí todavía no existe (ver CLAUDE.md — nunca aprendizaje "en vivo", siempre
+ * en sí todavía no existe (regla del proyecto: nunca aprendizaje "en vivo", siempre
  * un lote controlado que hace el equipo técnico), así que los pasos 2 y 3 se
  * marcan explícitamente como pendientes.
  *

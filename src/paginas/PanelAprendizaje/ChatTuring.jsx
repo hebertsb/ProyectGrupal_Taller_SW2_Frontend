@@ -252,7 +252,7 @@ export default function ChatTuring({ usuario, narrar, detener, narrando, vozDisp
                     onClick={() => narrarMensaje(m.contenido)}
                     disabled={!vozDisponible}
                     aria-label={narrando ? 'Detener la lectura en voz alta' : 'Escuchar esta respuesta de Turing'}
-                    className="self-start flex items-center gap-space-2xs px-space-xs py-space-2xs rounded-lg bg-surface-container-lowest hover:bg-surface-bright text-on-surface-variant disabled:opacity-50 disabled:cursor-not-allowed font-mono-label text-[11px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                    className="self-start min-h-10 flex items-center gap-space-2xs px-space-sm py-space-2xs rounded-lg bg-surface-container-lowest hover:bg-surface-bright text-on-surface-variant disabled:opacity-50 disabled:cursor-not-allowed font-mono-label text-[11px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                   >
                     <span className="material-symbols-outlined text-[14px]">{narrando ? 'stop_circle' : 'volume_up'}</span>
                     {narrando ? 'Detener' : 'Escuchar'}
@@ -273,6 +273,8 @@ export default function ChatTuring({ usuario, narrar, detener, narrando, vozDisp
         <label htmlFor="chat-turing-input" className="sr-only">
           Escribile una pregunta a Turing
         </label>
+        {/* `min-w-0` en el campo y `shrink-0` en el botón: sin eso el campo no se achica por debajo de su
+            ancho natural y, en pantallas angostas (360 px), empuja "Enviar" fuera de la tarjeta, cortado. */}
         <input
           id="chat-turing-input"
           type="text"
@@ -281,12 +283,12 @@ export default function ChatTuring({ usuario, narrar, detener, narrando, vozDisp
           disabled={enviando || cargandoHistorial}
           placeholder="Escribí tu pregunta para Turing…"
           maxLength={2000}
-          className="flex-1 px-space-sm py-space-xs rounded-lg bg-surface-container-lowest border border-outline-variant/30 text-on-surface font-body-sm text-body-sm placeholder:text-on-surface-variant disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+          className="flex-1 min-w-0 min-h-10 px-space-sm py-space-xs rounded-lg bg-surface-container-lowest border border-outline-variant/30 text-on-surface font-body-sm text-body-sm placeholder:text-on-surface-variant disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
         />
         <button
           type="submit"
           disabled={enviando || cargandoHistorial || !texto.trim()}
-          className="flex items-center gap-space-2xs px-space-md py-space-xs rounded-lg bg-primary text-on-primary font-body-sm text-body-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          className="shrink-0 min-h-10 flex items-center gap-space-2xs px-space-md py-space-xs rounded-lg bg-primary text-on-primary font-body-sm text-body-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         >
           <span className="material-symbols-outlined text-[18px]">send</span>
           Enviar

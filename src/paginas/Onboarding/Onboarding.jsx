@@ -303,9 +303,16 @@ export default function Onboarding({ usuario = null, alVerPiezas = null, pedidoA
             transition={{ duration: 0.25 }}
             className="flex flex-col gap-4"
           >
-            <h2 id="onboarding-titulo" className="font-headline-sm text-headline-sm text-on-surface">
-              {tarjeta.tipo === 'pieza' ? tarjeta.pieza.nombre : tarjeta.titulo}
-            </h2>
+            {/* El apodo de la pieza (el mismo `apodo` de `contenido/piezas.js` que usa el Panel de Aprendizaje)
+                va en la misma línea que el nombre, y baja solo si no entra: así no empuja el resto de la tarjeta. */}
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+              <h2 id="onboarding-titulo" className="font-headline-sm text-headline-sm text-on-surface">
+                {tarjeta.tipo === 'pieza' ? tarjeta.pieza.nombre : tarjeta.titulo}
+              </h2>
+              {tarjeta.tipo === 'pieza' && (
+                <p className="font-body-sm text-body-sm text-primary font-semibold italic">&ldquo;{tarjeta.pieza.apodo}&rdquo;</p>
+              )}
+            </div>
 
             {tarjeta.tipo === 'concepto' && (
               <p className="font-body-sm text-body-sm text-on-surface leading-relaxed">{tarjeta.texto}</p>
