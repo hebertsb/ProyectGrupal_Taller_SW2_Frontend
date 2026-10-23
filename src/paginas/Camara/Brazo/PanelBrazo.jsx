@@ -4,12 +4,13 @@ import { CLASE_AVISO } from '../estilos';
 import ConexionBrazo from './ConexionBrazo';
 import MoverPieza from './MoverPieza';
 import ParametrosBrazo from './ParametrosBrazo';
+import RutinasBrazo from './RutinasBrazo';
 
 const INTERVALO_MS = 700;
 
 /**
  * Control del brazo sin DobotStudio: conexión TCP, telemetría en vivo, parámetros y configuraciones guardadas, y la primera
- * prueba (llevar una pieza de una casilla a otra). El botón PARAR queda fijo y visible mientras haya conexión.
+ * prueba (llevar una pieza de una casilla a otra), más las rutinas guardadas del brazo. El botón PARAR queda fijo y visible mientras haya conexión.
  */
 export default function PanelBrazo() {
   const [estado, setEstado] = useState(null);
@@ -93,6 +94,7 @@ export default function PanelBrazo() {
           )}
         </div>
       </div>
+      <RutinasBrazo estado={estado} onCambio={leer} />
     </div>
   );
 }

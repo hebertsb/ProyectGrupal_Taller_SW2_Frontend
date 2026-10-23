@@ -17,6 +17,7 @@ const CAMPOS = [
   ['velocidad_pinza', 'Velocidad de la pinza (%)', 1, 100],
   ['apertura_aproximacion', 'Apertura al bajar sobre un peón (0–1000)', 0, 1000],
   ['apertura_extra_soltar', 'Apertura extra al soltar la pieza (0–1000)', 0, 1000],
+  ['largo_pinza_mm', 'Largo de la pinza: de la brida a la punta de los dedos (mm)', 100, 400],
   ['altura_segura_mm', 'Altura segura para trasladarse (mm)', 20, 200],
   ['margen_agarre_mm', 'Margen de agarre sobre el tablero (mm)', 0, 30],
   ['giro_diagonal_grados', 'Giro de los dedos (°)', -180, 180],
