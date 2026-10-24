@@ -33,9 +33,10 @@ const FIN_CABECERA = new TextEncoder().encode('\r\n\r\n');
  * @param {''|'blanca'|'negra'} auto en modo `vista`, el backend detecta solo la casilla de la pieza de ese color (`datos` = `[[casilla, estado, confianza]]`)
  * @param {'principal'|'secundaria'|'todas'} camara qué cámara mostrar; `todas` junta las dos lado a lado (y en modo `piezas`/`vista` fusiona el resultado)
  * @param {'plana'|'cajas'|'ambas'} vista en modo `piezas`: el tablero enderezado, la imagen de la cámara con la caja 3D de cada pieza, o ambas
+ * @param {number} maxFps si es mayor que 0, el backend procesa y envía como mucho esos cuadros por segundo (el resto no se analiza): alivia la máquina en el reconocimiento
  * @param {boolean} activo si es false no se conecta (y se desconecta si estaba conectado)
  */
-export default function useFlujoVivo({ modo, casillas = [], auto = '', camara = 'principal', vista = 'plana', activo = true }) {
+export default function useFlujoVivo({ modo, casillas = [], auto = '', camara = 'principal', vista = 'plana', maxFps = 0, activo = true }) {
   const [url, setUrl] = useState(null);
   const [datos, setDatos] = useState(null);
   const [error, setError] = useState(null);
@@ -65,6 +66,7 @@ export default function useFlujoVivo({ modo, casillas = [], auto = '', camara = 
         const token = leerSesion('access_token');
         const consulta = new URLSearchParams({ modo, camara });
         if (modo === 'piezas') consulta.set('vista', vista);
+        if (maxFps > 0) consulta.set('max_fps', String(maxFps));
         if (claveCasillas) consulta.set('casillas', claveCasillas);
         if (auto) consulta.set('auto', auto);
         const respuesta = await fetch(`/vision/flujo?${consulta}`, {
@@ -129,7 +131,7 @@ export default function useFlujoVivo({ modo, casillas = [], auto = '', camara = 
       if (controlador) controlador.abort();
       if (temporizador) clearTimeout(temporizador);
     };
-  }, [modo, claveCasillas, auto, camara, vista, activo]);
+  }, [modo, claveCasillas, auto, camara, vista, maxFps, activo]);
 
   // Cuadros por segundo realmente mostrados (0 = sin señal): sirve para ver a ojo que el video está vivo.
   useEffect(() => {

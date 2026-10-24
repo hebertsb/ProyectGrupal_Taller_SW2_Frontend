@@ -9,6 +9,7 @@ import {
 } from '../../../api/backend';
 import { nombreClase } from '../../EntrenarCamara/SubirFotosPieza';
 import { CLASE_AVISO, CLASE_BOTON, CLASE_BOTON_PRIMARIO, CLASE_TARJETA } from '../estilos';
+import ModoCamaras from '../ModoCamaras';
 import useCamarasConfiguradas from '../useCamarasConfiguradas';
 import useFlujoVivo from '../useFlujoVivo';
 import {
@@ -353,7 +354,11 @@ export default function EntrenamientoPiezas() {
                 ? <>Detecto la pieza en <strong>{detectada[0]}</strong>{camarasDeCaptura.length > 1 ? ' (decisión entre las dos cámaras)' : ''}. Si es correcto, tocá «Capturar».</>
                 : detectada?.[1] === 'ambigua'
                   ? 'Veo más de una pieza (o una muy inclinada): dejá una sola pieza en el tablero.'
-                  : `Poné una pieza ${clase.startsWith('white') ? 'blanca' : 'negra'} en cualquier casilla del tablero.`}
+                  : detectada?.[1] === 'ninguna'
+                    ? 'No veo ninguna pieza distinta del tablero vacío guardado. Si la cámara o la luz cambiaron desde que sacaste «Casilla vacía», volvé a sacarla (con el tablero sin piezas) y probá de nuevo.'
+                    : errorVista
+                      ? `El reconocimiento avisa: ${errorVista}.`
+                      : `Poné una pieza ${clase.startsWith('white') ? 'blanca' : 'negra'} en cualquier casilla del tablero.`}
               {' '}Solo una pieza a la vez en el tablero.
               {porCamaraDetectada && new Set(Object.values(porCamaraDetectada).filter(Boolean)).size > 1 && (
                 <span className="text-error">
@@ -441,6 +446,7 @@ export default function EntrenamientoPiezas() {
         <h3 id="titulo-capturar" className="font-body-md text-body-md text-on-surface font-medium">
           3 · Vista previa y foto
         </h3>
+        <ModoCamaras />
         <p className="font-body-sm text-body-sm text-on-surface-variant m-0" role="status">
           {camarasDeCaptura.length > 1
             ? 'Cada captura guarda las fotos de las DOS cámaras a la vez (las dos se ven abajo, lado a lado).'

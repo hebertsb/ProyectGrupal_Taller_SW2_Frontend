@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { corregirCasillaDataset, entrenarCandidatoPiezas, estadoCandidatoPiezas, estadoDeLosModelos, problemasDePosicion } from '../../../api/backend';
+import { comprobarCalibracion, corregirCasillaDataset, entrenarCandidatoPiezas, estadoCandidatoPiezas, estadoDeLosModelos, problemasDePosicion } from '../../../api/backend';
 import { nombreClase } from '../../EntrenarCamara/SubirFotosPieza';
 import { CLASE_AVISO, CLASE_BOTON, CLASE_BOTON_PRIMARIO, CLASE_TARJETA } from '../estilos';
+import ModoCamaras from '../ModoCamaras';
 import useCamarasConfiguradas from '../useCamarasConfiguradas';
 import useFlujoVivo from '../useFlujoVivo';
 import TableroSoloLectura from '../../../componentes/TableroSoloLectura';
+import SeguimientoPartida from './SeguimientoPartida';
 import { CLASE_VACIA, CLASES_BLANCAS, CLASES_NEGRAS, COLUMNAS, fenDeCasillas } from './fenCaptura';
 
 const CUADROS_VOTO = 5;
@@ -54,11 +56,33 @@ export default function ProbadorPiezas() {
     estadoDeLosModelos().then(setModelos).catch(() => setModelos(null));
   }, []);
   const textoModelo = (m, nombre) => (m?.existe ? `${nombre} (recorte ${m.recorte})` : `${nombre}: sin entrenar`);
-  const dosCamaras = calibradas.includes('secundaria');
+  const haySecundaria = calibradas.includes('secundaria');
+  // Con qué cámara(s) se reconoce: `principal`, `secundaria` o `todas` (las dos, decidiendo entre ambas). Sin elegir, las dos si hay secundaria calibrada.
+  const [eleccionCamara, setEleccionCamara] = useState(null);
+  const camaraElegida = haySecundaria ? (eleccionCamara ?? 'todas') : 'principal';
+  const dosCamaras = camaraElegida === 'todas';
   const [vistaPiezas, setVistaPiezas] = useState('ambas');
-  const { url, datos, error: errorFlujo } = useFlujoVivo({ modo: 'piezas', camara: dosCamaras ? 'todas' : 'principal', vista: vistaPiezas, activo: enVivo });
+  const [unoPorSegundo, setUnoPorSegundo] = useState(true); // reconocer cada cuadro de la webcam recarga mucho la máquina: por defecto, 1 por segundo
+  const { url, datos, error: errorFlujo } = useFlujoVivo({ modo: 'piezas', camara: camaraElegida, vista: vistaPiezas, maxFps: unoPorSegundo ? 1 : 0, activo: enVivo });
   const error = errorFlujo ? mensajeError({ message: errorFlujo, status: /entrenado|409/.test(errorFlujo) ? 409 : 0 }) : null;
   const historialRef = useRef([]);
+  // ¿Se movió alguna de las cámaras en uso desde que se calibró? Con la grilla corrida el modelo ve recortes que no son casillas y reconoce cualquier cosa.
+  const [camarasMovidas, setCamarasMovidas] = useState([]);
+  useEffect(() => {
+    let vigente = true;
+    setCamarasMovidas([]);
+    const enUso = camaraElegida === 'todas' ? ['principal', 'secundaria'] : [camaraElegida];
+    Promise.all(
+      enUso.map((camara) =>
+        comprobarCalibracion(camara)
+          .then((r) => (r.movida === true ? { camara, mensaje: r.mensaje } : null))
+          .catch(() => null)
+      )
+    ).then((resultados) => vigente && setCamarasMovidas(resultados.filter(Boolean)));
+    return () => {
+      vigente = false;
+    };
+  }, [camaraElegida]);
   const casillas = useMemo(() => {
     if (!datos) return [];
     historialRef.current = [...historialRef.current, datos].slice(-CUADROS_VOTO);
@@ -71,6 +95,8 @@ export default function ProbadorPiezas() {
   // Entrenamiento de un modelo candidato (GPU del Mac): solo reemplaza al actual si lo supera en validación.
   const [candidato, setCandidato] = useState(null);
   const [errorCandidato, setErrorCandidato] = useState(null);
+  const [soloPosicionActual, setSoloPosicionActual] = useState(true);
+  const [incluirSecundaria, setIncluirSecundaria] = useState(true);
   const entrenando = candidato?.estado === 'en_curso';
   useEffect(() => {
     estadoCandidatoPiezas().then(setCandidato).catch(() => setCandidato(null));
@@ -87,10 +113,10 @@ export default function ProbadorPiezas() {
     }, 2000);
     return () => clearInterval(intervalo);
   }, [entrenando]);
-  async function entrenarCandidato() {
+  async function entrenarCandidato(recorte) {
     setErrorCandidato(null);
     try {
-      await entrenarCandidatoPiezas();
+      await entrenarCandidatoPiezas(recorte, soloPosicionActual, incluirSecundaria);
       setCandidato(await estadoCandidatoPiezas());
     } catch (e) {
       setErrorCandidato(e.status === 400 ? `Todavía hay pocas muestras: ${e.message}` : e.message);
@@ -105,7 +131,7 @@ export default function ProbadorPiezas() {
     setGuardandoCorreccion(true);
     setResultadoCorreccion(null);
     try {
-      const r = await corregirCasillaDataset(casillaCorregida, claseCorrecta);
+      const r = await corregirCasillaDataset(casillaCorregida, claseCorrecta, dosCamaras ? undefined : [camaraElegida]);
       setResultadoCorreccion({
         ok: true,
         texto: `Guardado: ${casillaCorregida} como «${nombreClase(claseCorrecta)}» (${r.guardadas} ${r.guardadas === 1 ? 'foto' : 'fotos'}, ${r.total_clase} en esa clase). Se usa en el próximo reentrenamiento.${r.avisos?.length ? ` ${r.avisos.join(' ')}` : ''}`,
@@ -142,6 +168,30 @@ export default function ProbadorPiezas() {
         vacía»); el resultado ya respeta las reglas del ajedrez: un rey por bando, hasta 8 peones y nunca en la fila 1 u 8, y piezas de
         más (como un segundo alfil en el mismo color de casilla) solo si faltan peones que hayan coronado.
       </p>
+      <ModoCamaras />
+      {haySecundaria && (
+        <div className="flex flex-wrap items-center gap-space-xs" role="group" aria-label="Con qué cámara reconocer">
+          <span className="font-body-sm text-body-sm text-on-surface-variant">Cámara:</span>
+          {[['principal', 'Solo la principal'], ['secundaria', 'Solo la secundaria'], ['todas', 'Las dos']].map(([id, texto]) => (
+            <button
+              key={id}
+              type="button"
+              className={camaraElegida === id ? CLASE_BOTON_PRIMARIO : CLASE_BOTON}
+              aria-pressed={camaraElegida === id}
+              onClick={() => {
+                historialRef.current = [];
+                setEleccionCamara(id);
+              }}
+            >
+              {texto}
+            </button>
+          ))}
+        </div>
+      )}
+      <label className="inline-flex items-center gap-space-xs font-body-sm text-body-sm text-on-surface-variant min-h-[44px]">
+        <input type="checkbox" checked={unoPorSegundo} onChange={(e) => setUnoPorSegundo(e.target.checked)} />
+        Reconocer solo 1 vez por segundo (usa mucho menos la máquina; sin marcar, analiza cada cuadro de la cámara)
+      </label>
       <div className="flex flex-wrap items-center gap-space-xs" role="group" aria-label="Cómo mostrar el reconocimiento">
         <span className="font-body-sm text-body-sm text-on-surface-variant">Ver:</span>
         {[['plana', 'Tablero plano'], ['cajas', 'Cajas 3D sobre la cámara'], ['ambas', 'Ambas']].map(([id, texto]) => (
@@ -168,10 +218,21 @@ export default function ProbadorPiezas() {
           {error}
         </p>
       )}
+      {camarasMovidas.map(({ camara, mensaje }) => (
+        <p key={camara} className={CLASE_AVISO} role="alert">
+          Cámara {camara}: {mensaje} Mientras tanto el reconocimiento no es confiable: acomodá la cámara con la grilla guía del asistente de calibración o recalibrala.
+        </p>
+      ))}
+      {ocupadas.length > 32 && (
+        <p className={CLASE_AVISO} role="alert">
+          Se reconocen {ocupadas.length} piezas y en un tablero nunca hay más de 32: la grilla no calza con el tablero (la cámara o el tablero se movieron) o la
+          foto del tablero vacío quedó vieja. Recalibrá la cámara y volvé a sacar «Casilla vacía».
+        </p>
+      )}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-space-md items-start">
         <section className={`${CLASE_TARJETA} min-w-0`} aria-labelledby="titulo-probador-imagen">
           <h3 id="titulo-probador-imagen" className="font-body-md text-body-md text-on-surface font-medium">
-            Lo que ve la cámara{dosCamaras ? ' (principal y secundaria, resultado combinado)' : ''}
+            Lo que ve la cámara{dosCamaras ? ' (principal y secundaria, resultado combinado)' : camaraElegida === 'secundaria' ? ' (solo la secundaria)' : ''}
           </h3>
           <div className="w-full bg-surface-container rounded-lg overflow-hidden flex items-center justify-center min-h-[8rem]">
             {url ? (
@@ -233,17 +294,31 @@ export default function ProbadorPiezas() {
             </div>
           )}
         </section>
+        <SeguimientoPartida />
         <section className={`${CLASE_TARJETA} lg:col-span-2`} aria-labelledby="titulo-probador-entrenar">
           <h3 id="titulo-probador-entrenar" className="font-body-md text-body-md text-on-surface font-medium">
             Entrenar con mis correcciones
           </h3>
           <p className="font-body-sm text-body-sm text-on-surface-variant m-0">
-            Entrena un modelo nuevo con todas tus fotos y las casillas corregidas, usando la GPU del Mac (unos pocos minutos). El modelo actual solo se
-            reemplaza si el nuevo reconoce mejor las mismas casillas apartadas para validar; si no, queda como está (y el actual se respalda al reemplazarlo).
+            Entrena un modelo nuevo con todas tus fotos de la cámara principal y las casillas corregidas, usando la GPU del Mac (unos pocos minutos).
+            Elige con qué recorte aprende: <strong>2D</strong> (la casilla vista desde arriba, con un margen) o <strong>3D</strong> (la caja que ocupa la pieza). El modelo
+            actual solo se reemplaza si el nuevo reconoce mejor las mismas casillas apartadas para validar; si no, queda como está (y el actual se respalda al reemplazarlo).
+            Después, la vista «Tablero plano» y las «Cajas 3D» de arriba sirven para probar cada uno.
           </p>
-          <div>
-            <button type="button" className={CLASE_BOTON_PRIMARIO} onClick={entrenarCandidato} disabled={entrenando}>
-              {entrenando ? 'Entrenando…' : 'Entrenar con mis correcciones'}
+          <label className="inline-flex items-center gap-space-xs font-body-sm text-body-sm text-on-surface-variant min-h-[44px]">
+            <input type="checkbox" checked={soloPosicionActual} onChange={(e) => setSoloPosicionActual(e.target.checked)} disabled={entrenando} />
+            Usar solo las fotos tomadas desde la última calibración de la principal (su posición actual)
+          </label>
+          <label className="inline-flex items-center gap-space-xs font-body-sm text-body-sm text-on-surface-variant min-h-[44px]">
+            <input type="checkbox" checked={incluirSecundaria} onChange={(e) => setIncluirSecundaria(e.target.checked)} disabled={entrenando} />
+            Sumar las fotos de la cámara que antes estaba arriba (la secundaria), degradadas a la nitidez de la webcam. Solo sirven para entrenar: se valida únicamente con fotos de la principal.
+          </label>
+          <div className="flex flex-wrap gap-space-xs">
+            <button type="button" className={CLASE_BOTON_PRIMARIO} onClick={() => entrenarCandidato('ampliado')} disabled={entrenando}>
+              {entrenando ? 'Entrenando…' : 'Entrenar en 2D (plano)'}
+            </button>
+            <button type="button" className={CLASE_BOTON} onClick={() => entrenarCandidato('volumen')} disabled={entrenando}>
+              Entrenar en 3D (cajas)
             </button>
           </div>
           {entrenando && (

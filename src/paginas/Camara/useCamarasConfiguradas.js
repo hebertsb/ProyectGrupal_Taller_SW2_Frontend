@@ -4,10 +4,10 @@ import { estadoDeLasCamaras } from '../../api/backend';
 export const EVENTO_CAMARAS_CAMBIO = 'camaras-cambio';
 const INTERVALO_MS = 5000;
 
-const SIN_DATOS = { configuradas: ['principal'], calibradas: [], fuentes: {}, rotaciones: {} };
+const SIN_DATOS = { configuradas: ['principal'], calibradas: [], fuentes: {}, rotaciones: {}, secundaria_configurada: false, usar_secundaria: false };
 
 /**
- * Qué cámaras hay configuradas (la principal y, si se eligió, la secundaria) y cuáles tienen el tablero calibrado. Se actualiza cada
+ * Qué cámaras están en uso (la principal y, solo si se la encendió, la secundaria) y cuáles tienen el tablero calibrado. Se actualiza cada
  * 5 s y apenas alguien avisa con `EVENTO_CAMARAS_CAMBIO` (el selector de cámaras o el asistente de calibración). No abre ninguna cámara.
  */
 export default function useCamarasConfiguradas() {

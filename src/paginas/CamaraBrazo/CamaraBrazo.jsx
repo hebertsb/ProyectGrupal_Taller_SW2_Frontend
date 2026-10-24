@@ -399,7 +399,7 @@ export default function CamaraBrazo({ partidaActivaId = null, onPartidaActivaCha
           <AsistenteCalibracion key={camaraCalibrar} camara={camaraCalibrar} onEnCursoChange={setCalibrando} />
 
           <LenteYAltura key={`lente-${camaraCalibrar}`} camara={camaraCalibrar} />
-          <VerificacionUnificada />
+          {tieneSecundaria && <VerificacionUnificada />}
 
           {pausada && !calibrando && (
             <p className="font-mono-micro text-mono-micro text-on-surface-variant" role="status">

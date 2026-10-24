@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { fotoDeCamara, girarCamara, listarCamaras, quitarCamaraSecundaria, seleccionarCamara } from '../../api/backend';
 import { CLASE_AVISO, CLASE_BOTON, CLASE_BOTON_PRIMARIO } from './estilos';
+import ModoCamaras from './ModoCamaras';
 import { EVENTO_CAMARAS_CAMBIO } from './useCamarasConfiguradas';
 
 const NOMBRES = { principal: 'principal', secundaria: 'secundaria' };
@@ -95,6 +96,7 @@ export default function SelectorCamara() {
 
   return (
     <div className="flex flex-col gap-space-xs">
+      <ModoCamaras />
       <button
         type="button"
         className={CLASE_BOTON}

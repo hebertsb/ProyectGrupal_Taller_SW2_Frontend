@@ -447,17 +447,18 @@ export function subirFotosPieza(clase, fotos) {
 }
 
 /**
- * Guarda como muestra de `clase` (ej. "black-pawn", o "vacia") la casilla `casilla` tal como la ven ahora las cámaras, para que el
+ * Guarda como muestra de `clase` (ej. "black-pawn", o "vacia") la casilla `casilla` tal como la ven ahora las cámaras (todas las calibradas, o solo `camaras`), para que el
  * reentrenamiento aprenda de un error del reconocimiento. Devuelve `{guardadas, camaras, avisos, total_clase}`.
  */
-export const corregirCasillaDataset = (casilla, clase) =>
-  solicitar("/vision/dataset/casilla", { method: "POST", body: JSON.stringify({ casilla, clase }) });
+export const corregirCasillaDataset = (casilla, clase, camaras) =>
+  solicitar("/vision/dataset/casilla", { method: "POST", body: JSON.stringify({ casilla, clase, ...(camaras ? { camaras } : {}) }) });
 
 /**
  * Lanza el entrenamiento de un modelo candidato con el dataset propio (incluidas las casillas corregidas), en la GPU del Mac si hay. Solo reemplaza al
- * modelo actual si lo supera en validación. Devuelve `{estado: "en_curso"}`; 409 = ya hay uno corriendo, 400 = faltan muestras.
+ * modelo actual si lo supera en validación. `recorte`: `ampliado` (2D, la casilla con margen) o `volumen` (3D, la caja de la pieza). Usa solo fotos de la cámara principal; con `soloPosicionActual`, las tomadas desde su última calibración; con `incluirSecundaria` suma, solo para entrenar, las de la secundaria tomadas desde arriba. Devuelve `{estado: "en_curso"}`; 409 = ya hay uno corriendo, 400 = faltan muestras.
  */
-export const entrenarCandidatoPiezas = () => solicitar("/vision/dataset/candidato", { method: "POST" });
+export const entrenarCandidatoPiezas = (recorte = "ampliado", soloPosicionActual = true, incluirSecundaria = false) =>
+  solicitar(`/vision/dataset/candidato?recorte=${recorte}&solo_posicion_actual=${soloPosicionActual}&incluir_secundaria=${incluirSecundaria}`, { method: "POST" });
 
 /** Estado del entrenamiento del candidato: `{estado: "inactivo"|"en_curso"|"terminado"|"error", progreso, resultado, log}`. */
 export const estadoCandidatoPiezas = () => solicitar("/vision/dataset/candidato/estado", { method: "GET" });
@@ -1237,7 +1238,16 @@ export const seleccionarCamara = (fuente, camara = "principal") =>
   solicitar("/vision/camara", { method: "POST", body: JSON.stringify({ fuente: String(fuente), camara }) });
 /** Deja de usar la cámara secundaria. */
 export const quitarCamaraSecundaria = () => solicitar("/vision/camara/secundaria", { method: "DELETE" });
-/** Qué cámaras hay configuradas y calibradas: `{configuradas, calibradas, fuentes, rotaciones}`. Barato: no abre ninguna cámara. */
+/**
+ * Enciende o apaga la cámara secundaria sin tocar su configuración ni su calibración: apagada, la captura de fotos, el reconocimiento y las
+ * vistas en vivo usan solo la principal. Devuelve `{usar_secundaria, camaras}`.
+ */
+export const usarCamaraSecundaria = (activa) =>
+  solicitar("/vision/camara/secundaria/uso", { method: "POST", body: JSON.stringify({ activa }) });
+/**
+ * Qué cámaras están EN USO y cuáles calibradas: `{configuradas, calibradas, fuentes, rotaciones, secundaria_configurada, usar_secundaria}`. `configuradas`
+ * ya no incluye la secundaria si está apagada. Barato: no abre ninguna cámara.
+ */
 export const estadoDeLasCamaras = () => solicitar("/vision/camaras/estado", { method: "GET" });
 
 /** Gira la imagen de la cámara fija (0, 90, 180 o 270, horario). Después hay que volver a calibrar el tablero. */
@@ -1259,6 +1269,32 @@ export const verificarCalibracionUnificada = () => solicitar("/vision/calibracio
 export const ajustarEsquinasCalibracion = (camara = "principal") =>
   solicitar(`/vision/calibracion/ajustar?camara=${camara}`, { method: "POST" });
 export const aplicarOrientacionCalibracion = () => solicitar("/vision/calibracion/aplicar-orientacion", { method: "POST" });
+/**
+ * Empieza a seguir la partida por diferencias entre imágenes (un cuadro por segundo, sin clasificar piezas). `fen` (opcional): la posición de la que se parte
+ * (por defecto la inicial). 409 = la cámara no está calibrada, 422 = FEN inválido. Devuelve `{activo, estado, fen, jugadas, turno, alerta}`.
+ */
+export const iniciarSeguimientoPartida = (fen = null, camara = "principal") =>
+  solicitar("/vision/seguimiento/iniciar", { method: "POST", body: JSON.stringify({ fen, camara }) });
+
+/**
+ * Procesa el último cuadro de la cámara y dice qué pasó: `{estado, mensaje, fen, jugada, cambiadas, jugadas, turno}` con `estado` = tomando_base | esperando |
+ * moviendo | jugada | incompleta | invalida | dudosa. Se pide una vez por segundo. 409 = no hay seguimiento iniciado. Con `conVista`, suma `vista`: las fotos
+ * base y actual, el mapa de cambios por casilla y las jugadas candidatas (para mostrar cómo decide).
+ */
+export const avanzarSeguimientoPartida = (conVista = false) => solicitar(`/vision/seguimiento/tick${conVista ? "?vista=true" : ""}`, { method: "POST" });
+
+/** Vuelve a tomar la foto base con la posición que el seguimiento ya sabe (las piezas están bien pero la imagen no coincide con la foto). */
+export const retomarFotoBaseSeguimiento = () => solicitar("/vision/seguimiento/foto-base", { method: "POST" });
+
+/** Quita la última jugada detectada (si se detectó mal) y vuelve a tomar la foto base. Devuelve `{..., deshecha}`; 422 = no hay jugada que deshacer. */
+export const deshacerJugadaSeguimiento = () => solicitar("/vision/seguimiento/deshacer", { method: "POST" });
+
+/** Cambia la posición conocida del seguimiento (p. ej. tras jugar el robot) y vuelve a tomar la foto base cuando el tablero esté quieto. */
+export const fijarPosicionSeguimiento = (fen) => solicitar("/vision/seguimiento/posicion", { method: "POST", body: JSON.stringify({ fen }) });
+
+/** Deja de seguir la partida. */
+export const detenerSeguimientoPartida = () => solicitar("/vision/seguimiento", { method: "DELETE" });
+
 /**
  * Por qué una posición reconocida no puede darse en una partida (peones en la fila 1 u 8, más de un rey, material de más, jaques imposibles).
  * `fen` puede ser completo o solo las piezas. Devuelve `{problemas: [...]}`; con `exigirReyes` también avisa si falta un rey.

@@ -1,5 +1,6 @@
 import { CLASE_AVISO, CLASE_BOTON, CLASE_BOTON_PRIMARIO } from '../estilos';
 import CapaEsquinas from './CapaEsquinas';
+import GuiaAlineacion from './GuiaAlineacion';
 import { ESQUINAS_ORDEN, GUIA_ESQUINAS } from './esquinas';
 import useAsistenteCalibracion from './useAsistenteCalibracion';
 
@@ -110,9 +111,12 @@ export default function AsistenteCalibracion({ camara = 'principal', onEnCursoCh
       {paso === 1 && (
         <>
           <p className="font-body-sm text-body-sm text-on-surface">
-            Dejá el tablero completo y a la vista, sin manos encima, con la cámara en su posición definitiva. Mirá la vista en vivo de
-            arriba y cuando esté bien, congelá la foto.
+            Dejá el tablero completo y a la vista, sin manos encima, con la cámara en su posición definitiva.
+            {estado?.esquinas
+              ? ' Mové el trípode hasta que el tablero encaje en la grilla amarilla (las líneas blancas sobre las de las casillas) y, cuando esté bien, congelá la foto.'
+              : ' Cuando el tablero se vea completo, congelá la foto.'}
           </p>
+          <GuiaAlineacion camara={camara} esquinas={estado?.esquinas} resolucion={estado?.resolucion} />
           <div className="flex flex-wrap gap-space-xs">
             <button type="button" className={CLASE_BOTON_PRIMARIO} onClick={congelar} disabled={ocupado}>
               {ocupado ? 'Sacando la foto…' : 'Congelar foto'}

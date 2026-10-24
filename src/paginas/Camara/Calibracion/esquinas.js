@@ -58,3 +58,44 @@ export function validarEsquinas(datos) {
 export function puntosAEsquinas(puntos) {
   return Object.fromEntries(ESQUINAS_ORDEN.map((clave, i) => [clave, puntos[i]]));
 }
+
+/**
+ * Líneas de una grilla 8x8 sobre el tablero calibrado, para dibujarla encima de la imagen de la cámara. `esquinas` es `{a1, h1, h8, a8 -> [x, y]}` en
+ * píxeles de la foto. Se ajusta la homografía del cuadrado unidad (a1 en (0,0), h1 en (1,0), h8 en (1,1), a8 en (0,1)) a las 4 esquinas, así
+ * las líneas respetan la perspectiva. Devuelve `{contorno: [[x, y] x4], lineas: [[[x1, y1], [x2, y2]] x18]}` (9 verticales y 9 horizontales,
+ * contando los bordes), o `null` si las esquinas no dan una homografía válida (puntos alineados o repetidos).
+ */
+export function grillaDeEsquinas(esquinas) {
+  const origen = [[0, 0], [1, 0], [1, 1], [0, 1]];
+  const destino = ESQUINAS_ORDEN.map((clave) => esquinas?.[clave]);
+  if (destino.some((p) => !Array.isArray(p) || p.length !== 2 || !p.every(Number.isFinite))) return null;
+  // Sistema 8x8 de la homografía con h33 = 1: x = (h0 u + h1 v + h2) / (h6 u + h7 v + 1), y = (h3 u + h4 v + h5) / (h6 u + h7 v + 1).
+  const filas = [];
+  origen.forEach(([u, v], i) => {
+    const [x, y] = destino[i];
+    filas.push([u, v, 1, 0, 0, 0, -u * x, -v * x, x]);
+    filas.push([0, 0, 0, u, v, 1, -u * y, -v * y, y]);
+  });
+  for (let columna = 0; columna < 8; columna += 1) {
+    let pivote = columna;
+    for (let f = columna + 1; f < 8; f += 1) if (Math.abs(filas[f][columna]) > Math.abs(filas[pivote][columna])) pivote = f;
+    if (Math.abs(filas[pivote][columna]) < 1e-9) return null;
+    [filas[columna], filas[pivote]] = [filas[pivote], filas[columna]];
+    for (let f = 0; f < 8; f += 1) {
+      if (f === columna) continue;
+      const factor = filas[f][columna] / filas[columna][columna];
+      for (let c = columna; c < 9; c += 1) filas[f][c] -= factor * filas[columna][c];
+    }
+  }
+  const h = filas.map((fila, i) => fila[8] / fila[i]);
+  const proyectar = (u, v) => {
+    const w = h[6] * u + h[7] * v + 1;
+    return [(h[0] * u + h[1] * v + h[2]) / w, (h[3] * u + h[4] * v + h[5]) / w];
+  };
+  const lineas = [];
+  for (let k = 0; k <= 8; k += 1) {
+    lineas.push([proyectar(k / 8, 0), proyectar(k / 8, 1)]);
+    lineas.push([proyectar(0, k / 8), proyectar(1, k / 8)]);
+  }
+  return { contorno: origen.map(([u, v]) => proyectar(u, v)), lineas };
+}
