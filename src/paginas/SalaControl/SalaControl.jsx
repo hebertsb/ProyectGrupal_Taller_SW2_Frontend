@@ -2144,6 +2144,7 @@ export default function SalaControl({
           partida={partidaPendienteDetectada}
           alRetomar={manejarRetomarPartidaPendiente}
           alEmpezarNueva={manejarEmpezarNuevaDesdeModal}
+          alCerrar={() => setPartidaPendienteDetectada(null)}
           esFacilitador={esFacilitador}
         />
       )}

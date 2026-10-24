@@ -26,10 +26,11 @@ function describirNivel(partida) {
  * empezar otra, por eso no se cierra con Escape ni con un clic en el fondo.
  * `partida` es la respuesta de `GET /partida/en-curso`. Es accesible:
  * `role="dialog"`, el foco va al botón principal, Tab se queda dentro del modal y
- * al cerrar el foco vuelve a donde estaba. El texto de abajo del todo menciona el
+ * al cerrar el foco vuelve a donde estaba. Con `alCerrar` hay una X (y Escape) para cerrarlo SIN elegir: la partida pendiente queda como estaba y vuelve a
+ * ofrecerse la próxima vez. El texto de abajo del todo menciona el
  * nivel solo para el jugador — al facilitador no le aplica la calibración de nivel.
  */
-export default function ModalRetomarPartida({ partida, alRetomar, alEmpezarNueva, esFacilitador = false }) {
+export default function ModalRetomarPartida({ partida, alRetomar, alEmpezarNueva, alCerrar, esFacilitador = false }) {
   const tarjetaRef = useRef(null);
   const botonRetomarRef = useRef(null);
 
@@ -37,8 +38,12 @@ export default function ModalRetomarPartida({ partida, alRetomar, alEmpezarNueva
     const elementoPrevio = document.activeElement;
     botonRetomarRef.current?.focus();
 
-    // Solo se atrapa el foco: Escape no hace nada a propósito (hay que elegir una opción).
+    // Se atrapa el foco; Escape cierra solo si hay `alCerrar` (si no, hay que elegir una opción).
     function alPulsarTecla(evento) {
+      if (evento.key === 'Escape' && alCerrar) {
+        alCerrar();
+        return;
+      }
       if (evento.key !== 'Tab') return;
       const enfocables = tarjetaRef.current?.querySelectorAll('button:not([disabled])');
       if (!enfocables || enfocables.length === 0) return;
@@ -58,6 +63,7 @@ export default function ModalRetomarPartida({ partida, alRetomar, alEmpezarNueva
       document.removeEventListener('keydown', alPulsarTecla);
       elementoPrevio?.focus?.();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- el foco y los atajos se arman una sola vez al abrir
   }, []);
 
   // Entrada sutil: solo opacidad/desplazamiento (nunca `visibility`, que impediría enfocar el botón).
@@ -124,9 +130,22 @@ export default function ModalRetomarPartida({ partida, alRetomar, alEmpezarNueva
         aria-modal="true"
         aria-labelledby="titulo-retomar-partida"
         aria-describedby="descripcion-retomar-partida"
-        className="w-full max-w-md max-h-[90dvh] overflow-y-auto bg-surface-container-low border border-outline-variant/30 rounded-2xl shadow-2xl p-space-lg flex flex-col gap-space-md"
+        className="relative w-full max-w-md max-h-[90dvh] overflow-y-auto bg-surface-container-low border border-outline-variant/30 rounded-2xl shadow-2xl p-space-lg flex flex-col gap-space-md"
       >
-        <div className="retomar-partida-bloque flex items-center gap-space-sm">
+        {alCerrar && (
+          <button
+            type="button"
+            onClick={alCerrar}
+            aria-label="Cerrar sin elegir"
+            title="Cerrar sin elegir (la partida queda pendiente)"
+            className="absolute top-space-sm right-space-sm w-11 h-11 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          >
+            <span className="material-symbols-outlined text-[22px]" aria-hidden="true">
+              close
+            </span>
+          </button>
+        )}
+        <div className="retomar-partida-bloque flex items-center gap-space-sm pr-10">
           <div className="w-11 h-11 rounded-full bg-primary/15 text-primary flex items-center justify-center shrink-0">
             <span className="material-symbols-outlined text-[24px]" aria-hidden="true">
               pause_circle

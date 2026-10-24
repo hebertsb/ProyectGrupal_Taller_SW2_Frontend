@@ -79,7 +79,9 @@ export default function ParametrosBrazo({ emulador }) {
   }
 
   async function aplicar() {
-    const { z_tope, ...resto } = valores;
+    // El cementerio y las reservas se editan en «Llevar una pieza»: acá no se tocan (si no, se pisarían con los valores viejos de esta pantalla).
+    // eslint-disable-next-line no-unused-vars
+    const { z_tope, cementerio_origen, cementerio_paso, cementerio_paso_fila, cementerio_columnas, reservas, ...resto } = valores;
     const nuevos = await correr(
       () => actualizarParametrosBrazo({ ...resto, z_tope }, guardarEnDisco && !emulador),
       guardarEnDisco && !emulador ? 'Aplicado y guardado en brazo.json.' : 'Aplicado al brazo.'

@@ -1219,10 +1219,23 @@ export const guardarConfiguracionBrazo = (nombre, descripcion = "") => controlBr
 export const aplicarConfiguracionBrazo = (nombre) => controlBrazo(`/configuraciones/${encodeURIComponent(nombre)}/aplicar`);
 export const borrarConfiguracionBrazo = (nombre) => controlBrazo(`/configuraciones/${encodeURIComponent(nombre)}`, "DELETE");
 /** Ensayo: pasos y poses por los que pasaría, sin mover nada. */
-export const ensayoMoverPieza = (origen, destino, tipoPieza = "p") =>
-  controlBrazo("/mover-pieza/ensayo", "POST", { origen, destino, tipo_pieza: tipoPieza });
-export const moverPiezaBrazo = (origen, destino, tipoPieza = "p") =>
-  controlBrazo("/mover-pieza", "POST", { origen, destino, tipo_pieza: tipoPieza });
+/**
+ * Prueba manual del panel. `opciones`: `captura` (el destino tiene una pieza de `tipoCapturada`: se retira primero al cementerio), `alCementerio` (manda la pieza del
+ * origen al cementerio, sin destino) y `casillaCementerio` (0 a 29, dónde la deja).
+ */
+const cuerpoMoverPieza = (origen, destino, tipoPieza, { captura = false, tipoCapturada = "p", alCementerio = false, casillaCementerio = 0 } = {}) => ({
+  origen,
+  destino: destino ?? "",
+  tipo_pieza: tipoPieza,
+  captura,
+  tipo_capturada: tipoCapturada,
+  al_cementerio: alCementerio,
+  casilla_cementerio: casillaCementerio,
+});
+export const ensayoMoverPieza = (origen, destino, tipoPieza = "p", opciones) =>
+  controlBrazo("/mover-pieza/ensayo", "POST", cuerpoMoverPieza(origen, destino, tipoPieza, opciones));
+export const moverPiezaBrazo = (origen, destino, tipoPieza = "p", opciones) =>
+  controlBrazo("/mover-pieza", "POST", cuerpoMoverPieza(origen, destino, tipoPieza, opciones));
 
 /** Cámaras que abre el equipo: `{actual, camaras: [{indice, disponible, ancho, alto}]}`. Corta el video un instante. */
 export const listarCamaras = () => solicitar("/vision/camaras", { method: "GET" });
@@ -1292,6 +1305,24 @@ export const deshacerJugadaSeguimiento = () => solicitar("/vision/seguimiento/de
 /** Cambia la posición conocida del seguimiento (p. ej. tras jugar el robot) y vuelve a tomar la foto base cuando el tablero esté quieto. */
 export const fijarPosicionSeguimiento = (fen) => solicitar("/vision/seguimiento/posicion", { method: "POST", body: JSON.stringify({ fen }) });
 
+/**
+ * Partida física (cámara + Turing + brazo). Solo facilitador. `estado` = esperando_humano | turing_decide | brazo_ejecuta | verificando | esperando_robot_manual |
+ * incidente | fin. 404 = la partida no existe, 409 = cámara sin calibrar / sin partida física, 422 = no se puede.
+ */
+export const iniciarPartidaFisica = (partidaId, camara = "principal") =>
+  solicitar("/partida-fisica/iniciar", { method: "POST", body: JSON.stringify({ partida_id: partidaId, camara }) });
+/** Con `conVista`, el estado trae `vista`: la foto base, la actual y la comparación casilla por casilla (como el seguimiento por diferencias). */
+export const estadoPartidaFisica = (conVista = false) => solicitar(`/partida-fisica/estado${conVista ? "?vista=true" : ""}`, { method: "GET" });
+export const pausarPartidaFisica = () => solicitar("/partida-fisica/pausar", { method: "POST" });
+export const reanudarPartidaFisica = () => solicitar("/partida-fisica/reanudar", { method: "POST" });
+/** Respaldo si la cámara no detecta tu jugada: SAN (`Nf3`) o UCI (`g1f3`). */
+export const jugadaManualPartidaFisica = (movimiento) =>
+  solicitar("/partida-fisica/jugada-manual", { method: "POST", body: JSON.stringify({ movimiento }) });
+/** `accion`: `continuar` (el tablero físico ya coincide con la partida) o `reintentar` (quedó como antes de la jugada del brazo y se repite). */
+export const resolverIncidentePartidaFisica = (accion) =>
+  solicitar("/partida-fisica/resolver-incidente", { method: "POST", body: JSON.stringify({ accion }) });
+export const detenerPartidaFisica = () => solicitar("/partida-fisica", { method: "DELETE" });
+
 /** Deja de seguir la partida. */
 export const detenerSeguimientoPartida = () => solicitar("/vision/seguimiento", { method: "DELETE" });
 
@@ -1330,6 +1361,10 @@ export const moverArticulacionesBrazo = (angulos) => controlBrazo("/mover-articu
 export const moverRelativoBrazo = (dx = 0, dy = 0, dz = 0, velocidadMmS = 20) =>
   controlBrazo("/mover-relativo", "POST", { dx, dy, dz, velocidad_mm_s: velocidadMmS });
 export const irAPosicionInicialBrazo = () => controlBrazo("/posicion-inicial");
+/** Baja con la pinza abierta (sin cerrarla) sobre la pieza de `casilla`, a la apertura de ese tipo de pieza, espera unos segundos y sube: para medir cada apertura. */
+export const probarAperturaBrazo = (casilla, tipoPieza = "p") => controlBrazo("/probar-apertura", "POST", { casilla, tipo_pieza: tipoPieza });
+/** Lleva la punta, SIN pieza, sobre `cementerio:K` (K de 0 a 29), `reserva:dama_negra` o `reserva:dama_blanca`, baja hasta unos mm de donde soltaría y vuelve (para revisarlos antes de jugar). */
+export const probarLugarBrazo = (lugar) => controlBrazo("/probar-lugar", "POST", { lugar });
 
 /** Límites de las articulaciones y distancias de seguridad que validan las poses: `{limites_articulaciones, margen_mesa_m, distancia_minima_eslabones_m, punta_minima_m, z_tope_mm}`. */
 export const limitesBrazo = () => controlBrazo("/limites", "GET");

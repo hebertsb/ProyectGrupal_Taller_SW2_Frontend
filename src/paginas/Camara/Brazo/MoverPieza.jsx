@@ -1,11 +1,19 @@
 import { useState } from 'react';
-import { ensayoMoverPieza, irAPosicionInicialBrazo, moverPiezaBrazo } from '../../../api/backend';
+import { ensayoMoverPieza, irAPosicionInicialBrazo, moverPiezaBrazo, probarAperturaBrazo } from '../../../api/backend';
 import { COLUMNAS } from '../Piezas/fenCaptura';
+import CementerioBrazo from './CementerioBrazo';
 import { CLASE_AVISO, CLASE_BOTON, CLASE_BOTON_PRIMARIO, CLASE_TARJETA } from '../estilos';
 
-// El agarre no depende del tipo de pieza (la pinza ya está configurada en los scripts): se manda siempre el mismo.
-const TIPO_PIEZA = 'p';
+const CLASE_CAMPO =
+  'min-h-[44px] px-space-sm rounded-xl border border-outline-variant bg-surface-container text-on-surface font-body-sm text-body-sm min-w-0';
+
 const FILAS = [8, 7, 6, 5, 4, 3, 2, 1];
+const PIEZAS = [['p', 'Peón'], ['n', 'Caballo'], ['b', 'Alfil'], ['r', 'Torre'], ['q', 'Dama'], ['k', 'Rey']];
+const ACCIONES = [
+  ['llevar', 'Llevar a una casilla vacía'],
+  ['capturar', 'Capturar (come la pieza del destino)'],
+  ['cementerio', 'Mandar la pieza al cementerio'],
+];
 
 /** Primera prueba: elegís la casilla de origen y la de destino y el brazo lleva la pieza. Ensayo primero (no mueve nada). */
 export default function MoverPieza({ estado }) {
@@ -14,10 +22,17 @@ export default function MoverPieza({ estado }) {
   const [origen, setOrigen] = useState('');
   const [destino, setDestino] = useState('');
   const [modo, setModo] = useState('origen');
+  const [accion, setAccion] = useState('llevar');
+  const [tipoPieza, setTipoPieza] = useState('p');
+  const [tipoCapturada, setTipoCapturada] = useState('p');
+  const [casillaCem, setCasillaCem] = useState(1); // 1 a 30 en pantalla; el backend usa 0 a 29
   const [pasos, setPasos] = useState(null);
   const [error, setError] = useState(null);
   const [ocupado, setOcupado] = useState(false);
 
+  const alCementerio = accion === 'cementerio';
+  const opciones = { captura: accion === 'capturar', tipoCapturada, alCementerio, casillaCementerio: casillaCem - 1 };
+  const listo = Boolean(origen) && (alCementerio || Boolean(destino));
   const tarea = estado?.tarea;
   const habilitado = estado?.modo === 5;
   const enCurso = tarea?.estado === 'ejecutando';
@@ -28,7 +43,7 @@ export default function MoverPieza({ estado }) {
     if (modo === 'origen') {
       if (casilla === destino) return; // no puede ser la misma casilla que el destino
       setOrigen(casilla);
-      setModo(destino ? null : 'destino');
+      setModo(destino || alCementerio ? null : 'destino');
     } else {
       if (casilla === origen) return;
       setDestino(casilla);
@@ -39,6 +54,39 @@ export default function MoverPieza({ estado }) {
   function cambiar(que) {
     setPasos(null);
     setModo(que);
+  }
+
+  function cambiarAccion(nueva) {
+    setPasos(null);
+    setAccion(nueva);
+    if (nueva === 'cementerio') {
+      setDestino('');
+      setModo(origen ? null : 'origen');
+    } else {
+      setModo(origen && !destino ? 'destino' : origen ? null : 'origen');
+    }
+  }
+
+  /** Un solo botón para la prueba de captura: el peón negro de c5 come al peón blanco de d4 (el de d4 va a la casilla 1 del cementerio). Pide confirmación antes de mover. */
+  async function pruebaRapida() {
+    const opcionesPrueba = { captura: true, tipoCapturada: 'p', alCementerio: false, casillaCementerio: 0 };
+    setAccion('capturar');
+    setTipoPieza('p');
+    setTipoCapturada('p');
+    setCasillaCem(1);
+    setOrigen('c5');
+    setDestino('d4');
+    setModo(null);
+    const plan = await correr(() => ensayoMoverPieza('c5', 'd4', 'p', opcionesPrueba));
+    if (!plan) return;
+    setPasos(plan);
+    if (
+      window.confirm(
+        'Prueba de captura: el brazo llevará el peón BLANCO de d4 a la casilla 1 del cementerio y después el peón NEGRO de c5 a d4. ¿Están los dos peones en su sitio, el cementerio despejado y tenés la mano en la parada de emergencia?'
+      )
+    ) {
+      await correr(() => moverPiezaBrazo('c5', 'd4', 'p', opcionesPrueba));
+    }
   }
 
   function borrar() {
@@ -52,8 +100,15 @@ export default function MoverPieza({ estado }) {
     modo === 'origen'
       ? 'Toca en el tablero la casilla donde está la pieza (origen).'
       : modo === 'destino'
-        ? 'Ahora toca la casilla a la que va (destino).'
+        ? accion === 'capturar'
+          ? 'Ahora toca la casilla de la pieza que se come (destino).'
+          : 'Ahora toca la casilla a la que va (destino).'
         : 'Selección lista y bloqueada. Para cambiarla usa los botones de arriba; luego haz el ensayo.';
+  const textoConfirmar = alCementerio
+    ? `Vas a mover el brazo: tomará la pieza de ${origen.toUpperCase()} y la dejará en la casilla ${casillaCem} del cementerio. ¿La pieza está en ${origen.toUpperCase()}? Ten la mano cerca del botón de parada.`
+    : accion === 'capturar'
+      ? `Vas a mover el brazo: primero llevará la pieza de ${destino.toUpperCase()} a la casilla ${casillaCem} del cementerio y después la de ${origen.toUpperCase()} a ${destino.toUpperCase()}. ¿Están las dos piezas en su sitio? Ten la mano cerca del botón de parada.`
+      : `Vas a mover el brazo: tomará la pieza de ${origen.toUpperCase()} y la dejará en ${destino.toUpperCase()}. ¿La pieza está en ${origen.toUpperCase()} y ${destino.toUpperCase()} está vacía? Ten la mano cerca del botón de parada.`;
 
   async function correr(accion) {
     setOcupado(true);
@@ -71,12 +126,90 @@ export default function MoverPieza({ estado }) {
   return (
     <section className={CLASE_TARJETA} aria-labelledby="titulo-mover-pieza">
       <h3 id="titulo-mover-pieza" className="font-body-md text-body-md text-on-surface font-medium">
-        3 · Llevar una pieza de una casilla a otra
+        3 · Llevar una pieza, capturar o mandarla al cementerio
       </h3>
       <p className="font-body-sm text-body-sm text-on-surface-variant m-0">
-        Poné la pieza en el <strong>origen</strong>, elegí origen y destino en el tablero, mirá el ensayo y ejecutá. Hoy no resuelve capturas:
-        el destino tiene que estar vacío.
+        Poné la pieza en el <strong>origen</strong>, elegí qué hacer y las casillas en el tablero, mirá el ensayo y ejecutá. Con <em>Capturar</em> el brazo retira primero la
+        pieza del destino al cementerio y después hace la jugada: es lo mismo que hace en la partida. Pruébalo primero en el emulador.
       </p>
+      <div className="flex flex-wrap items-center gap-space-xs">
+        <button
+          type="button"
+          className={CLASE_BOTON_PRIMARIO}
+          disabled={ocupado || enCurso || !habilitado}
+          title={!habilitado ? 'Conectá y habilitá el brazo (o el emulador) primero' : 'Ensayo y ejecución de la captura c5 → d4 con un solo botón'}
+          onClick={pruebaRapida}
+        >
+          ▶ Probar captura: peón negro c5 come peón blanco d4
+        </button>
+        <span className="font-body-sm text-body-sm text-on-surface-variant">Un solo botón: ensayo, confirmación y captura (el blanco va a la casilla 1 del cementerio).</span>
+      </div>
+      <div className="flex flex-wrap gap-space-xs" role="radiogroup" aria-label="Qué hacer">
+        {ACCIONES.map(([id, texto]) => (
+          <button
+            key={id}
+            type="button"
+            role="radio"
+            aria-checked={accion === id}
+            disabled={enCurso}
+            className={`${CLASE_BOTON} ${accion === id ? 'ring-2 ring-primary' : ''}`}
+            onClick={() => cambiarAccion(id)}
+          >
+            {texto}
+          </button>
+        ))}
+      </div>
+      <div className="flex flex-wrap items-end gap-space-xs">
+        <label className="font-body-sm text-body-sm text-on-surface-variant flex flex-col gap-1">
+          Pieza que se mueve
+          <select className={CLASE_CAMPO} value={tipoPieza} disabled={enCurso} onChange={(e) => { setPasos(null); setTipoPieza(e.target.value); }}>
+            {PIEZAS.map(([id, texto]) => (
+              <option key={id} value={id}>
+                {texto}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          className={CLASE_BOTON}
+          disabled={ocupado || enCurso || !habilitado || !origen}
+          title={!origen ? 'Elegí primero la casilla donde está la pieza (origen)' : 'Baja con la pinza abierta, sin cerrarla, para ver si los dedos rodean la pieza sin tocarla'}
+          onClick={async () => {
+            if (window.confirm(`El brazo bajará sobre ${origen.toUpperCase()} con la apertura de ${tipoPieza.toUpperCase()}, SIN cerrar la pinza, esperará unos segundos y subirá. ¿Está esa pieza ahí y tenés la mano en la parada?`)) {
+              await correr(() => probarAperturaBrazo(origen, tipoPieza));
+            }
+          }}
+        >
+          Probar la apertura de esta pieza (baja sin cerrar)
+        </button>
+        {accion === 'capturar' && (
+          <label className="font-body-sm text-body-sm text-on-surface-variant flex flex-col gap-1">
+            Pieza que se come
+            <select className={CLASE_CAMPO} value={tipoCapturada} disabled={enCurso} onChange={(e) => { setPasos(null); setTipoCapturada(e.target.value); }}>
+              {PIEZAS.map(([id, texto]) => (
+                <option key={id} value={id}>
+                  {texto}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {accion !== 'llevar' && (
+          <label className="font-body-sm text-body-sm text-on-surface-variant flex flex-col gap-1">
+            Casilla del cementerio (1 a 30)
+            <input
+              className={`${CLASE_CAMPO} w-24`}
+              type="number"
+              min="1"
+              max="30"
+              value={casillaCem}
+              disabled={enCurso}
+              onChange={(e) => { setPasos(null); setCasillaCem(Math.max(1, Math.min(30, Number(e.target.value) || 1))); }}
+            />
+          </label>
+        )}
+      </div>
       <div className="flex flex-wrap gap-space-xs" role="group" aria-label="Qué casilla elegir al tocar el tablero">
         <button
           type="button"
@@ -88,16 +221,18 @@ export default function MoverPieza({ estado }) {
           <span className="inline-block w-3 h-3 rounded-sm bg-primary mr-2 align-middle" />
           Origen: {origen || '—'}
         </button>
-        <button
-          type="button"
-          className={`${CLASE_BOTON} ${modo === 'destino' ? 'ring-2 ring-primary' : ''}`}
-          aria-pressed={modo === 'destino'}
-          disabled={enCurso}
-          onClick={() => cambiar('destino')}
-        >
-          <span className="inline-block w-3 h-3 rounded-sm bg-tertiary mr-2 align-middle" />
-          Destino: {destino || '—'}
-        </button>
+        {!alCementerio && (
+          <button
+            type="button"
+            className={`${CLASE_BOTON} ${modo === 'destino' ? 'ring-2 ring-primary' : ''}`}
+            aria-pressed={modo === 'destino'}
+            disabled={enCurso}
+            onClick={() => cambiar('destino')}
+          >
+            <span className="inline-block w-3 h-3 rounded-sm bg-tertiary mr-2 align-middle" />
+            Destino: {destino || '—'}
+          </button>
+        )}
         <button type="button" className={CLASE_BOTON} disabled={enCurso || (!origen && !destino)} onClick={borrar}>
           Borrar
         </button>
@@ -139,23 +274,23 @@ export default function MoverPieza({ estado }) {
         <button
           type="button"
           className={CLASE_BOTON}
-          disabled={ocupado || enCurso || !estado?.conectado || !origen || !destino}
-          onClick={async () => setPasos(await correr(() => ensayoMoverPieza(origen, destino, TIPO_PIEZA)))}
+          disabled={ocupado || enCurso || !estado?.conectado || !listo}
+          onClick={async () => setPasos(await correr(() => ensayoMoverPieza(origen, destino, tipoPieza, opciones)))}
         >
           Ensayo (no mueve nada)
         </button>
         <button
           type="button"
           className={CLASE_BOTON_PRIMARIO}
-          disabled={ocupado || enCurso || !habilitado || !pasos || !origen || !destino}
+          disabled={ocupado || enCurso || !habilitado || !pasos || !listo}
           title={!pasos ? 'Hacé el ensayo primero' : !habilitado ? 'Habilitá el brazo primero' : undefined}
           onClick={async () => {
-            if (window.confirm(`Vas a mover el brazo: tomará la pieza de ${origen.toUpperCase()} y la dejará en ${destino.toUpperCase()}. ¿La pieza está en ${origen.toUpperCase()} y ${destino.toUpperCase()} está vacía? Ten la mano cerca del botón de parada.`)) {
-              await correr(() => moverPiezaBrazo(origen, destino, TIPO_PIEZA));
+            if (window.confirm(textoConfirmar)) {
+              await correr(() => moverPiezaBrazo(origen, destino, tipoPieza, opciones));
             }
           }}
         >
-          Mover {origen} → {destino}
+          {alCementerio ? `Mandar ${origen || '…'} al cementerio` : accion === 'capturar' ? `Capturar ${origen || '…'} → ${destino || '…'}` : `Mover ${origen || '…'} → ${destino || '…'}`}
         </button>
         <button
           type="button"
@@ -195,6 +330,12 @@ export default function MoverPieza({ estado }) {
           {error}
         </p>
       )}
+      <details className="font-body-sm text-body-sm text-on-surface">
+        <summary className="cursor-pointer text-on-surface-variant min-h-[44px] flex items-center">Cementerio y damas de reserva (dónde están, y probarlos sin pieza)</summary>
+        <div className="pt-space-xs">
+          <CementerioBrazo pose={estado?.pose} emulador={Boolean(estado?.emulador)} deshabilitado={!habilitado || enCurso} />
+        </div>
+      </details>
     </section>
   );
 }

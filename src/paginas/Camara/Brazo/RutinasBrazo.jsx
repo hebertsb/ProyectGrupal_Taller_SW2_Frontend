@@ -2,12 +2,15 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   borrarRutinaBrazo,
   ejecutarRutinaBrazo,
+  estadoControlBrazo,
   guardarRutinaBrazo,
   limitesBrazo,
   listarRutinasBrazo,
   moverArticulacionesBrazo,
+  moverPinza,
   obtenerParametrosBrazo,
   obtenerRutinaBrazo,
+  pararBrazo,
   verificarGeometriaBrazo,
 } from '../../../api/backend';
 import { CLASE_AVISO, CLASE_BOTON, CLASE_BOTON_PRIMARIO, CLASE_TARJETA } from '../estilos';
@@ -18,6 +21,11 @@ const POSE_INICIAL = [0, 0, 90, 0, 90, 0];
 const PASOS_JOG = [1, 5, 15];
 const GRADOS_POR_SEGUNDO_AL_100 = 180; // para la vista previa: a velocidad 100 % las articulaciones giran ~180°/s
 const INTERVALO_MANTENER_MS = 90;
+const ADELANTO_VIVO_GRADOS = 15; // en modo en vivo, la pose del esqueleto nunca se adelanta más que esto al brazo real (por articulación)
+const SALTO_VIVO_GRADOS = 10; // y cada orden al brazo real avanza como mucho esto por articulación
+const ESPERA_FIN_MOVIMIENTO_MS = 60_000;
+const CARRERA_PINZA_MM = 26; // la pinza DH PGE-50-26 abre 26 mm en total (posición 1000)
+const pausa = (ms) => new Promise((resolver) => setTimeout(resolver, ms));
 const CLASE_CAMPO =
   'min-h-[44px] px-space-sm rounded-xl border border-outline-variant bg-surface-container text-on-surface font-body-sm text-body-sm min-w-0';
 const ICONOS = { articulaciones: 'precision_manufacturing', pinza: 'pan_tool', esperar: 'schedule', rutina: 'playlist_play' };
@@ -124,6 +132,14 @@ export default function RutinasBrazo({ estado, onCambio }) {
   const cancelarRef = useRef(false);
   const poseRef = useRef(pose);
   poseRef.current = pose;
+  const [enVivo, setEnVivo] = useState(false);
+  const vivoRef = useRef(false);
+  const realRef = useRef(null); // ángulos que el brazo real tiene ahora (el último dato leído)
+  const empujandoRef = useRef(false);
+  const aperturaRef = useRef(apertura);
+  aperturaRef.current = apertura;
+  const pinzaRealRef = useRef(1000);
+  const pinzaOcupadaRef = useRef(false);
 
   const habilitado = estado?.modo === 5;
   const moviendo = estado?.tarea?.estado === 'ejecutando';
@@ -189,7 +205,9 @@ export default function RutinasBrazo({ estado, onCambio }) {
 
   const bloqueado = ocupado || animando;
   /** Aplica la pose solo si el brazo puede estar así (rango real de cada articulación, mesa, tablero y choques); si no, avisa por qué. */
-  const intentarPose = (candidata) => {
+  const intentarPose = (pedida) => {
+    // En vivo, el esqueleto va como mucho unos grados por delante del brazo real: así, aunque se mantenga apretado el botón, el brazo no sale corriendo detrás.
+    const candidata = enVivo && realRef.current ? pedida.map((a, i) => Math.min(realRef.current[i] + ADELANTO_VIVO_GRADOS, Math.max(realRef.current[i] - ADELANTO_VIVO_GRADOS, a))) : pedida;
     const problemas = problemasDePose(candidata, reglas);
     if (problemas.length) {
       setAviso(null);
@@ -249,6 +267,10 @@ export default function RutinasBrazo({ estado, onCambio }) {
   // --- editar la lista ---------------------------------------------------------------------------------------------------
   const elegirPaso = (i) => {
     setElegido(i);
+    if (enVivo) {
+      setAviso('En vivo no se salta a un paso (movería el brazo de golpe): salí del modo en vivo para verlo.');
+      return;
+    }
     const p = pasos[i];
     if (p.tipo === 'articulaciones') setPose(p.angulos);
     if (p.tipo === 'pinza') setApertura(p.apertura);
@@ -270,6 +292,15 @@ export default function RutinasBrazo({ estado, onCambio }) {
     if (p.tipo === 'articulaciones') cambiarPasos(pasos.map((q, j) => (j === i ? { ...q, angulos: pose.map(redondear) } : q)));
     if (p.tipo === 'pinza') cambiarPasos(pasos.map((q, j) => (j === i ? { ...q, apertura } : q)));
   };
+  /** Pone SOLO el esqueleto virtual en la posición inicial de la calibración (no mueve ningún brazo). */
+  const virtualAPosicionInicial = () =>
+    correr(async () => {
+      const rutina = await obtenerRutinaBrazo('posición inicial');
+      const angulos = rutina.pasos.find((p) => p.tipo === 'articulaciones')?.angulos;
+      if (!angulos) throw new Error('No hay posición inicial calibrada.');
+      setPose(angulos.map(redondear));
+      setAviso('El brazo virtual está en la posición inicial (el brazo conectado no se movió).');
+    });
   const deTelemetria = () => {
     if (estado?.angulos) setPose(estado.angulos.map(redondear));
     if (estado?.pinza?.inicializada) setApertura(estado.pinza.posicion);
@@ -328,6 +359,10 @@ export default function RutinasBrazo({ estado, onCambio }) {
     });
   const probar = () =>
     correr(async () => {
+      if (enVivo) {
+        setError('Salí del modo en vivo para probar en pantalla.');
+        return;
+      }
       cancelarRef.current = false;
       setAnimando(true);
       let actual = [...pose];
@@ -364,6 +399,7 @@ export default function RutinasBrazo({ estado, onCambio }) {
   // --- ejecutar en el brazo (emulador o real) ----------------------------------------------------------------------------
   const ejecutar = () =>
     correr(async () => {
+      if (enVivo) salirDeVivo(); // la rutina mueve el brazo: el modo en vivo no puede llevarlo de vuelta a la pose del esqueleto
       let confirmar = false;
       if (!estado?.emulador) {
         confirmar = window.confirm('Vas a ejecutar la rutina en el brazo REAL. ¿Tenés la mano en el botón de parada de emergencia?');
@@ -379,6 +415,124 @@ export default function RutinasBrazo({ estado, onCambio }) {
       setAviso('Ejecutando… el avance se ve abajo.');
       await onCambio?.();
     });
+  // --- modo en vivo: los controles mueven el brazo real (o el emulador) y el esqueleto lo refleja -------------------------------------------
+  // El brazo real se guarda cada vez que llega un dato nuevo del panel; el esqueleto parte SIEMPRE de la pose real (si no, la primera orden lo llevaría de golpe
+  // a la pose del esqueleto).
+  useEffect(() => {
+    if (estado?.angulos && !empujandoRef.current) realRef.current = estado.angulos;
+  }, [estado]);
+
+  const salirDeVivo = useCallback(() => {
+    vivoRef.current = false;
+    setEnVivo(false);
+  }, []);
+
+  const esperarFinDeMovimiento = async () => {
+    const limite = Date.now() + ESPERA_FIN_MOVIMIENTO_MS;
+    for (;;) {
+      await pausa(150);
+      const lectura = await estadoControlBrazo();
+      if (lectura.tarea?.estado !== 'ejecutando') return lectura;
+      if (Date.now() > limite) throw new Error('El brazo tardó demasiado en terminar el movimiento.');
+    }
+  };
+
+  /** Lleva el brazo real hacia la pose del esqueleto en tandas cortas; si el esqueleto cambió mientras tanto, sigue con lo último. Una sola tanda a la vez. */
+  const empujarVivo = async () => {
+    if (empujandoRef.current || !vivoRef.current) return;
+    empujandoRef.current = true;
+    try {
+      while (vivoRef.current && realRef.current) {
+        const real = realRef.current;
+        const objetivo = poseRef.current;
+        const diferencia = objetivo.map((a, i) => a - real[i]);
+        if (diferencia.every((d) => Math.abs(d) < 0.4)) break;
+        const siguiente = real.map((r, i) => redondear(r + Math.max(-SALTO_VIVO_GRADOS, Math.min(SALTO_VIVO_GRADOS, diferencia[i]))));
+        await moverArticulacionesBrazo(siguiente);
+        const lectura = await esperarFinDeMovimiento();
+        if (lectura.tarea?.estado !== 'terminada') throw new Error(lectura.tarea?.mensaje || 'El movimiento no terminó.');
+        realRef.current = lectura.angulos ?? siguiente;
+      }
+    } catch (e) {
+      setError(e.status === 422 ? `El brazo no puede ir ahí: ${e.message}` : e.message);
+      if (e.status !== 422) salirDeVivo();
+      try {
+        const lectura = await estadoControlBrazo(); // el esqueleto vuelve adonde está el brazo de verdad
+        if (lectura.angulos) {
+          realRef.current = lectura.angulos;
+          setPose(lectura.angulos.map(redondear));
+        }
+      } catch {
+        /* sin lectura: queda como está */
+      }
+    } finally {
+      empujandoRef.current = false;
+      onCambio?.();
+    }
+  };
+
+  useEffect(() => {
+    if (enVivo) empujarVivo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pose, enVivo]);
+
+  const empujarPinza = async () => {
+    if (pinzaOcupadaRef.current || !vivoRef.current) return;
+    pinzaOcupadaRef.current = true;
+    try {
+      while (vivoRef.current) {
+        const objetivo = aperturaRef.current;
+        if (Math.abs(objetivo - pinzaRealRef.current) < 15) break;
+        if (objetivo >= 995) await moverPinza('abrir');
+        else if (objetivo <= 5) await moverPinza('cerrar');
+        else await moverPinza('ancho', Math.round(((objetivo / 1000) * CARRERA_PINZA_MM) * 10) / 10);
+        pinzaRealRef.current = objetivo; // si cerró sobre una pieza se queda donde la sintió: no se insiste
+      }
+    } catch (e) {
+      setError(`Pinza: ${e.message}`);
+    } finally {
+      pinzaOcupadaRef.current = false;
+    }
+  };
+
+  useEffect(() => {
+    if (!enVivo || !estado?.pinza?.inicializada) return undefined;
+    const temporizador = setTimeout(empujarPinza, 250);
+    return () => clearTimeout(temporizador);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apertura, enVivo]);
+
+  // Si el brazo se desconecta, se deshabilita o hay otro movimiento (una rutina, «Llevar pieza»), el modo en vivo se apaga solo.
+  // Ojo: mientras el brazo se mueve, su modo es 7 («ejecutando»), no 5: eso NO es haberlo deshabilitado.
+  const sigueHabilitado = [5, 7, 8].includes(estado?.modo);
+  useEffect(() => {
+    if (enVivo && (!conectado || !sigueHabilitado || (moviendo && estado?.tarea?.descripcion !== 'Mover articulaciones'))) salirDeVivo();
+  }, [enVivo, conectado, sigueHabilitado, moviendo, salirDeVivo]);
+
+  const activarVivo = () =>
+    correr(async () => {
+      if (!estado?.angulos) throw new Error('No hay lectura de los ángulos del brazo: esperá un momento y volvé a probar.');
+      if (!estado.emulador && !window.confirm('Los controles van a mover el brazo REAL en tiempo real. ¿Está Hebert en el laboratorio, la velocidad global al 20 % y tenés la mano en la parada de emergencia?')) return;
+      realRef.current = estado.angulos;
+      setPose(estado.angulos.map(redondear));
+      if (estado.pinza?.inicializada) {
+        setApertura(estado.pinza.posicion);
+        pinzaRealRef.current = estado.pinza.posicion;
+      }
+      vivoRef.current = true;
+      setEnVivo(true);
+      setAviso('Modo en vivo: lo que muevas acá lo hace el brazo. Grabá los pasos cuando esté como querés.');
+    });
+  const pararTodo = async () => {
+    salirDeVivo();
+    try {
+      await pararBrazo();
+    } catch (e) {
+      setError(e.message);
+    }
+    onCambio?.();
+  };
+
   const irAPose = () => correr(() => moverArticulacionesBrazo(pose).then(() => onCambio?.()));
 
   // Cuando termina la rutina en el emulador queda validada: se relee para mostrar la insignia.
@@ -463,6 +617,46 @@ export default function RutinasBrazo({ estado, onCambio }) {
           {invalida && (
             <p className={CLASE_AVISO} role="alert">
               ⚠ Pose imposible: {problemasActuales[0]}. No se puede grabar así.
+            </p>
+          )}
+          <div className="flex flex-wrap items-center gap-space-xs">
+            {!enVivo ? (
+              <button
+                type="button"
+                className={CLASE_BOTON}
+                onClick={activarVivo}
+                disabled={!conectado || !habilitado || moviendo || bloqueado}
+                title={conectado && habilitado ? 'Los controles mueven el brazo conectado en tiempo real y el esqueleto lo refleja' : 'Conectá y habilitá el brazo (o el emulador) arriba'}
+              >
+                <Icono nombre="sensors" /> Mover el brazo en vivo
+              </button>
+            ) : (
+              <>
+                <span className="font-body-sm text-body-sm font-medium text-error" role="status">
+                  ● EN VIVO: los controles mueven el brazo {estado?.emulador ? 'del emulador' : 'REAL'}
+                </span>
+                <button type="button" className={CLASE_BOTON} onClick={salirDeVivo}>
+                  Salir del modo en vivo
+                </button>
+                <button type="button" className={CLASE_BOTON_PRIMARIO} onClick={pararTodo}>
+                  Parar el brazo
+                </button>
+              </>
+            )}
+          </div>
+          <button
+            type="button"
+            className={`${CLASE_BOTON} self-start`}
+            onClick={virtualAPosicionInicial}
+            disabled={bloqueado || enVivo}
+            title={enVivo ? 'En vivo moverías el brazo: salí del modo en vivo para poner solo el virtual' : 'Pone solo el brazo virtual en la posición inicial; no mueve el brazo conectado'}
+          >
+            <Icono nombre="home" /> Brazo virtual a la posición inicial
+          </button>
+          {enVivo && (
+            <p className="m-0 font-body-sm text-body-sm text-on-surface-variant" aria-live="off">
+              Brazo {estado?.emulador ? 'del emulador' : 'real'}: {(estado?.angulos ?? []).map((a) => `${Math.round(a)}°`).join(' ')}
+              {estado?.pinza?.inicializada ? '' : ' · la pinza no está inicializada: no se mueve en vivo'}
             </p>
           )}
           <fieldset className="flex flex-col gap-space-xs border-0 p-0 m-0" disabled={animando}>

@@ -6,6 +6,7 @@ import ModoCamaras from '../ModoCamaras';
 import useCamarasConfiguradas from '../useCamarasConfiguradas';
 import useFlujoVivo from '../useFlujoVivo';
 import TableroSoloLectura from '../../../componentes/TableroSoloLectura';
+import PartidaFisica from './PartidaFisica';
 import SeguimientoPartida from './SeguimientoPartida';
 import { CLASE_VACIA, CLASES_BLANCAS, CLASES_NEGRAS, COLUMNAS, fenDeCasillas } from './fenCaptura';
 
@@ -294,6 +295,7 @@ export default function ProbadorPiezas() {
             </div>
           )}
         </section>
+        <PartidaFisica />
         <SeguimientoPartida />
         <section className={`${CLASE_TARJETA} lg:col-span-2`} aria-labelledby="titulo-probador-entrenar">
           <h3 id="titulo-probador-entrenar" className="font-body-md text-body-md text-on-surface font-medium">
