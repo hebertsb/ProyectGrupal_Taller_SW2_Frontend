@@ -11,6 +11,7 @@ import {
 import { rutaImagenPieza } from '../../ajedrez';
 import InsigniaTonoCurso from '../../componentes/InsigniaTonoCurso';
 import { PRESETS_TONO } from '../../tonoTuring';
+import CrearMedallas from './CrearMedallas';
 import FiguritasMedallas from './FiguritasMedallas';
 
 /** 6 piezas — mismo vocabulario que `TIPOS_PIEZA_VALIDOS` en el backend
@@ -533,6 +534,13 @@ export default function ConfiguracionEnsenanza({ usuario, alActualizarUsuario })
                 ? 'El tono de cada curso les llega a los jugadores inscritos en él.'
                 : 'El tono de cada curso (y tus videos propios) les llegan a los jugadores inscritos en él.'}
             </p>
+            <p className="font-body-sm text-body-sm text-on-surface leading-relaxed">
+              <strong className="text-primary">4.</strong> Más abajo podés crear tus propias medallas: elegí el nivel, el
+              nombre, cómo se gana y, si querés, la ilustración del centro (el escudo lo pone el sistema).{' '}
+              {esPrincipal
+                ? 'Las tuyas pueden ser generales, y también podés cambiar la ilustración de las medallas de fábrica.'
+                : 'Las ven los jugadores de tus cursos, y las manuales las entregás vos desde la lista.'}
+            </p>
           </div>
         )}
       </div>
@@ -680,7 +688,10 @@ export default function ConfiguracionEnsenanza({ usuario, alActualizarUsuario })
         )}
       </section>
 
-      {/* Imágenes de las figuritas de las medallas: solo el facilitador principal (ver FiguritasMedallas.jsx). */}
+      {/* Medallas propias: cualquier facilitador crea, edita, entrega y borra las suyas (ver CrearMedallas.jsx). */}
+      <CrearMedallas esPrincipal={esPrincipal} />
+
+      {/* Ilustraciones de las 13 medallas de fábrica: solo el facilitador principal (ver FiguritasMedallas.jsx). */}
       {esPrincipal && <FiguritasMedallas />}
     </div>
   );

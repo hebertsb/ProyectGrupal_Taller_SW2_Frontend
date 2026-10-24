@@ -21,6 +21,7 @@ import {
   calibrarPartida,
   crearPartida,
   guardarRelojPartida,
+  registrarPresenciaPartida,
   moverPartida,
   moverPartidaDesdeFoto,
   obtenerJugadasLegales,
@@ -56,6 +57,9 @@ const OPCIONES_RELOJ_MIN = [0, 3, 5, 10, 15];
 const RELOJ_POR_DEFECTO_MIN = 10;
 const CLAVE_RELOJ_MIN = 'reloj_minutos';
 const INTERVALO_GUARDADO_RELOJ_MS = 5000;
+// Cada cuánto se avisa al servidor que el jugador sigue en una partida con reloj. El servidor da la partida por perdida
+// si pasan más de 20 segundos sin aviso, así que tiene que ser bastante menos.
+const INTERVALO_PRESENCIA_MS = 5000;
 
 function leerRelojGuardado() {
   try {
@@ -333,6 +337,39 @@ export default function SalaControl({
       document.removeEventListener('visibilitychange', alCambiarVisibilidad);
       window.removeEventListener('pagehide', alCerrarPestana);
       guardar(true); // al salir de la Sala de Control con la partida a medias
+    };
+  }, []);
+
+  // Una partida con reloj no se puede dejar (como en Lichess): mientras la pantalla está a la vista se avisa cada pocos
+  // segundos al servidor que el jugador sigue acá. Si pasan más de 20 segundos sin aviso (pestaña oculta o cerrada, sin
+  // conexión, otra pantalla) el servidor la da por perdida. Al volver, la respuesta trae el estado y se muestra.
+  // Sin reloj no hace falta: esas partidas se pueden dejar y retomar (se pierden recién a los 2 días sin jugar).
+  useEffect(() => {
+    const avisar = () => {
+      const reloj = relojEnVivoRef.current;
+      if (!reloj?.activo || document.visibilityState === 'hidden') return;
+      const idPartida = reloj.partidaId;
+      registrarPresenciaPartida(idPartida)
+        .then((datos) => {
+          if (partidaVigenteRef.current !== idPartida || datos?.estado !== 'abandonada') return;
+          setTerminada(true);
+          setResultado(datos.resultado);
+          setAvisoPartidaDescartada(
+            'Te fuiste de la partida con reloj por más de 20 segundos: se dio por perdida. En una partida con reloj no se puede salir.'
+          );
+        })
+        .catch((err) => {
+          // 404: se borró porque casi no se había jugado. Otro error (sin conexión): el próximo aviso lo reintenta.
+          if (err?.status !== 404 || partidaVigenteRef.current !== idPartida) return;
+          setError('La partida se canceló porque te fuiste y casi no se había jugado.');
+        });
+    };
+    avisar();
+    const intervalo = setInterval(avisar, INTERVALO_PRESENCIA_MS);
+    document.addEventListener('visibilitychange', avisar); // al volver a la pestaña, avisa enseguida
+    return () => {
+      clearInterval(intervalo);
+      document.removeEventListener('visibilitychange', avisar);
     };
   }, []);
   const oponenteMostrado = configPartida?.tipoOponente ?? tipoOponenteSeleccionado;

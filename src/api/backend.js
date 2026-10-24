@@ -124,6 +124,16 @@ export function guardarRelojPartida(partidaId, { blancasMs, negrasMs, controlTie
 }
 
 /**
+ * Señal de vida de una partida con reloj: avisa que el jugador sigue en la pantalla. Una partida con reloj no se puede
+ * dejar: si pasan más de 20 segundos sin esta señal el servidor la da por perdida (o la borra si casi no se jugó). La
+ * respuesta es el estado de la partida: `estado === "abandonada"` (con `terminada` y `resultado: "0-1"`) avisa que ya se
+ * perdió; 404 si se borró por abandono. Hay que mandarla cada pocos segundos y solo mientras la pantalla está a la vista.
+ */
+export function registrarPresenciaPartida(partidaId) {
+  return solicitar(`/partida/${partidaId}/presencia`, { body: "{}" });
+}
+
+/**
  * Informa que a un lado ("blancas" = el jugador, "negras" = el rival) se le acabó el reloj: la partida
  * termina y gana el otro. El reloj corre en la pantalla; el servidor solo registra el resultado.
  */
@@ -999,8 +1009,9 @@ export function marcarMedallasVistas(codigos = null) {
 }
 
 /**
- * Sube (o reemplaza) la imagen de una medalla (solo el facilitador PRINCIPAL; 403 si no lo es): reemplaza a la figurita
- * dibujada para todos los jugadores. Multipart con el campo `archivo` (PNG, JPG o WEBP de hasta 2 MB); el
+ * Sube (o reemplaza) la ilustración de una medalla: las 13 de fábrica solo las cambia el facilitador PRINCIPAL; una medalla
+ * propia, su creador o el principal (403 si no). Es la ilustración del centro de la figurita (el escudo lo pone el sistema
+ * según el nivel) y reemplaza a la silueta de la pieza. Multipart con el campo `archivo` (PNG, JPG o WEBP de hasta 2 MB); el
  * content-type con boundary lo arma el navegador. Devuelve `{codigo, imagen_url}` (la URL trae `?v=…`, así que se
  * refresca sola). 400 con un mensaje legible si el archivo no sirve.
  */
@@ -1022,11 +1033,84 @@ export async function subirImagenMedalla(codigo, archivo) {
 }
 
 /**
+ * Lee una ilustración sugerida (un archivo estático del frontend, p. ej. `/ideas-medallas/campeon_del_torneo.png`) y la
+ * devuelve como `File`, lista para `subirImagenMedalla`. Falla con un mensaje legible si no se puede leer o no es una imagen.
+ */
+export async function leerArchivoSugerido(ruta, nombreArchivo) {
+  const respuesta = await fetch(ruta);
+  if (!respuesta.ok) throw new Error(`No se pudo leer la ilustración sugerida (error ${respuesta.status}).`);
+  const contenido = await respuesta.blob();
+  if (!contenido.type.startsWith("image/")) throw new Error("La ilustración sugerida no es una imagen.");
+  return new File([contenido], nombreArchivo, { type: contenido.type });
+}
+
+/**
  * Borra la imagen subida de una medalla (solo el facilitador principal): vuelve la figurita de fábrica. 204 sin
  * cuerpo; 404 si no tenía imagen subida.
  */
 export function quitarImagenMedalla(codigo) {
   return solicitarAuthSinCuerpo(`/facilitador/medallas/${encodeURIComponent(codigo)}/imagen`, { method: "DELETE" });
+}
+
+/** Medallas propias: un facilitador crea las suyas, las edita, las borra y las entrega (todo con su token) */
+
+/**
+ * Lo que necesita el formulario de creación: `{reglas: [{codigo, nombre, tipo: "contador" | "si_no" | "manual", minimo,
+ * maximo, unidad}], niveles, piezas, plantillas: [{nombre, descripcion, nivel, pieza, regla, meta}], largo_nombre: [min,
+ * max], largo_descripcion: [min, max]}`. `contador` se gana al llegar a un número (`meta` entre `minimo` y `maximo`),
+ * `si_no` al cumplirlo una vez (meta 1) y `manual` la entrega el facilitador. Las `plantillas` son ideas listas para usar.
+ * Solo facilitadores (403 si no).
+ */
+export function obtenerOpcionesMedallas() {
+  return solicitarAuth("/medallas/opciones");
+}
+
+/**
+ * Las medallas propias que el facilitador puede gestionar (el principal ve las de todos): `[{codigo, nombre,
+ * descripcion, nivel, pieza, regla, regla_nombre, meta, general, creada_por, creador_nombre, es_mia, ganada_por,
+ * imagen_url}]`. `ganada_por` es cuántos jugadores la ganaron; `imagen_url` es `null` mientras no tenga ilustración.
+ */
+export function listarMisMedallas() {
+  return solicitarAuth("/medallas/mias");
+}
+
+/**
+ * Crea una medalla propia (sin imagen: se sube después con `subirImagenMedalla`). `datos`: `{nombre, descripcion, nivel,
+ * pieza, regla, meta, general}`; `general: true` solo si el usuario es PRINCIPAL (la ven todos los jugadores; si no, solo los
+ * de los cursos del creador). Devuelve la medalla creada (201). 400 con un mensaje claro si algún dato no sirve o si llegó al
+ * máximo de 30 medallas; 403 si pide una general sin ser principal.
+ */
+export function crearMedallaPropia(datos) {
+  return solicitarAuth("/medallas", { method: "POST", body: JSON.stringify(datos) });
+}
+
+/**
+ * Edita una medalla propia con un cuerpo parcial (`nombre`, `descripcion`, `nivel`, `pieza`, `regla`, `meta`; no se cambia
+ * `general`). Los jugadores que ya la ganaron la conservan. Devuelve la medalla. 403 si es de otro facilitador (salvo el
+ * principal), 404 si no existe, 400 con un mensaje claro si algún dato no sirve.
+ */
+export function editarMedallaPropia(codigo, cambios) {
+  return solicitarAuth(`/medallas/${encodeURIComponent(codigo)}`, { method: "PATCH", body: JSON.stringify(cambios) });
+}
+
+/**
+ * Borra una medalla propia con su imagen: quienes la ganaron la pierden. 204 sin cuerpo; 403 si es de otro facilitador
+ * (salvo el principal), 404 si no existe.
+ */
+export function borrarMedallaPropia(codigo) {
+  return solicitarAuthSinCuerpo(`/medallas/${encodeURIComponent(codigo)}`, { method: "DELETE" });
+}
+
+/**
+ * Entrega una medalla MANUAL (`regla === "manual"`) a jugadores concretos (`usuarioIds`) y/o a todos los de un curso
+ * (`cursoId`). Un facilitador solo puede entregarla a jugadores de sus cursos (el principal, a cualquiera). Devuelve
+ * `{otorgadas, ya_la_tenian}`. 400 con un mensaje claro si no es manual, no se indicó a quién o el curso no es suyo.
+ */
+export function otorgarMedalla(codigo, { usuarioIds = [], cursoId = null } = {}) {
+  return solicitarAuth(`/medallas/${encodeURIComponent(codigo)}/otorgar`, {
+    method: "POST",
+    body: JSON.stringify({ usuario_ids: usuarioIds, curso_id: cursoId }),
+  });
 }
 
 /** Tutor conversacional "Turing" (Panel de Aprendizaje) */

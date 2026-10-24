@@ -1,0 +1,21 @@
+Ilustraciones sugeridas de las ideas de "Crear medallas propias".
+
+Cada idea que ofrece la pantalla (las "plantillas" de GET /medallas/opciones) puede tener acá su ilustración: un PNG
+cuadrado, transparente, de 512x512, sin marco, escudo ni texto (lo deja listo scripts/preparar_ilustracion_medalla.py).
+
+El nombre del archivo es el de la idea sin tildes, en minúscula y con guiones bajos:
+
+  Constante del Club   -> constante_del_club.png
+  Racha de Fuego       -> racha_de_fuego.png
+  Jugador Madrugador   -> jugador_madrugador.png
+  Mente Afilada        -> mente_afilada.png
+  Curioso del Tablero  -> curioso_del_tablero.png
+  Cazador de Robots    -> cazador_de_robots.png
+  Campeón del Torneo   -> campeon_del_torneo.png
+  Mejor Compañero      -> mejor_companero.png
+  Esfuerzo Destacado   -> esfuerzo_destacado.png
+
+Cuando el facilitador elige una idea, su ilustración queda elegida para la medalla y se sube al crearla. Puede descartarla o
+subir la suya. Si falta el archivo de una idea, no pasa nada: esa idea se ve con la silueta de la pieza.
+
+Esta carpeta no se llama "medallas..." a propósito: las rutas que empiezan con /medallas van al backend.

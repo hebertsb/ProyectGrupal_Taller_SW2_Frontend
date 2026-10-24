@@ -18,7 +18,7 @@ const TAMANOS = ['xs', 'sm', 'md', 'lg'];
 /** Cuánto se agranda la silueta de la pieza (caja de 48 x 48) para llenar el campo del escudo. */
 const ESCALA_PIEZA = 1.2;
 /** Lado (en la caja de 100) de la ilustración subida: entra en el campo del escudo sin tocar el candado ni las estrellas. */
-const LADO_ILUSTRACION = 48;
+const LADO_ILUSTRACION = 62;
 
 /** Destello de cuatro puntas (las chispas de las legendarias). */
 const FORMA_CHISPA = 'M0 -3.4L0.95 -0.95L3.4 0L0.95 0.95L0 3.4L-0.95 0.95L-3.4 0L-0.95 -0.95Z';
@@ -161,7 +161,7 @@ function ArteEscudo({ uid, nivel, pieza, bloqueada, tamano, imagenUrl = null }) 
             className="fig-ilustracion"
             href={imagenUrl}
             x={50 - LADO_ILUSTRACION / 2}
-            y={conCandado ? 22 : !bloqueada && detallado ? 28 : 26}
+            y={conCandado ? 14 : !bloqueada && detallado ? 22 : 21}
             width={LADO_ILUSTRACION}
             height={LADO_ILUSTRACION}
             preserveAspectRatio="xMidYMid meet"

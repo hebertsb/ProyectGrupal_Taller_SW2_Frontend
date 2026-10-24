@@ -268,7 +268,7 @@ export default function FiguritasMedallas() {
             collections_bookmark
           </span>
           <h2 id="titulo-figuritas-medallas" className="m-0 font-headline-sm text-headline-sm text-on-surface">
-            Figuritas de las medallas
+            Figuritas de fábrica
           </h2>
         </div>
         <span className="flex items-center gap-1 px-space-xs py-space-2xs rounded-full bg-surface-container-high text-on-surface-variant font-mono-micro text-mono-micro uppercase tracking-wide">
