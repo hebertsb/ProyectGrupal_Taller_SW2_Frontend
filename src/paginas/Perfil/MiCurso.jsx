@@ -86,7 +86,7 @@ export default function MiCurso() {
   const tono = curso?.preset_ensenanza ? NOMBRE_TONO[curso.preset_ensenanza] : null;
 
   return (
-    <div className="max-w-xl w-full bg-surface-container-low p-space-lg rounded-xl shadow-md flex flex-col gap-space-md">
+    <div className="w-full bg-surface-container-low p-space-md rounded-xl shadow-md flex flex-col gap-space-md">
       <div className="flex items-center gap-space-xs">
         <span className="material-symbols-outlined text-[20px] text-primary" aria-hidden="true">
           groups

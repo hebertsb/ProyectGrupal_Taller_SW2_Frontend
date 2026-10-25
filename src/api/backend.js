@@ -580,9 +580,16 @@ export async function registro(email, nombre, password, rol = "jugador", claveFa
   });
   if (!respuesta.ok) {
     const detalle = await respuesta.json().catch(() => null);
-    throw new Error(detalle?.detail ?? `Error ${respuesta.status}`);
+    throw new Error(mensajeDeDetalle(detalle?.detail) ?? `Error ${respuesta.status}`);
   }
   return respuesta.json();
+}
+
+/** Texto legible del `detail` de un error de FastAPI: una frase, o la primera regla de validación que falló (422). */
+function mensajeDeDetalle(detalle) {
+  if (typeof detalle === "string") return detalle;
+  if (Array.isArray(detalle) && typeof detalle[0]?.msg === "string") return detalle[0].msg.replace(/^Value error, /, "");
+  return null;
 }
 
 /** Estado del modelo de aprendizaje (disponible, dispositivo, checkpoint, etc.) */
@@ -703,6 +710,34 @@ export async function subirFotoPerfil(archivo) {
     throw error;
   }
   return respuesta.json();
+}
+
+/**
+ * Darme de baja: elimina mi propia cuenta y todo lo mío, para siempre. Vuelve a comprobar quién soy: `password`, o
+ * `confirmarEmail` (mi correo completo) si la cuenta entra solo con Google. 401 si no coincide, 429 si falló demasiadas veces.
+ */
+export function eliminarMiCuenta({ password = null, confirmarEmail = null }) {
+  return solicitarAuth("/auth/me/eliminar", {
+    method: "POST",
+    body: JSON.stringify({ password, confirmar_email: confirmarEmail }),
+  });
+}
+
+/** Confirma el correo con el código de 6 dígitos que llegó por mail. Devuelve el usuario ya verificado; 400 si el código no sirve. */
+export function verificarCorreo(codigo) {
+  return solicitarAuth("/auth/verificar-correo", { method: "POST", body: JSON.stringify({ codigo }) });
+}
+
+/** Pide un código nuevo para verificar el correo (el anterior deja de servir). 429 si se pidió hace menos de un minuto. */
+export function reenviarCodigoCorreo() {
+  return solicitarAuth("/auth/verificar-correo/reenviar", { method: "POST" });
+}
+
+/** Últimas acciones de los administradores sobre cuentas, instituciones y códigos (solo la plataforma). */
+export function listarAuditoria({ limite = 100, accion = null } = {}) {
+  const consulta = new URLSearchParams({ limite: String(limite) });
+  if (accion) consulta.set("accion", accion);
+  return solicitarAuth(`/auditoria?${consulta.toString()}`);
 }
 
 /** Gestión de usuarios (solo facilitadores) */

@@ -19,7 +19,7 @@ export default function TarjetaMisMedallas({ alVerAlbum = null }) {
   return (
     <section
       aria-labelledby="titulo-mis-medallas"
-      className="max-w-xl w-full bg-surface-container-low p-space-lg rounded-xl shadow-md flex flex-col gap-space-md"
+      className="w-full bg-surface-container-low p-space-md rounded-xl shadow-md flex flex-col gap-space-md"
     >
       <div className="flex flex-wrap items-center justify-between gap-x-space-sm gap-y-space-2xs">
         <div className="flex items-center gap-space-xs">

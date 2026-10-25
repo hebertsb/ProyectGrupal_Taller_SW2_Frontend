@@ -21,10 +21,13 @@ export default function Login({ onLoginSuccess }) {
   const faltaCodigoVerificado =
     modo === 'registro' && rolEsperado === 'facilitador' && estadoCodigo !== 'valido' && estadoCodigo !== 'error';
   const [mostrarPassword, setMostrarPassword] = useState(false);
+  // Al crear una cuenta con correo hay que aceptar los términos (y declarar la autorización si es menor de edad).
+  const [aceptaTerminos, setAceptaTerminos] = useState(false);
   // Las credenciales de prueba van abiertas solo en pantallas anchas y altas; en el resto quedan
   // plegadas para que la tarjeta entre completa sin desplazarse.
   const pantallaAncha = typeof window !== 'undefined' && window.matchMedia('(min-width: 640px) and (min-height: 900px)').matches;
-  const [recordar, setRecordar] = useState(true);
+  // Desmarcado por defecto: en una computadora compartida (colegio, laboratorio) la sesión no debe quedar abierta al cerrar el navegador.
+  const [recordar, setRecordar] = useState(false);
 
   const [cargando, setCargando] = useState(false);
   const [progresoTrack, setProgresoTrack] = useState(0);
@@ -432,6 +435,14 @@ export default function Login({ onLoginSuccess }) {
               )}
             </div>
 
+            <p className="-mt-2 mb-3 text-center text-[10px] leading-snug text-slate-500">
+              Al continuar con Google aceptás los{' '}
+              <a href="/#politica" target="_blank" rel="noopener" className="text-slate-400 underline hover:text-[#00e5ff]">
+                términos y la política de privacidad
+              </a>
+              .
+            </p>
+
             {/* SEPARADOR CRIPTOGRÁFICO */}
             <div className="relative flex py-2 items-center mb-4">
               <div className="flex-grow border-t border-slate-800" />
@@ -528,6 +539,8 @@ export default function Login({ onLoginSuccess }) {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     minLength={modo === 'registro' ? 8 : undefined}
+                    pattern={modo === 'registro' ? '(?=.*[A-Za-zÁÉÍÓÚáéíóúÑñ])(?=.*[0-9]).{8,}' : undefined}
+                    title={modo === 'registro' ? 'Al menos 8 caracteres, con letras y números' : undefined}
                     placeholder="••••••••••••"
                     className="block w-full pl-9 pr-10 py-2 bg-[#0a0d14] border border-white/10 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#00e5ff] focus:border-[#00e5ff] font-mono tracking-wider transition duration-150"
                   />
@@ -542,6 +555,9 @@ export default function Login({ onLoginSuccess }) {
                     </span>
                   </button>
                 </div>
+                {modo === 'registro' && (
+                  <p className="mt-1 mb-0 text-[10px] leading-snug text-slate-500">Mínimo 8 caracteres, con letras y números.</p>
+                )}
               </div>
 
               {/* Clave de Seguridad de Facilitador (cuando aplica) */}
@@ -567,6 +583,27 @@ export default function Login({ onLoginSuccess }) {
                 </div>
               )}
 
+              {/* Aceptación de términos (solo al crear la cuenta) */}
+              {modo === 'registro' && (
+                <div className="flex items-start gap-2 pt-0.5">
+                  <input
+                    id="aceptaTerminos"
+                    type="checkbox"
+                    checked={aceptaTerminos}
+                    onChange={(e) => setAceptaTerminos(e.target.checked)}
+                    required
+                    className="mt-0.5 h-4 w-4 shrink-0 text-[#00e5ff] focus:ring-[#00e5ff] bg-[#090d15] border-white/20 rounded cursor-pointer"
+                  />
+                  <label htmlFor="aceptaTerminos" className="block text-xs leading-snug text-slate-400 cursor-pointer">
+                    Leí y acepto los{' '}
+                    <a href="/#politica" target="_blank" rel="noopener" className="text-[#00e5ff] underline">
+                      términos y la política de privacidad
+                    </a>
+                    . Si soy menor de 18 años, cuento con la autorización de mi madre, padre o tutor.
+                  </label>
+                </div>
+              )}
+
               {/* Recordar en este equipo */}
               <div className="flex items-center pt-0.5">
                 <input
@@ -577,7 +614,7 @@ export default function Login({ onLoginSuccess }) {
                   className="h-4 w-4 text-[#00e5ff] focus:ring-[#00e5ff] bg-[#090d15] border-white/20 rounded cursor-pointer"
                 />
                 <label htmlFor="recordarEquipo" className="ml-2 block text-xs text-slate-400 select-none cursor-pointer">
-                  Recordar en este equipo
+                  Recordar en este equipo <span className="text-slate-500">(no en computadoras compartidas)</span>
                 </label>
               </div>
 

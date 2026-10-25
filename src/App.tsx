@@ -20,8 +20,10 @@ import ConfiguracionEnsenanza from './paginas/ConfiguracionEnsenanza/Configuraci
 import EntrenamientoModelo from './paginas/EntrenamientoModelo/EntrenamientoModelo';
 import Perfil from './paginas/Perfil/Perfil';
 import Login from './paginas/Login/Login';
+import Politica from './paginas/Politica/Politica';
 import AccesoRestringido from './componentes/AccesoRestringido';
 import NotificadorMedallas from './componentes/NotificadorMedallas';
+import AvisoVerificarCorreo from './componentes/AvisoVerificarCorreo';
 import { backendEnLinea, obtenerDemostracionActiva, obtenerEstadoEntrenamiento, obtenerPerfil, pararBrazo } from './api/backend';
 import useEstadoBrazo from './useEstadoBrazo';
 import { ProveedorRazonamiento } from './contexto/ContextoRazonamiento';
@@ -30,6 +32,7 @@ import { ProveedorEstadoModelo } from './contexto/ContextoEstadoModelo';
 const GestionUsuarios = lazy(() => import('./paginas/Administracion/GestionUsuarios.jsx'));
 const MisCursos = lazy(() => import('./paginas/Administracion/MisCursos.jsx'));
 const Instituciones = lazy(() => import('./paginas/Instituciones/Instituciones.jsx'));
+const Auditoria = lazy(() => import('./paginas/Auditoria/Auditoria.jsx'));
 const MiInstitucion = lazy(() => import('./paginas/Instituciones/MiInstitucion.jsx'));
 
 // Mismo intervalo que ya usaba el sondeo local de RegistroPartidas.jsx — acá se sondea a nivel
@@ -59,6 +62,17 @@ function obtenerUsuarioGuardado() {
 
 export default function App() {
   const [pantallaActiva, setPantallaActiva] = useState('control');
+  // Términos y política de privacidad: pantalla pública en `/#politica` (se puede abrir sin iniciar sesión).
+  const [verPolitica, setVerPolitica] = useState(() => window.location.hash === '#politica');
+  useEffect(() => {
+    const alCambiarHash = () => setVerPolitica(window.location.hash === '#politica');
+    window.addEventListener('hashchange', alCambiarHash);
+    return () => window.removeEventListener('hashchange', alCambiarHash);
+  }, []);
+  const cerrarPolitica = () => {
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    setVerPolitica(false);
+  };
   // Secciones del menú lateral que el facilitador abrió o cerró a mano (id de sección -> abierta).
   const [seccionesAbiertas, setSeccionesAbiertas] = useState<Record<string, boolean>>({});
   // En pantallas angostas (menos de lg) la barra lateral arranca cerrada: si no, tapa el contenido.
@@ -371,6 +385,7 @@ export default function App() {
       items: [
         { id: 'usuarios', texto: 'Gestión de Usuarios', icono: 'manage_accounts', visible: esPrincipal },
         { id: 'instituciones', texto: 'Instituciones', icono: 'apartment', visible: esPrincipal },
+        { id: 'auditoria', texto: 'Auditoría', icono: 'history', visible: esPrincipal },
       ],
     },
     {
@@ -398,6 +413,8 @@ export default function App() {
     if (seccion) setSeccionesAbiertas((previas) => (previas[seccion.id] ? previas : { ...previas, [seccion.id]: true }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pantallaActiva]);
+
+  if (verPolitica) return <Politica alVolver={cerrarPolitica} />;
 
   // Si no hay usuario, mostrar login
   if (!usuario) {
@@ -711,6 +728,7 @@ export default function App() {
         <main className="w-full pt-16 bg-surface-container-lowest min-h-screen">
           {/* Solo en Cámara y Brazo: el brazo se usa en local, así que el aviso no debe aparecer en las demás pantallas
               (ni en el sitio publicado, donde no hay cámara ni brazo). */}
+          {usuario.correo_verificado === false && <AvisoVerificarCorreo usuario={usuario} alVerificar={manejarActualizarUsuario} />}
           {esPrincipal && pantallaActiva === 'camaraBrazo' && <BannerCalibracion />}
           {/* Banner global de transmisión en vivo — a propósito NO es un toast: se queda mientras
               la transmisión siga activa y el jugador no la esté viendo, en CUALQUIER pantalla (no
@@ -861,6 +879,7 @@ export default function App() {
               usuario={usuario}
               alActualizarUsuario={manejarActualizarUsuario}
               alVerAlbum={esFacilitador ? null : () => irAPanelAprendizaje('logros')}
+              alEliminarCuenta={manejarLogout}
             />
           )}
           {pantallaActiva === 'usuarios' && esPrincipal && (
@@ -901,6 +920,15 @@ export default function App() {
               </Suspense>
             ) : (
               soloPlataforma('Instituciones')
+            )
+          )}
+          {pantallaActiva === 'auditoria' && (
+            esPrincipal ? (
+              <Suspense fallback={cargandoPantalla('Cargando la auditoría...')}>
+                <Auditoria />
+              </Suspense>
+            ) : (
+              soloPlataforma('La Auditoría')
             )
           )}
           {pantallaActiva === 'misCursos' && esFacilitador && !esPrincipal && (

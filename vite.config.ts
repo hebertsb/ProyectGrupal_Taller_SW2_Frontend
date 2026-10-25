@@ -28,6 +28,7 @@ export default defineConfig({
       '/medallas': BACKEND_URL,
       '/cursos': BACKEND_URL,
       '/instituciones': BACKEND_URL,
+      '/auditoria': BACKEND_URL,
       '/media': BACKEND_URL,
       '/tutor': BACKEND_URL,
       '/entrenamiento': BACKEND_URL,
