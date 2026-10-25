@@ -527,7 +527,7 @@ export default function Login({ onLoginSuccess }) {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    minLength={6}
+                    minLength={modo === 'registro' ? 8 : undefined}
                     placeholder="••••••••••••"
                     className="block w-full pl-9 pr-10 py-2 bg-[#0a0d14] border border-white/10 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#00e5ff] focus:border-[#00e5ff] font-mono tracking-wider transition duration-150"
                   />

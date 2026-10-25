@@ -1389,13 +1389,11 @@ export default function SalaControl({
             resultado={resultado}
           />
 
-          {/* CÁMARA FIJA / TABLERO FÍSICO — operación de hardware, SIEMPRE VISIBLE
-              (nunca plegada): el facilitador siempre la ve; para el jugador
-              depende del permiso de esta partida (`permite_camara`), que el
-              facilitador prende/apaga desde "CONTROLES PARA EL JUGADOR" más
-              abajo — un jugador practicando desde el navegador por defecto no
-              tiene tablero físico ni cámara al lado. */}
-          {(esFacilitador || permiteCamara) && (
+          {/* CÁMARA FIJA / TABLERO FÍSICO — solo para el jugador, y solo si el facilitador le dio permiso en esta
+              partida (`permite_camara`, desde "CONTROLES PARA EL JUGADOR" más abajo): un jugador practicando desde el
+              navegador por defecto no tiene tablero físico ni cámara al lado. Los facilitadores no la ven acá: la
+              cámara, el reconocimiento del tablero y la partida física se manejan desde Cámara y Brazo. */}
+          {!esFacilitador && permiteCamara && (
             <div className="panel-entrada bg-surface-container-low rounded-xl p-space-md shadow-xl flex flex-col gap-space-sm relative overflow-hidden">
               <div className="flex items-center justify-between">
                 <span className="font-mono-micro text-mono-micro uppercase tracking-wider text-on-surface-variant flex items-center gap-1">

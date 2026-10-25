@@ -951,8 +951,8 @@ function TarjetaCurso({
  * Si el usuario es facilitador principal (`es_principal`) suma: ver los cursos de todos los facilitadores,
  * crear un curso a nombre de otro y asignar un curso a otro facilitador. Para los demás no cambia nada.
  */
-export default function PanelCursos({ usuarioActual = null }) {
-  const [abierto, setAbierto] = useState(false);
+export default function PanelCursos({ usuarioActual = null, abiertoAlInicio = false }) {
+  const [abierto, setAbierto] = useState(abiertoAlInicio);
   const [cursos, setCursos] = useState(null); // null = todavía no se cargó
   const [cargando, setCargando] = useState(false);
   const [errorLista, setErrorLista] = useState(null);

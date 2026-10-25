@@ -961,6 +961,51 @@ export function salirDelCurso() {
   return solicitarAuthSinCuerpo("/cursos/salir", { method: "POST" });
 }
 
+/** Instituciones clientes */
+
+/** Todas las instituciones con sus docentes (solo la plataforma). */
+export function listarInstituciones() {
+  return solicitarAuth("/instituciones");
+}
+
+/** Crea una institución (solo la plataforma). `tipo`: academia, colegio u organizador. Con `administradorId`, ese facilitador la administra. */
+export function crearInstitucion({ nombre, tipo, administradorId = null }) {
+  return solicitarAuth("/instituciones", {
+    method: "POST",
+    body: JSON.stringify({ nombre, tipo, administrador_id: administradorId }),
+  });
+}
+
+/** Edita una institución (solo la plataforma). `campos` lleva solo lo que cambió: nombre, tipo, administrador_id. */
+export function editarInstitucion(institucionId, campos) {
+  return solicitarAuth(`/instituciones/${institucionId}`, { method: "PATCH", body: JSON.stringify(campos) });
+}
+
+/** Pasa a un facilitador a esa institución (solo la plataforma). */
+export function asignarDocenteAInstitucion(institucionId, usuarioId) {
+  return solicitarAuth(`/instituciones/${institucionId}/docentes/${usuarioId}`, { method: "PUT" });
+}
+
+/** Saca a un docente de la institución (solo la plataforma). */
+export function quitarDocenteDeInstitucion(institucionId, usuarioId) {
+  return solicitarAuth(`/instituciones/${institucionId}/docentes/${usuarioId}`, { method: "DELETE" });
+}
+
+/** La institución del facilitador que consulta, con sus números. 404 si no pertenece a ninguna. */
+export function obtenerMiInstitucion() {
+  return solicitarAuth("/instituciones/mia");
+}
+
+/** Los docentes de mi institución (solo su administrador o la plataforma). */
+export function listarDocentesDeMiInstitucion() {
+  return solicitarAuth("/instituciones/mia/docentes");
+}
+
+/** Los alumnos de mi institución, con su curso y su docente (solo su administrador o la plataforma). */
+export function listarAlumnosDeMiInstitucion() {
+  return solicitarAuth("/instituciones/mia/alumnos");
+}
+
 /**
  * Ranking de jugadores por nivel (cualquier usuario autenticado): el de su curso si está inscrito
  * (`alcance: "curso"`) o el de los jugadores sin curso (`alcance: "general"`). Devuelve `{alcance, curso, total,

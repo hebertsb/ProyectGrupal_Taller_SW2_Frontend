@@ -37,7 +37,10 @@ export default function SelectorCamara() {
       const datos = await listarCamaras();
       setAsignadas(datos.asignadas ?? { principal: { fuente: datos.actual, rotacion: datos.rotacion }, secundaria: null });
       setCamaras(datos.camaras);
-      for (const c of datos.camaras.filter((x) => x.disponible)) {
+      // La búsqueda ya trae la miniatura de cada cámara (todas se prueban a la vez): no hace falta pedir una foto por cámara.
+      const yaTrajeron = Object.fromEntries(datos.camaras.filter((x) => x.disponible && x.miniatura).map((x) => [x.indice, x.miniatura]));
+      setMiniaturas((m) => ({ ...m, ...yaTrajeron }));
+      for (const c of datos.camaras.filter((x) => x.disponible && !x.miniatura)) {
         setEstado(`Mirando la cámara ${c.indice}…`);
         try {
           const foto = await fotoDeCamara(c.indice);

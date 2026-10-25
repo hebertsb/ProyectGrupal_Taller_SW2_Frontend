@@ -7,7 +7,6 @@ import { useEffect, useRef, useState, Suspense, lazy } from 'react';
 import { leerSesion, actualizarSesion, borrarSesion, renovarSesion } from './api/sesion';
 import SalaControl from './paginas/SalaControl/SalaControl';
 import RazonamientoNeuronal from './paginas/RazonamientoNeuronal/RazonamientoNeuronal';
-import Administracion from './paginas/Administracion/Administracion';
 import RegistroPartidas from './paginas/RegistroPartidas/RegistroPartidas';
 import Aprendizaje from './paginas/Aprendizaje/Aprendizaje';
 import PanelAprendizaje from './paginas/PanelAprendizaje/PanelAprendizaje';
@@ -23,15 +22,31 @@ import Perfil from './paginas/Perfil/Perfil';
 import Login from './paginas/Login/Login';
 import AccesoRestringido from './componentes/AccesoRestringido';
 import NotificadorMedallas from './componentes/NotificadorMedallas';
-import { backendEnLinea, obtenerDemostracionActiva, obtenerEstadoEntrenamiento, obtenerPerfil } from './api/backend';
+import { backendEnLinea, obtenerDemostracionActiva, obtenerEstadoEntrenamiento, obtenerPerfil, pararBrazo } from './api/backend';
+import useEstadoBrazo from './useEstadoBrazo';
 import { ProveedorRazonamiento } from './contexto/ContextoRazonamiento';
 import { ProveedorEstadoModelo } from './contexto/ContextoEstadoModelo';
 
 const GestionUsuarios = lazy(() => import('./paginas/Administracion/GestionUsuarios.jsx'));
+const MisCursos = lazy(() => import('./paginas/Administracion/MisCursos.jsx'));
+const Instituciones = lazy(() => import('./paginas/Instituciones/Instituciones.jsx'));
+const MiInstitucion = lazy(() => import('./paginas/Instituciones/MiInstitucion.jsx'));
 
 // Mismo intervalo que ya usaba el sondeo local de RegistroPartidas.jsx — acá se sondea a nivel
 // global (cualquier pantalla), así que ese sondeo local queda redundante pero no molesta.
 const INTERVALO_SONDEO_DEMOSTRACION_MS = 8000;
+
+type ItemMenu = { id: string; texto: string; icono: string; visible?: boolean; aviso?: boolean; alClick?: () => void };
+type SeccionMenu = { id: string; titulo: string; icono: string; items: ItemMenu[] };
+
+function cargandoPantalla(texto: string) {
+  return (
+    <div className="w-full px-space-lg py-space-lg flex flex-col items-center justify-center min-h-[40vh]">
+      <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin motion-reduce:animate-none mb-2"></div>
+      <span className="font-mono-micro text-mono-micro text-on-surface-variant">{texto}</span>
+    </div>
+  );
+}
 
 function obtenerUsuarioGuardado() {
   try {
@@ -44,6 +59,8 @@ function obtenerUsuarioGuardado() {
 
 export default function App() {
   const [pantallaActiva, setPantallaActiva] = useState('control');
+  // Secciones del menú lateral que el facilitador abrió o cerró a mano (id de sección -> abierta).
+  const [seccionesAbiertas, setSeccionesAbiertas] = useState<Record<string, boolean>>({});
   // En pantallas angostas (menos de lg) la barra lateral arranca cerrada: si no, tapa el contenido.
   const [isSidebarOpen, setIsSidebarOpen] = useState(() =>
     typeof window === 'undefined' || window.matchMedia('(min-width: 1024px)').matches,
@@ -144,6 +161,38 @@ export default function App() {
   };
 
   const esFacilitador = usuario?.rol === 'facilitador';
+  // Perfiles (los calcula el backend en /auth/me): la plataforma (facilitador principal), el administrador de una
+  // institución, el docente (cualquier otro facilitador) y el jugador. El backend vuelve a exigir cada permiso;
+  // esto solo decide qué se muestra en el menú.
+  const esPrincipal = esFacilitador && usuario?.es_principal === true;
+  const tieneInstitucion = esFacilitador && usuario?.institucion != null;
+  // Estado real del brazo (solo la plataforma): alimenta el botón de parar de la cabecera y el estado del menú.
+  const { estado: estadoBrazo, refrescar: refrescarBrazo } = useEstadoBrazo(esPrincipal && usuario?.id != null);
+  const brazoConectado = estadoBrazo?.conectado === true;
+  const brazoEsEmulador = estadoBrazo?.emulador === true;
+  const brazoMoviendo = brazoConectado && estadoBrazo?.tarea?.estado === 'ejecutando';
+  const [parandoBrazo, setParandoBrazo] = useState(false);
+  const textoBrazo = !brazoConectado
+    ? 'DESCONECTADO'
+    : `${brazoEsEmulador ? 'EMULADOR' : 'REAL'}${brazoMoviendo ? ' · MOVIÉNDOSE' : ' · CONECTADO'}`;
+  async function pararDesdeCabecera() {
+    setParandoBrazo(true);
+    try {
+      await pararBrazo();
+    } catch {
+      // si el parar falla, el estado que se vuelve a leer abajo muestra qué pasó con el brazo
+    } finally {
+      await refrescarBrazo();
+      setParandoBrazo(false);
+    }
+  }
+  const etiquetaPerfil = !esFacilitador
+    ? 'Jugador'
+    : esPrincipal
+      ? 'Plataforma'
+      : usuario?.es_admin_institucion === true
+        ? 'Admin. de institución'
+        : 'Docente';
 
   function irASalaControl(partidaId?: string) {
     // Sin id explícito (ej. click genérico en "Sala de Control" del nav) simplemente
@@ -175,11 +224,11 @@ export default function App() {
     return () => clearInterval(intervalo);
   }, []);
 
-  // Estado de "datos para entrenar a Turing" — solo para facilitadores, silencioso ante errores (es
+  // Estado de "datos para entrenar a Turing" — solo para la plataforma, silencioso ante errores (es
   // apenas la insignia del menú). Se sondea al iniciar sesión y cada 60 s; se limpia al cerrar sesión
-  // o dejar de ser facilitador. La pantalla de Entrenamiento del modelo reusa este mismo estado.
+  // o dejar de ser plataforma. La pantalla de Entrenamiento del modelo reusa este mismo estado.
   useEffect(() => {
-    if (!esFacilitador || usuario?.id == null) {
+    if (!esPrincipal || usuario?.id == null) {
       setEstadoEntrenamiento(null);
       return;
     }
@@ -199,7 +248,7 @@ export default function App() {
       cancelado = true;
       clearInterval(intervalo);
     };
-  }, [esFacilitador, usuario?.id]);
+  }, [esPrincipal, usuario?.id]);
 
   // Transmisión en vivo del facilitador — sondeo GLOBAL (no solo en Registro de Partidas) para que
   // un jugador se entere aunque esté en otra pantalla, por ejemplo jugando su propia partida en
@@ -258,6 +307,29 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usuario?.id]);
 
+  // Pantalla que no le corresponde al perfil: a un facilitador se le explica que es de la plataforma; a un jugador,
+  // que es para su facilitador.
+  const soloPlataforma = (panel: string) =>
+    esFacilitador ? (
+      <AccesoRestringido
+        icono="admin_panel_settings"
+        colorIcono="text-primary"
+        titulo="Esta vista es solo para la plataforma"
+        mensaje={`${panel} es un panel de los administradores de la plataforma. Para gestionar a tus alumnos, usá Mis cursos.`}
+        textoBoton="Ir a Sala de Control"
+        alClickBoton={() => setPantallaActiva('control')}
+      />
+    ) : (
+      <AccesoRestringido
+        icono="smartphone"
+        colorIcono="text-primary"
+        titulo="Esta vista es para tu facilitador"
+        mensaje={`${panel} es un panel para tu facilitador. Para jugar y aprender desde tu celular, usá la app móvil.`}
+        textoBoton="Ir a Registro de Partidas"
+        alClickBoton={() => setPantallaActiva('registro')}
+      />
+    );
+
   const navClasses = (path: string) => 
     pantallaActiva === path
       ? "boton-nav flex items-center gap-space-sm px-space-sm py-space-xs transition-colors bg-surface-container-high text-primary font-medium rounded-lg shadow-[0_1px_8px_rgba(0,0,0,0.04)] w-full text-left"
@@ -267,6 +339,65 @@ export default function App() {
     pantallaActiva === path
       ? "px-space-sm py-space-2xs transition-colors font-body-sm uppercase tracking-wide bg-surface-container-high text-primary rounded-lg"
       : "px-space-sm py-space-2xs text-on-surface-variant hover:bg-surface-container hover:text-on-surface rounded-lg transition-colors font-body-sm text-body-sm uppercase tracking-wide";
+
+  // Menú lateral del facilitador, agrupado en secciones desplegables. Cada perfil ve solo las secciones y pantallas
+  // que le tocan; una sección sin pantallas visibles no se muestra.
+  const seccionesMenu = ([
+    {
+      id: 'partidas',
+      titulo: 'Partidas',
+      icono: 'sports_esports',
+      items: [
+        { id: 'monitoreo', texto: 'Monitoreo', icono: 'grid_view' },
+        { id: 'neuronal', texto: 'Razonamiento Neuronal', icono: 'neurology' },
+        { id: 'registro', texto: 'Registro de Partidas', icono: 'history_edu' },
+        { id: 'aprendizaje', texto: 'Análisis Jugada a Jugada', icono: 'troubleshoot', alClick: () => irAAprendizaje() },
+      ],
+    },
+    {
+      id: 'ensenanza',
+      titulo: 'Enseñanza',
+      icono: 'school',
+      items: [
+        { id: 'ensenanza', texto: 'Configuración de Enseñanza', icono: 'video_settings' },
+        { id: 'misCursos', texto: 'Mis cursos', icono: 'groups', visible: !esPrincipal },
+        { id: 'miInstitucion', texto: 'Mi institución', icono: 'apartment', visible: tieneInstitucion },
+      ],
+    },
+    {
+      id: 'plataforma',
+      titulo: 'Plataforma',
+      icono: 'admin_panel_settings',
+      items: [
+        { id: 'usuarios', texto: 'Gestión de Usuarios', icono: 'manage_accounts', visible: esPrincipal },
+        { id: 'instituciones', texto: 'Instituciones', icono: 'apartment', visible: esPrincipal },
+      ],
+    },
+    {
+      id: 'equipo',
+      titulo: 'Brazo y modelo',
+      icono: 'precision_manufacturing',
+      items: [
+        { id: 'camaraBrazo', texto: 'Cámara y Brazo', icono: 'videocam', visible: esPrincipal },
+        {
+          id: 'entrenamiento',
+          texto: 'Entrenamiento del modelo',
+          icono: 'database',
+          visible: esPrincipal,
+          aviso: estadoEntrenamiento?.listo_para_entrenar === true,
+        },
+      ],
+    },
+  ] as SeccionMenu[])
+    .map((seccion) => ({ ...seccion, items: seccion.items.filter((item) => item.visible !== false) }))
+    .filter((seccion) => seccion.items.length > 0);
+
+  // Al llegar a una pantalla (por el menú o por un botón de otra pantalla) se abre la sección que la contiene.
+  useEffect(() => {
+    const seccion = seccionesMenu.find((sec) => sec.items.some((item) => item.id === pantallaActiva));
+    if (seccion) setSeccionesAbiertas((previas) => (previas[seccion.id] ? previas : { ...previas, [seccion.id]: true }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pantallaActiva]);
 
   // Si no hay usuario, mostrar login
   if (!usuario) {
@@ -327,61 +458,70 @@ export default function App() {
                   <span className="material-symbols-outlined text-[18px]">auto_stories</span>Panel de Aprendizaje
                 </button>
               )}
-              {esFacilitador && (
-                <button onClick={() => setPantallaActiva('neuronal')} className={navClasses('neuronal')}>
-                  <span className="material-symbols-outlined text-[18px]">neurology</span>Razonamiento Neuronal
-                </button>
-              )}
-              {esFacilitador && (
-                <button onClick={() => setPantallaActiva('monitoreo')} className={navClasses('monitoreo')}>
-                  <span className="material-symbols-outlined text-[18px]">grid_view</span>Monitoreo
-                </button>
-              )}
-              {esFacilitador && (
-                <button onClick={() => setPantallaActiva('camaraBrazo')} className={navClasses('camaraBrazo')}>
-                  <span className="material-symbols-outlined text-[18px]">videocam</span>Cámara y Brazo
-                </button>
-              )}
-              {esFacilitador && (
-                <button onClick={() => setPantallaActiva('admin')} className={navClasses('admin')}>
-                  <span className="material-symbols-outlined text-[18px]">tune</span>Administración
-                </button>
-              )}
-              {esFacilitador && (
-                <button onClick={() => setPantallaActiva('usuarios')} className={navClasses('usuarios')}>
-                  <span className="material-symbols-outlined text-[18px]">manage_accounts</span>Gestión de Usuarios
-                </button>
-              )}
-              {esFacilitador && (
-                <button onClick={() => setPantallaActiva('ensenanza')} className={navClasses('ensenanza')}>
-                  <span className="material-symbols-outlined text-[18px]">video_settings</span>Configuración de Enseñanza
-                </button>
-              )}
-              {esFacilitador && (
-                <button onClick={() => setPantallaActiva('entrenamiento')} className={navClasses('entrenamiento')}>
-                  <span className="material-symbols-outlined text-[18px]">database</span>Entrenamiento del modelo
-                  {estadoEntrenamiento?.listo_para_entrenar && (
-                    <>
-                      <span className="relative flex h-2 w-2 shrink-0 ml-auto" aria-hidden="true">
-                        <span className="animate-ping motion-reduce:animate-none absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
-                      </span>
-                      <span className="sr-only">, datos listos</span>
-                    </>
-                  )}
-                </button>
-              )}
+              {esFacilitador &&
+                seccionesMenu.map((seccion) => {
+                  const abierta = seccionesAbiertas[seccion.id] === true;
+                  const conAviso = seccion.items.some((item) => item.aviso);
+                  return (
+                    <div key={seccion.id} className="flex flex-col gap-space-2xs">
+                      <button
+                        type="button"
+                        onClick={() => setSeccionesAbiertas((previas) => ({ ...previas, [seccion.id]: !abierta }))}
+                        aria-expanded={abierta}
+                        aria-controls={`menu-seccion-${seccion.id}`}
+                        className="flex items-center gap-space-sm px-space-sm py-space-xs min-h-10 rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors w-full text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                      >
+                        <span className="material-symbols-outlined text-[18px]" aria-hidden="true">{seccion.icono}</span>
+                        <span className="font-mono-label text-mono-label uppercase tracking-wide">{seccion.titulo}</span>
+                        {conAviso && !abierta && (
+                          <>
+                            <span className="inline-flex rounded-full h-2 w-2 bg-primary shrink-0" aria-hidden="true"></span>
+                            <span className="sr-only">, hay datos listos</span>
+                          </>
+                        )}
+                        <span className="material-symbols-outlined text-[18px] ml-auto shrink-0" aria-hidden="true">
+                          {abierta ? 'expand_less' : 'expand_more'}
+                        </span>
+                      </button>
+                      {abierta && (
+                        <div id={`menu-seccion-${seccion.id}`} className="pl-space-md flex flex-col gap-space-2xs border-l border-outline-variant/20 ml-space-sm">
+                          {seccion.items.map((item) => (
+                            <button
+                              key={item.id}
+                              onClick={item.alClick ?? (() => setPantallaActiva(item.id))}
+                              className={navClasses(item.id)}
+                            >
+                              <span className="material-symbols-outlined text-[16px]">{item.icono}</span>
+                              {item.texto}
+                              {item.aviso && (
+                                <>
+                                  <span className="relative flex h-2 w-2 shrink-0 ml-auto" aria-hidden="true">
+                                    <span className="animate-ping motion-reduce:animate-none absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+                                  </span>
+                                  <span className="sr-only">, datos listos</span>
+                                </>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               <button onClick={() => setPantallaActiva('perfil')} className={navClasses('perfil')}>
                 <span className="material-symbols-outlined text-[18px]">account_circle</span>Mi Perfil
               </button>
-              <div className="pl-space-md flex flex-col gap-space-2xs border-l border-outline-variant/20 ml-space-sm mt-space-2xs">
-                <button onClick={() => setPantallaActiva('registro')} className={navClasses('registro')}>
-                  <span className="material-symbols-outlined text-[16px]">history_edu</span>Registro de Partidas
-                </button>
-                <button onClick={() => irAAprendizaje()} className={navClasses('aprendizaje')}>
-                  <span className="material-symbols-outlined text-[16px]">troubleshoot</span>Análisis Jugada a Jugada
-                </button>
-              </div>
+              {!esFacilitador && (
+                <div className="pl-space-md flex flex-col gap-space-2xs border-l border-outline-variant/20 ml-space-sm mt-space-2xs">
+                  <button onClick={() => setPantallaActiva('registro')} className={navClasses('registro')}>
+                    <span className="material-symbols-outlined text-[16px]">history_edu</span>Registro de Partidas
+                  </button>
+                  <button onClick={() => irAAprendizaje()} className={navClasses('aprendizaje')}>
+                    <span className="material-symbols-outlined text-[16px]">troubleshoot</span>Análisis Jugada a Jugada
+                  </button>
+                </div>
+              )}
             </nav>
           </div>
         </div>
@@ -393,10 +533,18 @@ export default function App() {
                 {backendConectado === null ? 'VERIFICANDO' : backendConectado ? 'CONECTADO' : 'SIN CONEXIÓN'}
               </span>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="font-mono-micro text-mono-micro uppercase text-on-surface-variant">Brazo robótico</span>
-              <span className="font-mono-micro text-mono-micro text-outline">SOLO SIMULADO</span>
-            </div>
+            {esPrincipal && (
+              <div className="flex items-center justify-between gap-space-xs">
+                <span className="font-mono-micro text-mono-micro uppercase text-on-surface-variant">Brazo robótico</span>
+                <span
+                  className={`font-mono-micro text-mono-micro text-right ${
+                    !brazoConectado ? 'text-outline' : brazoEsEmulador ? 'text-tertiary' : 'text-primary-fixed-dim'
+                  }`}
+                >
+                  {textoBrazo}
+                </span>
+              </div>
+            )}
           </div>
           <div className="p-space-sm rounded-lg bg-surface-container-lowest/60 flex items-center gap-space-sm">
             <button
@@ -420,8 +568,8 @@ export default function App() {
             </button>
             <div className="flex-1 min-w-0 flex flex-col">
               <span className="font-body-sm text-body-sm font-medium text-on-surface truncate">{usuario.nombre}</span>
-              <span className={`font-mono-micro text-mono-micro ${esFacilitador ? 'text-tertiary' : 'text-secondary'}`}>
-                {esFacilitador ? 'Facilitador' : 'Jugador'}
+              <span className={`font-mono-micro text-mono-micro truncate ${esFacilitador ? 'text-tertiary' : 'text-secondary'}`}>
+                {etiquetaPerfil}
               </span>
             </div>
             <button
@@ -461,19 +609,25 @@ export default function App() {
                 {esFacilitador && (
                   <button onClick={() => setPantallaActiva('monitoreo')} className={headerNavClasses('monitoreo')}>MONITOREO</button>
                 )}
-                {esFacilitador && (
+                {esPrincipal && (
                   <button onClick={() => setPantallaActiva('camaraBrazo')} className={headerNavClasses('camaraBrazo')}>CÁMARA Y BRAZO</button>
                 )}
-                {esFacilitador && (
-                  <button onClick={() => setPantallaActiva('admin')} className={headerNavClasses('admin')}>ADMINISTRACIÓN</button>
-                )}
-                {esFacilitador && (
+                {esPrincipal && (
                   <button onClick={() => setPantallaActiva('usuarios')} className={headerNavClasses('usuarios')}>GESTIÓN USUARIOS</button>
+                )}
+                {esPrincipal && (
+                  <button onClick={() => setPantallaActiva('instituciones')} className={headerNavClasses('instituciones')}>INSTITUCIONES</button>
+                )}
+                {esFacilitador && !esPrincipal && (
+                  <button onClick={() => setPantallaActiva('misCursos')} className={headerNavClasses('misCursos')}>MIS CURSOS</button>
+                )}
+                {tieneInstitucion && (
+                  <button onClick={() => setPantallaActiva('miInstitucion')} className={headerNavClasses('miInstitucion')}>MI INSTITUCIÓN</button>
                 )}
                 {esFacilitador && (
                   <button onClick={() => setPantallaActiva('ensenanza')} className={headerNavClasses('ensenanza')}>ENSEÑANZA</button>
                 )}
-                {esFacilitador && (
+                {esPrincipal && (
                   <button onClick={() => setPantallaActiva('entrenamiento')} className={`${headerNavClasses('entrenamiento')} relative`}>
                     ENTRENAMIENTO
                     {estadoEntrenamiento?.listo_para_entrenar && (
@@ -499,14 +653,36 @@ export default function App() {
                   </span>
                 </div>
               </div>
-              {esFacilitador && (
+              {esPrincipal && brazoConectado && (
+                <div className="hidden lg:flex items-center gap-space-xs px-space-sm py-space-2xs rounded-lg bg-surface-container" role="status">
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${brazoEsEmulador ? 'bg-tertiary' : 'bg-primary'} ${brazoMoviendo ? 'animate-pulse motion-reduce:animate-none' : ''}`}
+                    aria-hidden="true"
+                  ></span>
+                  <span className="font-mono-micro text-mono-micro uppercase font-medium text-on-surface">
+                    {`BRAZO ${textoBrazo}`}
+                  </span>
+                </div>
+              )}
+              {esPrincipal && (
                 <button
-                  disabled
-                  title="No disponible — el brazo físico todavía no está conectado"
-                  className="flex items-center gap-space-xs px-space-sm py-space-2xs rounded-lg bg-surface-container text-outline cursor-not-allowed font-mono-micro text-mono-micro font-medium tracking-wider uppercase"
                   type="button"
+                  onClick={pararDesdeCabecera}
+                  disabled={!brazoConectado || parandoBrazo}
+                  aria-label="Parar el brazo"
+                  title={
+                    brazoConectado
+                      ? 'Frena el brazo y cancela lo que esté haciendo. No reemplaza el botón de parada de emergencia del brazo.'
+                      : 'El brazo no está conectado'
+                  }
+                  className={`flex items-center gap-space-xs px-space-sm py-space-2xs min-h-10 rounded-lg font-mono-micro text-mono-micro font-medium tracking-wider uppercase transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
+                    brazoConectado
+                      ? 'bg-error text-on-error hover:brightness-110 disabled:opacity-60'
+                      : 'bg-surface-container text-outline cursor-not-allowed'
+                  }`}
                 >
-                  <span className="material-symbols-outlined text-[14px]">emergency</span><span className="hidden sm:inline">E-STOP</span>
+                  <span className="material-symbols-outlined text-[14px]" aria-hidden="true">emergency</span>
+                  <span className="hidden sm:inline">{parandoBrazo ? 'PARANDO…' : 'PARAR'}</span>
                 </button>
               )}
               <button
@@ -535,7 +711,7 @@ export default function App() {
         <main className="w-full pt-16 bg-surface-container-lowest min-h-screen">
           {/* Solo en Cámara y Brazo: el brazo se usa en local, así que el aviso no debe aparecer en las demás pantallas
               (ni en el sitio publicado, donde no hay cámara ni brazo). */}
-          {esFacilitador && pantallaActiva === 'camaraBrazo' && <BannerCalibracion />}
+          {esPrincipal && pantallaActiva === 'camaraBrazo' && <BannerCalibracion />}
           {/* Banner global de transmisión en vivo — a propósito NO es un toast: se queda mientras
               la transmisión siga activa y el jugador no la esté viendo, en CUALQUIER pantalla (no
               solo Registro de Partidas). Nunca se le muestra al facilitador. */}
@@ -622,21 +798,18 @@ export default function App() {
             )
           )}
           {pantallaActiva === 'camaraBrazo' && (
-            esFacilitador ? (
+            esPrincipal ? (
               <CamaraBrazo partidaActivaId={partidaActivaId} onPartidaActivaChange={setPartidaActivaId} onEntrenarCamara={() => setPantallaActiva('entrenarCamara')} />
             ) : (
-              <AccesoRestringido
-                icono="smartphone"
-                colorIcono="text-primary"
-                titulo="Esta vista es para tu facilitador"
-                mensaje="La pantalla de Cámara y Brazo es un panel técnico para tu facilitador. Para jugar y aprender desde tu celular, usá la app móvil."
-                textoBoton="Ir a Registro de Partidas"
-                alClickBoton={() => setPantallaActiva('registro')}
-              />
+              soloPlataforma('Cámara y Brazo')
             )
           )}
-          {pantallaActiva === 'entrenarCamara' && esFacilitador && (
-            <EntrenarCamara onVolver={() => setPantallaActiva('camaraBrazo')} />
+          {pantallaActiva === 'entrenarCamara' && (
+            esPrincipal ? (
+              <EntrenarCamara onVolver={() => setPantallaActiva('camaraBrazo')} />
+            ) : (
+              soloPlataforma('El entrenamiento de la cámara')
+            )
           )}
           {pantallaActiva === 'ensenanza' && (
             esFacilitador ? (
@@ -653,20 +826,13 @@ export default function App() {
             )
           )}
           {pantallaActiva === 'entrenamiento' && (
-            esFacilitador ? (
+            esPrincipal ? (
               <EntrenamientoModelo
                 estadoCompartido={estadoEntrenamiento}
                 alActualizarEstadoCompartido={setEstadoEntrenamiento}
               />
             ) : (
-              <AccesoRestringido
-                icono="smartphone"
-                colorIcono="text-primary"
-                titulo="Esta vista es para tu facilitador"
-                mensaje="El Entrenamiento del modelo es un panel para tu facilitador. Para jugar y aprender desde tu celular, usá la app móvil."
-                textoBoton="Ir a Registro de Partidas"
-                alClickBoton={() => setPantallaActiva('registro')}
-              />
+              soloPlataforma('El Entrenamiento del modelo')
             )
           )}
           {pantallaActiva === 'panelAprendizaje' && (
@@ -675,9 +841,9 @@ export default function App() {
                 icono="school"
                 colorIcono="text-secondary"
                 titulo="Este panel es para el jugador"
-                mensaje="El Panel de Aprendizaje es la vista de tutoría personal de cada jugador. Como facilitador, podés ver el progreso desde Gestión de Usuarios."
-                textoBoton="Ir a Gestión de Usuarios"
-                alClickBoton={() => setPantallaActiva('usuarios')}
+                mensaje={`El Panel de Aprendizaje es la vista de tutoría personal de cada jugador. Como facilitador, podés ver el progreso desde ${esPrincipal ? 'Gestión de Usuarios' : 'Mis cursos'}.`}
+                textoBoton={esPrincipal ? 'Ir a Gestión de Usuarios' : 'Ir a Mis cursos'}
+                alClickBoton={() => setPantallaActiva(esPrincipal ? 'usuarios' : 'misCursos')}
               />
             ) : (
               <PanelAprendizaje
@@ -690,20 +856,6 @@ export default function App() {
               />
             )
           )}
-          {pantallaActiva === 'admin' && (
-            esFacilitador ? (
-              <Administracion />
-            ) : (
-              <AccesoRestringido
-                icono="smartphone"
-                colorIcono="text-primary"
-                titulo="Esta vista es para tu facilitador"
-                mensaje="Administración es la consola de telemetría del brazo y de todas las sesiones — es un panel para tu facilitador. Para jugar y aprender desde tu celular, usá la app móvil."
-                textoBoton="Ir a Registro de Partidas"
-                alClickBoton={() => setPantallaActiva('registro')}
-              />
-            )
-          )}
           {pantallaActiva === 'perfil' && (
             <Perfil
               usuario={usuario}
@@ -711,13 +863,8 @@ export default function App() {
               alVerAlbum={esFacilitador ? null : () => irAPanelAprendizaje('logros')}
             />
           )}
-          {pantallaActiva === 'usuarios' && esFacilitador && (
-            <Suspense fallback={
-              <div className="w-full px-space-lg py-space-lg flex flex-col items-center justify-center min-h-[40vh]">
-                <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mb-2"></div>
-                <span className="font-mono-micro text-mono-micro text-on-surface-variant">Cargando gestión de usuarios...</span>
-              </div>
-            }>
+          {pantallaActiva === 'usuarios' && esPrincipal && (
+            <Suspense fallback={cargandoPantalla('Cargando gestión de usuarios...')}>
               <GestionUsuarios usuarioActual={usuario} />
             </Suspense>
           )}
@@ -747,12 +894,31 @@ export default function App() {
               alVolver={() => setPantallaActiva('registro')}
             />
           )}
-          {pantallaActiva === 'usuarios' && !esFacilitador && (
+          {pantallaActiva === 'instituciones' && (
+            esPrincipal ? (
+              <Suspense fallback={cargandoPantalla('Cargando instituciones...')}>
+                <Instituciones />
+              </Suspense>
+            ) : (
+              soloPlataforma('Instituciones')
+            )
+          )}
+          {pantallaActiva === 'misCursos' && esFacilitador && !esPrincipal && (
+            <Suspense fallback={cargandoPantalla('Cargando tus cursos...')}>
+              <MisCursos usuarioActual={usuario} />
+            </Suspense>
+          )}
+          {pantallaActiva === 'miInstitucion' && tieneInstitucion && (
+            <Suspense fallback={cargandoPantalla('Cargando tu institución...')}>
+              <MiInstitucion />
+            </Suspense>
+          )}
+          {pantallaActiva === 'usuarios' && !esPrincipal && (
             <div className="w-full px-space-lg py-space-lg flex flex-col items-center justify-center min-h-[40vh] text-center">
               <span className="material-symbols-outlined text-[48px] text-error mb-2">lock</span>
               <h2 className="font-headline-md text-headline-md text-on-surface mb-2">Acceso denegado</h2>
               <p className="font-body-md text-body-md text-on-surface-variant">
-                Solo los facilitadores pueden acceder a la gestión de usuarios.
+                Solo la plataforma puede acceder a la gestión de usuarios.
               </p>
               <button
                 onClick={() => setPantallaActiva('control')}
