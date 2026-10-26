@@ -77,6 +77,14 @@ export default function ParametrosBrazo({ emulador }) {
       return { ...v, aperturas_por_pieza: aperturas };
     });
   }
+  function cambiarMargen(letra, texto) {
+    setValores((v) => {
+      const margenes = { ...v.margenes_por_pieza };
+      if (texto === '') delete margenes[letra];
+      else margenes[letra] = Number(texto);
+      return { ...v, margenes_por_pieza: margenes };
+    });
+  }
 
   async function aplicar() {
     // El cementerio y las reservas se editan en «Llevar una pieza»: acá no se tocan (si no, se pisarían con los valores viejos de esta pantalla).
@@ -123,6 +131,27 @@ export default function ParametrosBrazo({ emulador }) {
               value={valores.aperturas_por_pieza?.[letra] ?? ''}
               onChange={(e) => cambiarApertura(letra, e.target.value)}
               placeholder="sin medir"
+            />
+          </label>
+        ))}
+      </div>
+      <p className="font-body-sm text-body-sm text-on-surface m-0">
+        Margen de agarre sobre el tablero al bajar sobre cada pieza (mm, 0–30; el peón usa el de arriba). Si la pinza choca contra el
+        tablero con una pieza puntual, subile el margen acá — no hace falta tocar el de arriba, que sigue valiendo para las demás.
+      </p>
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-space-xs">
+        {PIEZAS.map(([letra, etiqueta]) => (
+          <label key={letra} className="font-body-sm text-body-sm text-on-surface-variant flex flex-col gap-1">
+            {etiqueta}
+            <input
+              className={CAMPO}
+              type="number"
+              min="0"
+              max="30"
+              step="0.1"
+              value={valores.margenes_por_pieza?.[letra] ?? ''}
+              onChange={(e) => cambiarMargen(letra, e.target.value)}
+              placeholder={String(valores.margen_agarre_mm ?? '')}
             />
           </label>
         ))}
