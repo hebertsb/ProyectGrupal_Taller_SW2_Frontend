@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { listarUsuarios, historialPartidasUsuario } from '../../api/backend';
+import { listarUsuarios, historialPartidasUsuario, reiniciarDobleFactorDe } from '../../api/backend';
 import { fechaDesdeIso } from '../../formatoTiempo';
 import ModalEditarUsuario from './ModalEditarUsuario';
 import ModalEliminarUsuario from './ModalEliminarUsuario';
@@ -18,7 +18,7 @@ function estadoBadge(activo) {
     : { texto: 'INACTIVO', clase: 'bg-error-container text-error font-medium' };
 }
 
-/** Botones de Editar y Eliminar de un usuario. `compacto` los muestra solo con ícono en pantallas chicas. */
+/** Botones de Editar y Eliminar de un usuario. */
 function AccionesUsuario({ usuario, esPropio, alEditar, alEliminar }) {
   const base =
     'flex items-center justify-center gap-1 px-space-sm py-space-2xs rounded-lg font-mono-label text-mono-label transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary min-h-9';
@@ -48,7 +48,7 @@ function AccionesUsuario({ usuario, esPropio, alEditar, alEliminar }) {
   );
 }
 
-export default function GestionUsuarios({ usuarioActual = null }) {
+export default function GestionUsuarios({ usuarioActual = null, alMirarPartida = null }) {
   const [usuarios, setUsuarios] = useState([]);
   const [usuarioEditando, setUsuarioEditando] = useState(null);
   const [usuarioEliminando, setUsuarioEliminando] = useState(null);
@@ -95,6 +95,25 @@ export default function GestionUsuarios({ usuarioActual = null }) {
     setUsuarioSeleccionado(usuario);
     setPaginaActual(0);
     await cargarPartidasUsuario(usuario.id);
+  };
+
+  const [confirmandoReinicio, setConfirmandoReinicio] = useState(false);
+
+  // Quita el doble factor de una cuenta que perdió el celular y los códigos de respaldo (pide confirmar con un segundo toque).
+  const reiniciarDobleFactor = async (usuario) => {
+    if (!confirmandoReinicio) {
+      setConfirmandoReinicio(true);
+      return;
+    }
+    setConfirmandoReinicio(false);
+    try {
+      const actualizado = await reiniciarDobleFactorDe(usuario.id);
+      setUsuarios((lista) => lista.map((u) => (u.id === actualizado.id ? { ...u, ...actualizado } : u)));
+      setUsuarioSeleccionado((actual) => (actual?.id === actualizado.id ? { ...actual, ...actualizado } : actual));
+      setAviso({ tipo: 'ok', texto: `Se quitó la verificación en dos pasos de ${usuario.nombre}. Puede volver a activarla.` });
+    } catch (err) {
+      setError(err.message || 'No se pudo reiniciar la verificación en dos pasos.');
+    }
   };
 
   const guardarEdicion = (actualizado) => {
@@ -173,7 +192,7 @@ export default function GestionUsuarios({ usuarioActual = null }) {
         </div>
       )}
 
-      <PanelCursos usuarioActual={usuarioActual} />
+      <PanelCursos usuarioActual={usuarioActual} alMirarPartida={alMirarPartida} />
 
       <PanelInvitaciones />
 
@@ -267,24 +286,36 @@ export default function GestionUsuarios({ usuarioActual = null }) {
         <section className="xl:col-span-2 flex flex-col gap-space-md bg-surface-container-low p-space-lg rounded-xl shadow-md">
           {usuarioSeleccionado ? (
             <>
-              <div className="flex items-center justify-between pb-space-xs border-b border-outline-variant/20">
-                <div className="flex items-center gap-space-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-space-sm pb-space-xs border-b border-outline-variant/20">
+                <div className="flex items-center gap-space-sm min-w-0">
                   <button
                     onClick={cerrarDetalle}
-                    className="p-space-xs rounded-lg hover:bg-surface-container transition-colors text-on-surface-variant"
+                    className="p-space-xs rounded-lg hover:bg-surface-container transition-colors text-on-surface-variant shrink-0"
                     type="button"
                   >
                     <span className="material-symbols-outlined text-[20px]">chevron_left</span>
                   </button>
-                  <div className="w-10 h-10 rounded-full bg-surface-bright flex items-center justify-center text-primary">
+                  <div className="w-10 h-10 rounded-full bg-surface-bright flex items-center justify-center text-primary shrink-0">
                     <span className="material-symbols-outlined text-[24px]">{usuarioSeleccionado.rol === 'facilitador' ? 'admin_panel_settings' : 'person'}</span>
                   </div>
-                  <div className="flex flex-col">
-                    <span className="font-headline-sm text-headline-sm text-on-surface">{usuarioSeleccionado.nombre}</span>
-                    <span className="font-mono-micro text-mono-micro text-on-surface-variant">{usuarioSeleccionado.email}</span>
+                  <div className="flex flex-col min-w-0">
+                    <span className="font-headline-sm text-headline-sm text-on-surface truncate">{usuarioSeleccionado.nombre}</span>
+                    <span className="font-mono-micro text-mono-micro text-on-surface-variant truncate">{usuarioSeleccionado.email}</span>
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center justify-end gap-space-xs">
+                <div className="flex flex-wrap items-center gap-space-xs sm:justify-end">
+                  {usuarioSeleccionado.doble_factor_activo && (
+                    <button
+                      type="button"
+                      onClick={() => reiniciarDobleFactor(usuarioSeleccionado)}
+                      onBlur={() => setConfirmandoReinicio(false)}
+                      title="Quita la verificación en dos pasos de esta cuenta (si perdió el celular y los códigos de respaldo)"
+                      className="flex items-center justify-center gap-1 px-space-sm py-space-2xs min-h-9 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface font-mono-label text-mono-label"
+                    >
+                      <span className="material-symbols-outlined text-[16px] text-primary" aria-hidden="true">phonelink_erase</span>
+                      <span>{confirmandoReinicio ? '¿Seguro? Tocá otra vez' : 'Reiniciar 2 pasos'}</span>
+                    </button>
+                  )}
                   <AccionesUsuario
                     usuario={usuarioSeleccionado}
                     esPropio={usuarioActual?.id === usuarioSeleccionado.id}

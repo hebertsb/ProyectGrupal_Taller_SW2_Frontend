@@ -5,7 +5,7 @@
  * Incluye automáticamente el token JWT de la sesión (ver api/sesion.js).
  */
 
-import { leerSesion } from "./sesion";
+import { leerSesion, actualizarSesion } from "./sesion";
 
 async function solicitar(endpoint, opciones = {}) {
   const token = leerSesion("access_token");
@@ -547,6 +547,23 @@ export async function login(email, password, rolEsperado) {
   return respuesta.json();
 }
 
+/**
+ * Segundo paso del login de una cuenta con verificación en dos pasos: la constancia que devolvió `login` (`token_2fa`) y el código de
+ * 6 dígitos de la app (o uno de respaldo). Devuelve lo mismo que `login`: `{ usuario, tokens }`. 401 si el código no sirve.
+ */
+export async function login2fa(token2fa, codigo) {
+  const respuesta = await fetch("/auth/login/2fa", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token_2fa: token2fa, codigo }),
+  });
+  if (!respuesta.ok) {
+    const detalle = await respuesta.json().catch(() => null);
+    throw new Error(typeof detalle?.detail === "string" ? detalle.detail : `Error ${respuesta.status}`);
+  }
+  return respuesta.json();
+}
+
 /** Autenticación con Google OAuth (ID Token / Credential) */
 export async function loginGoogle(credential, rolSeleccionado = "jugador", claveFacilitador = null) {
   const respuesta = await fetch("/auth/google", {
@@ -565,8 +582,11 @@ export async function loginGoogle(credential, rolSeleccionado = "jugador", clave
   return respuesta.json();
 }
 
-/** Registro de nueva cuenta */
-export async function registro(email, nombre, password, rol = "jugador", claveFacilitador = null) {
+/**
+ * Registro de nueva cuenta. `familia` (solo jugadores): `{edad, tutorNombre, tutorTelefono, autorizacionTutor}`; la edad es obligatoria en la web, y si el jugador
+ * es menor puede declarar la autorización de su madre, padre o tutor (con su nombre y teléfono).
+ */
+export async function registro(email, nombre, password, rol = "jugador", claveFacilitador = null, familia = {}) {
   const respuesta = await fetch("/auth/registro", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -576,6 +596,11 @@ export async function registro(email, nombre, password, rol = "jugador", claveFa
       password,
       rol,
       clave_facilitador: claveFacilitador,
+      edad: familia.edad ?? null,
+      tutor_nombre: familia.tutorNombre || null,
+      tutor_telefono: familia.tutorTelefono || null,
+      tutor_email: familia.tutorEmail || null,
+      autorizacion_tutor: Boolean(familia.autorizacionTutor),
     }),
   });
   if (!respuesta.ok) {
@@ -740,6 +765,26 @@ export function listarAuditoria({ limite = 100, accion = null } = {}) {
   return solicitarAuth(`/auditoria?${consulta.toString()}`);
 }
 
+/** Genera el secreto para vincular la app de códigos (todavía sin activar): `{ secreto, uri }`, la `uri` es lo que dibuja el QR. */
+export function prepararDobleFactor() {
+  return solicitarAuth("/auth/2fa/preparar", { method: "POST" });
+}
+
+/** Activa la verificación en dos pasos con el primer código de la app. Devuelve `{ codigos_respaldo }`: se ven una sola vez. */
+export function activarDobleFactor(codigo) {
+  return solicitarAuth("/auth/2fa/activar", { method: "POST", body: JSON.stringify({ codigo }) });
+}
+
+/** Desactiva la verificación en dos pasos (pide la contraseña, si la cuenta tiene, y un código). Devuelve el usuario actualizado. */
+export function desactivarDobleFactor({ password = null, codigo }) {
+  return solicitarAuth("/auth/2fa/desactivar", { method: "POST", body: JSON.stringify({ password, codigo }) });
+}
+
+/** Le quita el doble factor a una cuenta que perdió el celular y los códigos (solo la plataforma). Devuelve el usuario actualizado. */
+export function reiniciarDobleFactorDe(usuarioId) {
+  return solicitarAuth(`/auth/usuarios/${usuarioId}/2fa/reiniciar`, { method: "POST" });
+}
+
 /** Gestión de usuarios (solo facilitadores) */
 
 export function listarUsuarios() {
@@ -755,15 +800,16 @@ export function editarUsuario(usuarioId, campos) {
  * Genera un código de invitación para un nuevo facilitador (un solo uso, vence a los `minutos`). El código
  * viene en la respuesta una única vez: el servidor solo guarda su hash.
  */
-export function generarCodigoFacilitador(minutos = 15, para = null) {
+export function generarCodigoFacilitador(minutos = 15, para = null, { institucionId = null, comoAdministrador = false } = {}) {
   return solicitarAuth("/auth/codigos-facilitador", {
     method: "POST",
-    body: JSON.stringify({ minutos, para }),
+    body: JSON.stringify({ minutos, para, institucion_id: institucionId, como_administrador: comoAdministrador }),
   });
 }
 
 /**
- * Comprueba un código de invitación SIN gastarlo (no requiere sesión): `{ valido, segundos_restantes }`.
+ * Comprueba un código de invitación SIN gastarlo (no requiere sesión): `{ valido, segundos_restantes, institucion_nombre, como_administrador,
+ * es_evaluacion }` (lo último, si es de una institución).
  * Responde 429 si ese cliente ya probó demasiados códigos incorrectos.
  */
 export function verificarCodigoFacilitador(codigo) {
@@ -996,6 +1042,65 @@ export function salirDelCurso() {
   return solicitarAuthSinCuerpo("/cursos/salir", { method: "POST" });
 }
 
+/** Suscripción de las instituciones */
+
+/** Los planes con el precio de cada ciclo y los días de prueba gratis. */
+export function obtenerCatalogoSuscripcion() {
+  return solicitarAuth("/suscripciones/planes");
+}
+
+/** La suscripción de mi institución con mis pagos (solo su administrador). */
+export function obtenerMiSuscripcion() {
+  return solicitarAuth("/suscripciones/mia");
+}
+
+/** La institución avisa que pagó `plan` por `ciclo`. Queda pendiente hasta que la plataforma lo confirme. 409 si ya hay uno pendiente. */
+export function avisarPago({ plan, ciclo, referencia = null }) {
+  return solicitarAuth("/suscripciones/mia/pagos", { method: "POST", body: JSON.stringify({ plan, ciclo, referencia }) });
+}
+
+/** Todas las suscripciones, las que piden atención primero (solo la plataforma). */
+export function listarSuscripciones() {
+  return solicitarAuth("/suscripciones");
+}
+
+/** Ingresos por mes, instituciones por estado, pagos por confirmar y valores del punto de equilibrio (solo la plataforma). */
+export function obtenerIngresos() {
+  return solicitarAuth("/suscripciones/ingresos");
+}
+
+/** Todos los pagos de todas las instituciones, los más nuevos primero; `estado` filtra (solo la plataforma). */
+export function listarPagosSuscripciones(estado = null) {
+  const consulta = new URLSearchParams({ limite: "300" });
+  if (estado) consulta.set("estado", estado);
+  return solicitarAuth(`/suscripciones/pagos?${consulta.toString()}`);
+}
+
+/** Confirma un pago y extiende la suscripción (solo la plataforma). */
+export function confirmarPagoSuscripcion(pagoId, nota = null) {
+  return solicitarAuth(`/suscripciones/pagos/${pagoId}/confirmar`, { method: "POST", body: JSON.stringify({ nota: nota || null }) });
+}
+
+/** Rechaza un pago, con un motivo opcional (solo la plataforma). */
+export function rechazarPagoSuscripcion(pagoId, nota = null) {
+  return solicitarAuth(`/suscripciones/pagos/${pagoId}/rechazar`, { method: "POST", body: JSON.stringify({ nota: nota || null }) });
+}
+
+/** Suma `dias` a la prueba gratis de una institución (solo la plataforma). */
+export function extenderPruebaSuscripcion(institucionId, dias) {
+  return solicitarAuth(`/suscripciones/${institucionId}/extender-prueba`, { method: "POST", body: JSON.stringify({ dias }) });
+}
+
+/** Carga cinco instituciones de ejemplo con pagos, para mostrar el panel de ingresos (solo la plataforma). */
+export function cargarDemostracionSuscripciones() {
+  return solicitarAuth("/suscripciones/demostracion", { method: "POST" });
+}
+
+/** Quita las instituciones de ejemplo (solo la plataforma). */
+export function quitarDemostracionSuscripciones() {
+  return solicitarAuth("/suscripciones/demostracion", { method: "DELETE" });
+}
+
 /** Instituciones clientes */
 
 /** Todas las instituciones con sus docentes (solo la plataforma). */
@@ -1003,12 +1108,58 @@ export function listarInstituciones() {
   return solicitarAuth("/instituciones");
 }
 
-/** Crea una institución (solo la plataforma). `tipo`: academia, colegio u organizador. Con `administradorId`, ese facilitador la administra. */
-export function crearInstitucion({ nombre, tipo, administradorId = null }) {
+/**
+ * Crea una institución con su suscripción de una vez (solo la plataforma). `tipo`: academia, colegio u organizador; `plan`: plan_60 o plan_120.
+ * El administrador puede ser un facilitador que ya tiene cuenta (`administradorId`) o alguien nuevo que se registra con un código
+ * (`invitarAdministrador`). Con `esPrueba` es una institución para evaluar el sistema (con su código de evaluación). `pagoInicialCiclo`
+ * registra un pago y la deja activa. Devuelve la institución, su suscripción y, si hubo invitación, el código (se ve una sola vez).
+ */
+export function crearInstitucion({
+  nombre,
+  tipo,
+  administradorId = null,
+  plan = "plan_60",
+  diasDePrueba = 60,
+  pagoInicialCiclo = null,
+  invitarAdministrador = false,
+  esPrueba = false,
+  minutosDelCodigo = 1440,
+}) {
   return solicitarAuth("/instituciones", {
     method: "POST",
-    body: JSON.stringify({ nombre, tipo, administrador_id: administradorId }),
+    body: JSON.stringify({
+      nombre,
+      tipo,
+      administrador_id: administradorId,
+      plan,
+      dias_de_prueba: diasDePrueba,
+      pago_inicial_ciclo: pagoInicialCiclo,
+      invitar_administrador: invitarAdministrador,
+      es_prueba: esPrueba,
+      minutos_del_codigo: minutosDelCodigo,
+    }),
   });
+}
+
+/** El trato se cerró: la institución de prueba pasa a ser cliente y se borra el jugador de prueba. Todo es opcional (solo la plataforma). */
+export function convertirInstitucion(institucionId, { nombre = null, tipo = null, plan = null, pagoInicialCiclo = null } = {}) {
+  return solicitarAuth(`/instituciones/${institucionId}/convertir`, {
+    method: "POST",
+    body: JSON.stringify({ nombre, tipo, plan, pago_inicial_ciclo: pagoInicialCiclo }),
+  });
+}
+
+/** Registra un pago que la plataforma recibió directamente (efectivo, transferencia): queda confirmado y extiende la suscripción. */
+export function registrarPagoRecibido(institucionId, { plan, ciclo, referencia = null }) {
+  return solicitarAuth(`/suscripciones/${institucionId}/pago-registrado`, {
+    method: "POST",
+    body: JSON.stringify({ plan, ciclo, referencia }),
+  });
+}
+
+/** Pasa de la vista de director de prueba a su jugador de prueba (y de vuelta). Devuelve la sesión de la otra cuenta: `{ usuario, tokens }`. */
+export function cambiarVista() {
+  return solicitarAuth("/auth/cambiar-vista", { method: "POST" });
 }
 
 /** Edita una institución (solo la plataforma). `campos` lleva solo lo que cambió: nombre, tipo, administrador_id. */
@@ -1546,3 +1697,160 @@ export const borrarRutinaBrazo = (nombre) => controlBrazo(`/rutinas/${encodeURIC
 /** Ejecuta la rutina. En el brazo real exige que esté validada y `confirmar: true`; `factor` (0,25 a 2) multiplica la velocidad. */
 export const ejecutarRutinaBrazo = (nombre, factor = 1, confirmar = false) =>
   controlBrazo(`/rutinas/${encodeURIComponent(nombre)}/ejecutar`, "POST", { factor, confirmar });
+
+// --- Progreso de los alumnos (`/progreso`) ---
+/** El informe de progreso del propio jugador: `{alumno, generado_en, progreso, actividad, resultados, precision_por_fase, errores_frecuentes, medallas, lectura}`. */
+export const obtenerMiProgreso = () => solicitarAuth("/progreso/mio");
+/** El informe de un alumno para su docente, el administrador de su institución o la plataforma (404 si no es de su alcance). */
+export const obtenerInformeAlumno = (alumnoId) => solicitarAuth(`/progreso/alumnos/${alumnoId}`);
+/** El antes y el después de un curso: `{nombre, resumen, alumnos}`. */
+export const obtenerProgresoCurso = (cursoId) => solicitarAuth(`/progreso/cursos/${cursoId}`);
+/** El antes y el después de la institución que administra el usuario (la plataforma indica cuál con `institucionId`). */
+export const obtenerProgresoInstitucion = (institucionId = null) =>
+  solicitarAuth(institucionId == null ? "/progreso/institucion" : `/progreso/institucion?institucion_id=${institucionId}`);
+/** Solo la plataforma: por institución, cuántos alumnos juegan y mejoran y si está en riesgo de irse. */
+export const obtenerSaludInstituciones = () => solicitarAuth("/progreso/instituciones");
+
+// --- Partidas entre personas: salas (`/sala`) ---
+/** Controles de tiempo de una sala, en milisegundos por lado: sin reloj, 3, 5, 10 y 15 minutos. */
+export const CONTROLES_DE_TIEMPO_SALA = [0, 180000, 300000, 600000, 900000];
+/** Crea una sala con el color (`"blancas" | "negras" | "aleatorio"`) y el reloj elegidos. `{codigo, partida_id, estado, rol, control_tiempo_ms, ...}`. */
+export const crearSala = (color = "aleatorio", controlTiempoMs = 0) =>
+  solicitarAuth("/sala", { method: "POST", body: JSON.stringify({ color, control_tiempo_ms: controlTiempoMs }) });
+/** Se sienta en la sala con el código (o la mira si está llena). `{codigo, partida_id, rol}`; 404 si no existe. */
+export const unirseASala = (codigo) => solicitarAuth(`/sala/${encodeURIComponent(codigo)}/unirse`, { method: "POST" });
+/**
+ * El estado de la sala: tablero, turno, quién juega (`blancas`/`negras` con nombre público, nivel y `ausente_s`), los tiempos que le quedan a cada lado
+ * (`tiempo_blancas_ms`, `tiempo_negras_ms`, ya descontado lo que lleva gastado el que tiene el turno), `reloj_corre`, `resultado` y `motivo_fin`
+ * (`mate`, `tablas`, `abandono`, `tiempo`, `ausencia`, `inactividad`). Consultarla es también la señal de que el jugador sigue en pantalla.
+ */
+export const obtenerSala = (codigo) => solicitarAuth(`/sala/${encodeURIComponent(codigo)}`);
+/** Solo docentes: las salas abiertas en las que juega algún alumno que el docente puede ver, con el código para mirarlas en vivo. */
+export const obtenerPartidasEnVivo = () => solicitarAuth("/social/partidas-en-vivo");
+/** Señal de vida de quien está sentado en la sala (para una pantalla que no la consulta): devuelve el estado de la sala. */
+export const presenciaSala = (codigo) => solicitarAuth(`/sala/${encodeURIComponent(codigo)}/presencia`, { method: "POST" });
+/** La sala `esperando` o `en_curso` más reciente del jugador, o `null`. */
+export const obtenerSalaActiva = () => solicitarAuth("/sala/activa");
+/** Casillas a las que puede ir la pieza de `casilla` (`["e3", "e4"]`). */
+export const jugadasLegalesSala = (codigo, casilla) =>
+  solicitarAuth(`/sala/${encodeURIComponent(codigo)}/jugadas-legales?casilla=${encodeURIComponent(casilla)}`).then((r) => r.casillas);
+/** Juega `jugada` (UCI, `"e2e4"` o `"e7e8q"`). Devuelve la sala ya actualizada; 403 si no es tu turno. */
+export const moverEnSala = (codigo, jugada) =>
+  solicitarAuth(`/sala/${encodeURIComponent(codigo)}/mover`, { method: "POST", body: JSON.stringify({ jugada }) });
+/** Abandona la partida: gana el otro. */
+export const abandonarSala = (codigo) => solicitarAuth(`/sala/${encodeURIComponent(codigo)}/abandonar`, { method: "POST" });
+/** Cancela una sala que todavía espera rival. */
+export const cancelarSala = (codigo) => solicitarAuthSinCuerpo(`/sala/${encodeURIComponent(codigo)}`, { method: "DELETE" });
+/** Análisis con Stockfish de los dos bandos (solo cuando la sala terminó). */
+export const obtenerAnalisisSala = (codigo) => solicitarAuth(`/sala/${encodeURIComponent(codigo)}/analisis`);
+
+// --- Amigos, retos y búsqueda de rival (`/social`) ---
+/** Lo que la pantalla del jugador consulta cada pocos segundos: `{retos_recibidos, mi_reto, busqueda, solicitudes_amistad}`. Consultar es también estar en línea. */
+export const obtenerAvisosSociales = () => solicitarAuth("/social/avisos");
+/** Compañeros de curso y amigos (los que están en línea, primero), solicitudes pendientes y el código de amigo propio. */
+export const obtenerAmigos = () => solicitarAuth("/social/amigos");
+/** Manda una solicitud de amistad con `{email}`, `{codigo}` o `{usuarioId}` (un compañero de curso). Responde igual exista o no la cuenta. */
+export const mandarSolicitudDeAmistad = ({ email, codigo, usuarioId } = {}) =>
+  solicitarAuth("/social/amigos/solicitudes", {
+    method: "POST",
+    body: JSON.stringify({ email: email || null, codigo: codigo || null, usuario_id: usuarioId ?? null }),
+  });
+export const aceptarSolicitudDeAmistad = (id) => solicitarAuthSinCuerpo(`/social/amigos/solicitudes/${id}/aceptar`);
+export const rechazarSolicitudDeAmistad = (id) => solicitarAuthSinCuerpo(`/social/amigos/solicitudes/${id}/rechazar`);
+export const quitarAmigo = (usuarioId) => solicitarAuthSinCuerpo(`/social/amigos/${usuarioId}`, { method: "DELETE" });
+/** Reta a un compañero o amigo. `{id, codigo, tu_color, control_tiempo_ms, segundos_restantes}`; 403 si no lo es, 409 si alguno ya juega. */
+export const retarJugador = ({ retadoId, color = "aleatorio", controlTiempoMs = 0 }) =>
+  solicitarAuth("/social/retos", { method: "POST", body: JSON.stringify({ retado_id: retadoId, color, control_tiempo_ms: controlTiempoMs }) });
+/** Acepta un reto: devuelve `{codigo}` de la sala, que ya está en curso. */
+export const aceptarReto = (id) => solicitarAuth(`/social/retos/${id}/aceptar`, { method: "POST" });
+export const rechazarReto = (id) => solicitarAuthSinCuerpo(`/social/retos/${id}/rechazar`);
+export const cancelarReto = (id) => solicitarAuthSinCuerpo(`/social/retos/${id}`, { method: "DELETE" });
+/** Pide la revancha de una partida que acaba de terminar (colores cambiados, mismo reloj). */
+export const pedirRevancha = (codigo) => solicitarAuth(`/social/retos/revancha/${encodeURIComponent(codigo)}`, { method: "POST" });
+/** Se pone a buscar un rival de nivel parecido. `{estado: "buscando" | "encontrado" | "sin_rival", codigo?, rival?, segundos}`. */
+export const buscarRival = (controlTiempoMs = 0) =>
+  solicitarAuth("/social/emparejamiento", { method: "POST", body: JSON.stringify({ control_tiempo_ms: controlTiempoMs }) });
+export const dejarDeBuscarRival = () => solicitarAuthSinCuerpo("/social/emparejamiento", { method: "DELETE" });
+
+// --- Tablas, bloqueos y denuncias ---
+/** Ofrece tablas en la sala. Si el rival ya había ofrecido, las acepta y la partida termina `1/2-1/2` por acuerdo. Devuelve la sala. */
+export const ofrecerTablas = (codigo) => solicitarAuth(`/sala/${encodeURIComponent(codigo)}/tablas`, { method: "POST" });
+/** Rechaza las tablas que ofreció el rival. Devuelve la sala. */
+export const rechazarTablas = (codigo) => solicitarAuth(`/sala/${encodeURIComponent(codigo)}/tablas/rechazar`, { method: "POST" });
+/** Las personas que bloqueó el jugador (nombre abreviado). */
+export const obtenerBloqueados = () => solicitarAuth("/social/bloqueos");
+/** Bloquea a alguien: no puede retarlo ni buscarlo, y la otra persona no se entera. */
+export const bloquearJugador = (usuarioId) => solicitarAuthSinCuerpo(`/social/bloqueos/${usuarioId}`);
+export const desbloquearJugador = (usuarioId) => solicitarAuthSinCuerpo(`/social/bloqueos/${usuarioId}`, { method: "DELETE" });
+/** Denuncia a alguien que conoce (compañero, amigo o rival de una sala). `motivo`: `conducta | trampa | abandono | otro`. Con `bloquear` también lo bloquea. */
+export const denunciarJugador = ({ usuarioId, motivo, detalle = "", codigoSala = null, bloquear = false }) =>
+  solicitarAuth("/social/denuncias", {
+    method: "POST",
+    body: JSON.stringify({ usuario_id: usuarioId, motivo, detalle: detalle || null, codigo_sala: codigoSala, bloquear }),
+  });
+/** Solo docentes: las denuncias contra sus alumnos (nombres completos). */
+export const obtenerDenuncias = () => solicitarAuth("/social/denuncias");
+export const marcarDenunciaRevisada = (id) => solicitarAuthSinCuerpo(`/social/denuncias/${id}/revisada`);
+
+// --- Autorización de menores, edad y contraseña ---
+/** Si el jugador puede jugar con otras personas y qué le falta: `{estado, puede_jugar_con_otros, es_menor, falta, mensaje, tutor_nombre, tutor_telefono}`. */
+export const obtenerMiAutorizacion = () => solicitarAuth("/auth/me/autorizacion");
+/** Cambia la contraseña de quien la tiene (pide la actual). */
+export const cambiarMiPassword = async (passwordActual, passwordNueva) => {
+  const tokens = await solicitarAuth("/auth/me/cambiar-password", {
+    method: "POST",
+    body: JSON.stringify({ password_actual: passwordActual, password_nueva: passwordNueva }),
+  });
+  actualizarSesion("access_token", tokens.access_token);
+  actualizarSesion("refresh_token", tokens.refresh_token);
+};
+export const pedirRecuperacionPassword = (email) => solicitar("/auth/recuperar-password", { body: JSON.stringify({ email }) });
+export const confirmarRecuperacionPassword = async (email, codigo, passwordNueva) => {
+  const respuesta = await fetch("/auth/recuperar-password/confirmar", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, codigo, password_nueva: passwordNueva }),
+  });
+  if (!respuesta.ok) throw await errorDeRespuesta(respuesta);
+};
+
+// --- Torneos relámpago de un curso (`/torneos`) ---
+export const crearTorneo = ({ cursoId, nombre, controlTiempoMs = 300000, rondas = 3 }) =>
+  solicitarAuth("/torneos", { method: "POST", body: JSON.stringify({ curso_id: cursoId, nombre, control_tiempo_ms: controlTiempoMs, rondas }) });
+/** Los torneos de un curso, el más reciente primero, con la tabla de posiciones. */
+export const obtenerTorneosDelCurso = (cursoId) => solicitarAuth(`/torneos/curso/${cursoId}`);
+export const obtenerTorneo = (id) => solicitarAuth(`/torneos/${id}`);
+export const inscribirmeEnTorneo = (id) => solicitarAuth(`/torneos/${id}/inscribirse`, { method: "POST" });
+export const bajarmeDelTorneo = (id) => solicitarAuth(`/torneos/${id}/inscripcion`, { method: "DELETE" });
+/** Docente: inscribe a los alumnos que pueden jugar con otros. `{inscritos, omitidos: [{nombre, motivo}]}`. */
+export const inscribirATodosEnTorneo = (id) => solicitarAuth(`/torneos/${id}/inscribir-a-todos`, { method: "POST" });
+/** Docente: empareja la ronda siguiente. Con `forzar` cierra sin ganador las partidas de la anterior que siguen abiertas. */
+export const iniciarRondaDeTorneo = (id, forzar = false) =>
+  solicitarAuth(`/torneos/${id}/iniciar-ronda`, { method: "POST", body: JSON.stringify({ forzar }) });
+export const cerrarTorneo = (id) => solicitarAuth(`/torneos/${id}/cerrar`, { method: "POST" });
+
+// --- Aula: avisos y tareas del curso ---
+/** Alumno: los avisos de su docente. */
+export const obtenerAvisosDeMiCurso = () => solicitarAuth("/cursos/mio/avisos");
+/** Alumno: las tareas de su curso con su avance (`valor` de `meta`). */
+export const obtenerTareasDeMiCurso = () => solicitarAuth("/cursos/mio/tareas");
+export const obtenerAvisosDelCurso = (cursoId) => solicitarAuth(`/cursos/${cursoId}/avisos`);
+export const publicarAvisoEnCurso = (cursoId, texto, enlace = "") =>
+  solicitarAuth(`/cursos/${cursoId}/avisos`, { method: "POST", body: JSON.stringify({ texto, enlace: enlace || null }) });
+export const borrarAvisoDelCurso = (cursoId, avisoId) => solicitarAuthSinCuerpo(`/cursos/${cursoId}/avisos/${avisoId}`, { method: "DELETE" });
+/** Docente: las tareas del curso con el avance de cada alumno. */
+export const obtenerTareasDelCurso = (cursoId) => solicitarAuth(`/cursos/${cursoId}/tareas`);
+/** `tipo`: `partidas_ia | partidas_amigos | precision`. Cuenta lo jugado desde ahora hasta dentro de `dias` días. */
+export const crearTareaEnCurso = (cursoId, { titulo, tipo, meta, dias = 7 }) =>
+  solicitarAuth(`/cursos/${cursoId}/tareas`, { method: "POST", body: JSON.stringify({ titulo, tipo, meta, dias }) });
+export const borrarTareaDelCurso = (cursoId, tareaId) => solicitarAuthSinCuerpo(`/cursos/${cursoId}/tareas/${tareaId}`, { method: "DELETE" });
+
+// --- Aula: cuentas de alumnos, familias y modo clase (docente) ---
+/** Crea una cuenta por alumno (`[{nombre, edad?, tutor_nombre?, tutor_telefono?}]`, hasta 60). La clave temporal solo se ve esta vez. `{cuentas: [{id, nombre, usuario, password}], dominio}`. */
+export const crearCuentasDeAlumnos = (cursoId, alumnos) =>
+  solicitarAuth(`/cursos/${cursoId}/estudiantes/crear`, { method: "POST", body: JSON.stringify({ alumnos }) });
+/** Le pone una clave temporal nueva a un alumno: `{usuario, password}`. */
+export const restablecerClaveDeAlumno = (cursoId, alumnoId) =>
+  solicitarAuth(`/cursos/${cursoId}/estudiantes/${alumnoId}/restablecer-clave`, { method: "POST" });
+/** Carga o corrige la edad y el contacto de la familia de un alumno (`{edad, tutor_nombre, tutor_telefono}`, solo lo que cambia). */
+export const actualizarDatosDeFamilia = (cursoId, alumnoId, campos) =>
+  solicitarAuth(`/cursos/${cursoId}/estudiantes/${alumnoId}/familia`, { method: "PATCH", body: JSON.stringify(campos) });

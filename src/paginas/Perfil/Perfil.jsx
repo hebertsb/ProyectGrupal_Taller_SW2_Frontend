@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react';
 import { actualizarPerfil, guardarNivelEstimado, subirFotoPerfil } from '../../api/backend';
 import MiCurso from './MiCurso';
 import ModalBajaCuenta from './ModalBajaCuenta';
+import TarjetaCambiarPassword from './TarjetaCambiarPassword';
+import TarjetaDobleFactor from './TarjetaDobleFactor';
+import TarjetaMiFamilia from './TarjetaMiFamilia';
+import TarjetaMiProgreso from './TarjetaMiProgreso';
 import TarjetaMisMedallas from './TarjetaMisMedallas';
 
 const EDAD_MIN = 0;
@@ -381,8 +385,20 @@ export default function Perfil({ usuario, alActualizarUsuario, alVerAlbum, alEli
         {/* Medallas del jugador — resumen del álbum de figuritas y acceso a él (ver TarjetaMisMedallas.jsx). */}
         {!esFacilitador && <TarjetaMisMedallas alVerAlbum={alVerAlbum} />}
 
+        {/* Informe de progreso del jugador: el antes y el después, para mostrar a la familia (ver TarjetaMiProgreso.jsx). */}
+        {!esFacilitador && <TarjetaMiProgreso />}
+
         {/* Curso del jugador — entra con el código de su facilitador (ver MiCurso.jsx). */}
         {!esFacilitador && <MiCurso />}
+
+        {/* Edad y autorización de la familia para jugar con otras personas (ver TarjetaMiFamilia.jsx). */}
+        {!esFacilitador && <TarjetaMiFamilia usuario={usuario} alActualizarUsuario={alActualizarUsuario} />}
+
+        {/* Cambiar la contraseña: las cuentas que entran solo con Google no tienen una. */}
+        {usuario?.tiene_password !== false && !usuario?.google_id && <TarjetaCambiarPassword />}
+
+        {/* Verificación en dos pasos: solo facilitadores (docentes, administradores y la plataforma) */}
+        {esFacilitador && <TarjetaDobleFactor usuario={usuario} alActualizarUsuario={alActualizarUsuario} />}
 
         {/* Privacidad y baja de la cuenta — para todos los perfiles. La cuenta de la plataforma no se da de baja desde acá. */}
         <div className="w-full bg-surface-container-low p-space-md rounded-xl shadow-md flex flex-col gap-space-sm">

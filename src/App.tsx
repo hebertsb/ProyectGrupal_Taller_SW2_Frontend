@@ -21,10 +21,25 @@ import EntrenamientoModelo from './paginas/EntrenamientoModelo/EntrenamientoMode
 import Perfil from './paginas/Perfil/Perfil';
 import Login from './paginas/Login/Login';
 import Politica from './paginas/Politica/Politica';
+import Confianza from './paginas/Confianza/Confianza';
 import AccesoRestringido from './componentes/AccesoRestringido';
 import NotificadorMedallas from './componentes/NotificadorMedallas';
 import AvisoVerificarCorreo from './componentes/AvisoVerificarCorreo';
-import { backendEnLinea, obtenerDemostracionActiva, obtenerEstadoEntrenamiento, obtenerPerfil, pararBrazo } from './api/backend';
+import AvisoDobleFactor from './componentes/AvisoDobleFactor';
+import AvisoEvaluacion from './componentes/AvisoEvaluacion';
+import AvisoCurso from './componentes/AvisoCurso';
+import AvisoSuscripcion from './componentes/AvisoSuscripcion';
+import AvisoPartidaEnCurso from './componentes/AvisoPartidaEnCurso';
+import { AvisoDelDocente, AvisoTorneo } from './componentes/AvisosDeAula';
+import ModalRetoRecibido from './componentes/ModalRetoRecibido';
+import Aula from './paginas/Aula/Aula';
+import Jugar from './paginas/Jugar/Jugar';
+import PartidaEntrePersonas from './paginas/Jugar/PartidaEntrePersonas';
+import PartidasEntreAlumnos from './paginas/Jugar/PartidasEntreAlumnos';
+import useSocial from './useSocial';
+import { capturarEnlaceDeJuego, enlaceDeJuegoPendiente, olvidarEnlaceDeJuego } from './enlaceJuego';
+import { capturarCursoDelEnlace, cursoPendiente, olvidarCursoPendiente } from './enlaceCurso';
+import { backendEnLinea, cambiarVista as cambiarVistaApi, obtenerDemostracionActiva, obtenerEstadoEntrenamiento, obtenerPerfil, pararBrazo, unirseACurso, obtenerMiSuscripcion, listarPagosSuscripciones, aceptarReto, rechazarReto, unirseASala, mandarSolicitudDeAmistad, presenciaSala } from './api/backend';
 import useEstadoBrazo from './useEstadoBrazo';
 import { ProveedorRazonamiento } from './contexto/ContextoRazonamiento';
 import { ProveedorEstadoModelo } from './contexto/ContextoEstadoModelo';
@@ -33,6 +48,8 @@ const GestionUsuarios = lazy(() => import('./paginas/Administracion/GestionUsuar
 const MisCursos = lazy(() => import('./paginas/Administracion/MisCursos.jsx'));
 const Instituciones = lazy(() => import('./paginas/Instituciones/Instituciones.jsx'));
 const Auditoria = lazy(() => import('./paginas/Auditoria/Auditoria.jsx'));
+const MiSuscripcion = lazy(() => import('./paginas/Suscripcion/MiSuscripcion.jsx'));
+const Ingresos = lazy(() => import('./paginas/Suscripcion/Ingresos.jsx'));
 const MiInstitucion = lazy(() => import('./paginas/Instituciones/MiInstitucion.jsx'));
 
 // Mismo intervalo que ya usaba el sondeo local de RegistroPartidas.jsx — acá se sondea a nivel
@@ -72,6 +89,17 @@ export default function App() {
   const cerrarPolitica = () => {
     window.history.replaceState(null, '', window.location.pathname + window.location.search);
     setVerPolitica(false);
+  };
+  // Ficha de confianza (entorno cerrado y Turing medido): también pública, en `/#confianza`, para mostrársela a una institución antes de que tenga cuenta.
+  const [verConfianza, setVerConfianza] = useState(() => window.location.hash === '#confianza');
+  useEffect(() => {
+    const alCambiarHash = () => setVerConfianza(window.location.hash === '#confianza');
+    window.addEventListener('hashchange', alCambiarHash);
+    return () => window.removeEventListener('hashchange', alCambiarHash);
+  }, []);
+  const cerrarConfianza = () => {
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    setVerConfianza(false);
   };
   // Secciones del menú lateral que el facilitador abrió o cerró a mano (id de sección -> abierta).
   const [seccionesAbiertas, setSeccionesAbiertas] = useState<Record<string, boolean>>({});
@@ -164,6 +192,51 @@ export default function App() {
     }
   }
 
+  // Modo evaluación: quien prueba el sistema como director tiene además un jugador de prueba; este botón lo pasa de una vista a la otra sin
+  // volver a iniciar sesión (cambia la sesión guardada por la de la otra cuenta).
+  const [cambiandoVista, setCambiandoVista] = useState(false);
+  const [errorVista, setErrorVista] = useState<string | null>(null);
+  const alternarVista = async () => {
+    setCambiandoVista(true);
+    setErrorVista(null);
+    try {
+      const datos = await cambiarVistaApi();
+      actualizarSesion('access_token', datos.tokens.access_token);
+      actualizarSesion('refresh_token', datos.tokens.refresh_token);
+      actualizarSesion('usuario', JSON.stringify(datos.usuario));
+      setUsuario(datos.usuario);
+      setPantallaActiva('control');
+    } catch (err: any) {
+      setErrorVista(err?.message || 'No se pudo cambiar de vista.');
+    } finally {
+      setCambiandoVista(false);
+    }
+  };
+
+  // Entrar a un curso por un enlace o un código QR (`/#curso=CÓDIGO`): el código se guarda en la pestaña al abrir el enlace y, cuando el
+  // jugador ya tiene sesión (ya la tenía o la acaba de crear), se lo inscribe. Se intenta una sola vez por enlace.
+  const [avisoCurso, setAvisoCurso] = useState<{ ok: boolean; texto: string } | null>(null);
+  const [enlacesDeCurso, setEnlacesDeCurso] = useState(0);
+  useEffect(() => {
+    const capturar = () => {
+      if (capturarCursoDelEnlace() || capturarEnlaceDeJuego()) setEnlacesDeCurso((n) => n + 1);
+    };
+    capturar();
+    window.addEventListener('hashchange', capturar);
+    return () => window.removeEventListener('hashchange', capturar);
+  }, []);
+  useEffect(() => {
+    const codigo = cursoPendiente();
+    if (!codigo || usuario?.id == null) return;
+    olvidarCursoPendiente();
+    if (usuario.rol !== 'jugador') return; // el enlace es para alumnos
+    unirseACurso(codigo)
+      .then((curso: any) =>
+        setAvisoCurso({ ok: true, texto: `Te uniste al curso «${curso.nombre}»${curso.facilitador_nombre ? ` de ${curso.facilitador_nombre}` : ''}.` }),
+      )
+      .catch((err: any) => setAvisoCurso({ ok: false, texto: err?.message || 'No se pudo entrar al curso.' }));
+  }, [usuario?.id, usuario?.rol, enlacesDeCurso]);
+
   const manejarLogout = () => {
     borrarSesion();
     setPartidaActivaId(null);
@@ -200,6 +273,139 @@ export default function App() {
       setParandoBrazo(false);
     }
   }
+  // Doble factor: se le ofrece a todo facilitador; si el servidor lo exige a su cuenta, queda en Mi Perfil hasta activarlo.
+  const sinDobleFactor = esFacilitador && usuario?.doble_factor_activo !== true;
+  const debeActivarDobleFactor = sinDobleFactor && usuario?.doble_factor_obligatorio === true;
+
+  // Suscripción: al director se le avisa si la de su institución está por vencer, venció o tiene un pago esperando confirmación; a la plataforma, si hay
+  // pagos por confirmar (punto en «Ingresos» del menú). Se relee al cambiar de pantalla, así el aviso se apaga solo después de pagar o de confirmar.
+  const esAdminDeInstitucion = esFacilitador && !esPrincipal && usuario?.es_admin_institucion === true;
+  const [suscripcionDeMiInstitucion, setSuscripcionDeMiInstitucion] = useState<any>(null);
+  useEffect(() => {
+    if (!esAdminDeInstitucion) {
+      setSuscripcionDeMiInstitucion(null);
+      return undefined;
+    }
+    let cancelado = false;
+    obtenerMiSuscripcion()
+      .then((datos: any) => {
+        if (!cancelado) setSuscripcionDeMiInstitucion(datos);
+      })
+      .catch(() => {
+        // Silencioso: sin el dato simplemente no se muestra el aviso.
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [esAdminDeInstitucion, usuario?.id, pantallaActiva]);
+  // Lo social del jugador: los retos que le hacen, cómo va su reto o su búsqueda de rival, y las partidas con otras personas. Los finales de reto y
+  // de búsqueda llegan una sola vez en `avisos`: acá se actúa (se lo lleva a la partida o se le avisa).
+  const esJugador = usuario?.rol === 'jugador';
+  const { avisos, refrescar: refrescarAvisos } = useSocial(esJugador);
+  const [salaCodigo, setSalaCodigo] = useState<string | null>(null);
+  const [partidaVigente, setPartidaVigente] = useState<{ codigo: string; rival: string; conReloj: boolean } | null>(null);
+  const [retoOcupado, setRetoOcupado] = useState(false);
+  const [retoError, setRetoError] = useState<string | null>(null);
+  const irASala = (codigo: string) => {
+    setSalaCodigo(codigo);
+    setPantallaActiva('sala');
+  };
+  useEffect(() => {
+    if (!avisos) return;
+    const reto = avisos.mi_reto;
+    if (reto?.estado === 'aceptado' && reto.codigo) irASala(reto.codigo);
+    else if (reto?.estado === 'rechazado') setAvisoCurso({ ok: false, texto: 'Tu reto fue rechazado.' });
+    else if (reto?.estado === 'expirado') setAvisoCurso({ ok: false, texto: 'Tu reto no fue respondido a tiempo.' });
+    const busqueda = avisos.busqueda;
+    if (busqueda?.estado === 'encontrado' && busqueda.codigo) {
+      setAvisoCurso({ ok: true, texto: `Encontramos un rival${busqueda.rival ? `: ${busqueda.rival.nombre}` : ''}. ¡A jugar!` });
+      irASala(busqueda.codigo);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [avisos]);
+  const aceptarRetoRecibido = async (id: string) => {
+    setRetoOcupado(true);
+    setRetoError(null);
+    try {
+      const respuesta = await aceptarReto(id);
+      irASala(respuesta.codigo);
+    } catch (err: any) {
+      setRetoError(err?.message || 'No se pudo aceptar el reto.');
+    } finally {
+      setRetoOcupado(false);
+      refrescarAvisos();
+    }
+  };
+  const rechazarRetoRecibido = async (id: string) => {
+    setRetoOcupado(true);
+    try {
+      await rechazarReto(id);
+    } catch {
+      // si ya venció o lo canceló quien retó, la próxima consulta lo saca de la lista
+    } finally {
+      setRetoOcupado(false);
+      setRetoError(null);
+      refrescarAvisos();
+    }
+  };
+  // Un enlace de partida (`/#sala=CÓDIGO`) o de amistad (`/#amigo=CÓDIGO`) que se abrió antes de tener sesión se usa apenas el jugador entra.
+  useEffect(() => {
+    const pendiente = enlaceDeJuegoPendiente();
+    if (!pendiente || usuario?.id == null) return;
+    olvidarEnlaceDeJuego();
+    if (usuario.rol !== 'jugador') return; // los enlaces de juego son para jugadores
+    if (pendiente.tipo === 'sala') {
+      unirseASala(pendiente.codigo)
+        .then((sala: any) => irASala(sala.codigo))
+        .catch((err: any) => setAvisoCurso({ ok: false, texto: err?.status === 404 ? 'Esa partida ya no existe.' : err?.message || 'No se pudo entrar a la partida.' }));
+    } else {
+      mandarSolicitudDeAmistad({ codigo: pendiente.codigo })
+        .then((respuesta: any) => setAvisoCurso({ ok: true, texto: respuesta.mensaje }))
+        .catch((err: any) => setAvisoCurso({ ok: false, texto: err?.message || 'No se pudo mandar la solicitud.' }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [usuario?.id, usuario?.rol, enlacesDeCurso]);
+  // Con reloj no se puede dejar la partida, pero moverse por la aplicación no es dejarla: mientras el jugador esté en otra pantalla, acá se sigue
+  // avisando que está presente, y la franja de arriba le recuerda volver.
+  useEffect(() => {
+    if (!partidaVigente?.conReloj || pantallaActiva === 'sala') return undefined;
+    let cancelado = false;
+    const avisar = async () => {
+      try {
+        const sala: any = await presenciaSala(partidaVigente.codigo);
+        if (!cancelado && (sala.terminada || sala.estado !== 'en_curso')) setPartidaVigente(null);
+      } catch {
+        if (!cancelado) setPartidaVigente(null); // la sala ya no existe
+      }
+    };
+    avisar();
+    const intervalo = setInterval(avisar, 5000);
+    return () => {
+      cancelado = true;
+      clearInterval(intervalo);
+    };
+  }, [partidaVigente, pantallaActiva]);
+  const [pagosPorConfirmar, setPagosPorConfirmar] = useState(0);
+  useEffect(() => {
+    if (!esPrincipal) {
+      setPagosPorConfirmar(0);
+      return undefined;
+    }
+    let cancelado = false;
+    listarPagosSuscripciones('pendiente')
+      .then((lista: any) => {
+        if (!cancelado) setPagosPorConfirmar(Array.isArray(lista) ? lista.filter((pago: any) => !pago.es_demostracion).length : 0);
+      })
+      .catch(() => {
+        // Silencioso: sin el dato simplemente no se marca el menú.
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [esPrincipal, usuario?.id, pantallaActiva]);
+  useEffect(() => {
+    if (debeActivarDobleFactor && pantallaActiva !== 'perfil') setPantallaActiva('perfil');
+  }, [debeActivarDobleFactor, pantallaActiva]);
   const etiquetaPerfil = !esFacilitador
     ? 'Jugador'
     : esPrincipal
@@ -365,6 +571,7 @@ export default function App() {
         { id: 'monitoreo', texto: 'Monitoreo', icono: 'grid_view' },
         { id: 'neuronal', texto: 'Razonamiento Neuronal', icono: 'neurology' },
         { id: 'registro', texto: 'Registro de Partidas', icono: 'history_edu' },
+        { id: 'partidasVivo', texto: 'Partidas entre alumnos', icono: 'swords' },
         { id: 'aprendizaje', texto: 'Análisis Jugada a Jugada', icono: 'troubleshoot', alClick: () => irAAprendizaje() },
       ],
     },
@@ -374,8 +581,10 @@ export default function App() {
       icono: 'school',
       items: [
         { id: 'ensenanza', texto: 'Configuración de Enseñanza', icono: 'video_settings' },
+        { id: 'confianza', texto: 'Confianza y Turing', icono: 'verified_user' },
         { id: 'misCursos', texto: 'Mis cursos', icono: 'groups', visible: !esPrincipal },
         { id: 'miInstitucion', texto: 'Mi institución', icono: 'apartment', visible: tieneInstitucion },
+        { id: 'miSuscripcion', texto: 'Mi suscripción', icono: 'workspace_premium', visible: usuario?.es_admin_institucion === true },
       ],
     },
     {
@@ -385,6 +594,7 @@ export default function App() {
       items: [
         { id: 'usuarios', texto: 'Gestión de Usuarios', icono: 'manage_accounts', visible: esPrincipal },
         { id: 'instituciones', texto: 'Instituciones', icono: 'apartment', visible: esPrincipal },
+        { id: 'ingresos', texto: 'Ingresos', icono: 'payments', visible: esPrincipal, aviso: pagosPorConfirmar > 0 },
         { id: 'auditoria', texto: 'Auditoría', icono: 'history', visible: esPrincipal },
       ],
     },
@@ -415,6 +625,7 @@ export default function App() {
   }, [pantallaActiva]);
 
   if (verPolitica) return <Politica alVolver={cerrarPolitica} />;
+  if (verConfianza) return <Confianza alVolver={cerrarConfianza} />;
 
   // Si no hay usuario, mostrar login
   if (!usuario) {
@@ -473,6 +684,34 @@ export default function App() {
               {!esFacilitador && (
                 <button onClick={() => setPantallaActiva('panelAprendizaje')} className={navClasses('panelAprendizaje')}>
                   <span className="material-symbols-outlined text-[18px]">auto_stories</span>Panel de Aprendizaje
+                </button>
+              )}
+              {!esFacilitador && (
+                <button onClick={() => setPantallaActiva('jugar')} className={navClasses(pantallaActiva === 'sala' ? 'sala' : 'jugar')}>
+                  <span className="material-symbols-outlined text-[18px]">swords</span>Jugar con otros
+                  {((avisos?.solicitudes_amistad ?? 0) > 0 || (avisos?.retos_recibidos?.length ?? 0) > 0) && (
+                    <>
+                      <span className="relative flex h-2 w-2 shrink-0 ml-auto" aria-hidden="true">
+                        <span className="animate-ping motion-reduce:animate-none absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+                      </span>
+                      <span className="sr-only">, hay novedades</span>
+                    </>
+                  )}
+                </button>
+              )}
+              {!esFacilitador && (
+                <button onClick={() => setPantallaActiva('aula')} className={navClasses('aula')}>
+                  <span className="material-symbols-outlined text-[18px]">school</span>Mi aula
+                  {(avisos?.torneo?.mi_partida || avisos?.aviso_docente) && (
+                    <>
+                      <span className="relative flex h-2 w-2 shrink-0 ml-auto" aria-hidden="true">
+                        <span className="animate-ping motion-reduce:animate-none absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+                      </span>
+                      <span className="sr-only">, hay novedades</span>
+                    </>
+                  )}
                 </button>
               )}
               {esFacilitador &&
@@ -563,6 +802,17 @@ export default function App() {
               </div>
             )}
           </div>
+          {usuario.tiene_vista_alternativa && (
+            <button
+              type="button"
+              onClick={alternarVista}
+              disabled={cambiandoVista}
+              className="w-full flex items-center justify-center gap-space-xs px-space-sm py-space-xs min-h-10 rounded-lg bg-tertiary/15 hover:bg-tertiary/25 text-tertiary font-body-sm text-body-sm font-medium transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-tertiary"
+            >
+              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">swap_horiz</span>
+              {esFacilitador ? 'Ver como jugador' : 'Volver a mi panel'}
+            </button>
+          )}
           <div className="p-space-sm rounded-lg bg-surface-container-lowest/60 flex items-center gap-space-sm">
             <button
               onClick={() => setPantallaActiva('perfil')}
@@ -728,7 +978,26 @@ export default function App() {
         <main className="w-full pt-16 bg-surface-container-lowest min-h-screen">
           {/* Solo en Cámara y Brazo: el brazo se usa en local, así que el aviso no debe aparecer en las demás pantallas
               (ni en el sitio publicado, donde no hay cámara ni brazo). */}
+          {usuario.tiene_vista_alternativa && (
+            <AvisoEvaluacion esFacilitador={esFacilitador} ocupado={cambiandoVista} error={errorVista} alAlternar={alternarVista} />
+          )}
           {usuario.correo_verificado === false && <AvisoVerificarCorreo usuario={usuario} alVerificar={manejarActualizarUsuario} />}
+          {esAdminDeInstitucion && pantallaActiva !== 'miSuscripcion' && (
+            <AvisoSuscripcion datos={suscripcionDeMiInstitucion} alIrAPagar={() => setPantallaActiva('miSuscripcion')} />
+          )}
+          {avisoCurso && <AvisoCurso ok={avisoCurso.ok} texto={avisoCurso.texto} alCerrar={() => setAvisoCurso(null)} />}
+          {esJugador && partidaVigente?.conReloj && pantallaActiva !== 'sala' && (
+            <AvisoPartidaEnCurso rival={partidaVigente.rival} alVolver={() => irASala(partidaVigente.codigo)} />
+          )}
+          {esJugador && pantallaActiva !== 'sala' && pantallaActiva !== 'aula' && (
+            <AvisoTorneo torneo={avisos?.torneo} alIrAPartida={irASala} alIrAlAula={() => setPantallaActiva('aula')} />
+          )}
+          {esJugador && pantallaActiva !== 'sala' && pantallaActiva !== 'aula' && (
+            <AvisoDelDocente aviso={avisos?.aviso_docente} alIrAlAula={() => setPantallaActiva('aula')} />
+          )}
+          {sinDobleFactor && pantallaActiva !== 'perfil' || debeActivarDobleFactor ? (
+            <AvisoDobleFactor obligatorio={debeActivarDobleFactor} alActivar={() => setPantallaActiva('perfil')} />
+          ) : null}
           {esPrincipal && pantallaActiva === 'camaraBrazo' && <BannerCalibracion />}
           {/* Banner global de transmisión en vivo — a propósito NO es un toast: se queda mientras
               la transmisión siga activa y el jugador no la esté viendo, en CUALQUIER pantalla (no
@@ -884,7 +1153,7 @@ export default function App() {
           )}
           {pantallaActiva === 'usuarios' && esPrincipal && (
             <Suspense fallback={cargandoPantalla('Cargando gestión de usuarios...')}>
-              <GestionUsuarios usuarioActual={usuario} />
+              <GestionUsuarios usuarioActual={usuario} alMirarPartida={irASala} />
             </Suspense>
           )}
           {pantallaActiva === 'registro' && (
@@ -922,6 +1191,37 @@ export default function App() {
               soloPlataforma('Instituciones')
             )
           )}
+          {pantallaActiva === 'ingresos' && (
+            esPrincipal ? (
+              <Suspense fallback={cargandoPantalla('Cargando los ingresos...')}>
+                <Ingresos />
+              </Suspense>
+            ) : (
+              soloPlataforma('Los Ingresos')
+            )
+          )}
+          {pantallaActiva === 'miSuscripcion' && usuario?.es_admin_institucion === true && (
+            <Suspense fallback={cargandoPantalla('Cargando tu suscripción...')}>
+              <MiSuscripcion />
+            </Suspense>
+          )}
+          {pantallaActiva === 'confianza' && esFacilitador && <Confianza />}
+          {pantallaActiva === 'jugar' && esJugador && (
+            <Jugar usuario={usuario} avisos={avisos} alRefrescarAvisos={refrescarAvisos} alIrASala={irASala} alActualizarUsuario={manejarActualizarUsuario} />
+          )}
+          {pantallaActiva === 'aula' && esJugador && (
+            <Aula usuario={usuario} alIrAPartida={irASala} alIrAPerfil={() => setPantallaActiva('perfil')} />
+          )}
+          {pantallaActiva === 'partidasVivo' && esFacilitador && <PartidasEntreAlumnos alMirar={irASala} />}
+          {pantallaActiva === 'sala' && (esJugador || esFacilitador) && salaCodigo && (
+            <PartidaEntrePersonas
+              key={salaCodigo}
+              codigo={salaCodigo}
+              alSalir={() => setPantallaActiva(esFacilitador ? 'partidasVivo' : 'jugar')}
+              alCambiarPartida={setPartidaVigente}
+              nombresCompletos={esFacilitador}
+            />
+          )}
           {pantallaActiva === 'auditoria' && (
             esPrincipal ? (
               <Suspense fallback={cargandoPantalla('Cargando la auditoría...')}>
@@ -933,7 +1233,7 @@ export default function App() {
           )}
           {pantallaActiva === 'misCursos' && esFacilitador && !esPrincipal && (
             <Suspense fallback={cargandoPantalla('Cargando tus cursos...')}>
-              <MisCursos usuarioActual={usuario} />
+              <MisCursos usuarioActual={usuario} alMirarPartida={irASala} />
             </Suspense>
           )}
           {pantallaActiva === 'miInstitucion' && tieneInstitucion && (
@@ -959,6 +1259,16 @@ export default function App() {
         </main>
       </div>
     </div>
+      {esJugador && !(pantallaActiva === 'sala' && partidaVigente) && avisos?.retos_recibidos?.[0] && (
+        <ModalRetoRecibido
+          key={avisos.retos_recibidos[0].id}
+          reto={avisos.retos_recibidos[0]}
+          ocupado={retoOcupado}
+          error={retoError}
+          alAceptar={aceptarRetoRecibido}
+          alRechazar={rechazarRetoRecibido}
+        />
+      )}
     </ProveedorEstadoModelo>
     </ProveedorRazonamiento>
   );

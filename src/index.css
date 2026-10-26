@@ -214,3 +214,56 @@
     padding-bottom: 0.25rem;
   }
 }
+
+
+/* Hoja imprimible (informe de progreso de un alumno, `paginas/Progreso/InformeAlumno.jsx`): al imprimir o guardar como PDF queda solo
+   el informe, en papel blanco y letra oscura, sin botones ni barras de desplazamiento. */
+@media print {
+  body > *:not(#informe-impreso) {
+    display: none !important;
+  }
+  body {
+    overflow: visible !important;
+    background: #fff !important;
+  }
+  #informe-impreso {
+    position: static !important;
+    display: block !important;
+    padding: 0 !important;
+    background: #fff !important;
+    backdrop-filter: none !important;
+  }
+  #informe-impreso .hoja-informe {
+    --color-on-surface: #111827;
+    --color-on-surface-variant: #4b5563;
+    --color-surface-container-low: #ffffff;
+    --color-surface-container: #f3f4f6;
+    --color-surface-container-high: #e5e7eb;
+    --color-surface-container-lowest: #ffffff;
+    --color-primary: #00626e;
+    --color-primary-container: #cdeff4;
+    --color-tertiary-fixed-dim: #8a4b00;
+    --color-tertiary-container: #ffe3c8;
+    --color-outline-variant: #9ca3af;
+    max-width: none !important;
+    max-height: none !important;
+    overflow: visible !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    background: #fff !important;
+    color: #111827;
+  }
+  #informe-impreso .no-imprimir {
+    display: none !important;
+  }
+  #informe-impreso .hoja-informe section,
+  #informe-impreso .hoja-informe header {
+    break-inside: avoid;
+  }
+  #informe-impreso .hoja-informe,
+  #informe-impreso .hoja-informe * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

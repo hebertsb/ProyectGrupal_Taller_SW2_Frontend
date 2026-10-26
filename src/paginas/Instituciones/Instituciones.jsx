@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   asignarDocenteAInstitucion,
-  crearInstitucion,
   editarInstitucion,
   listarInstituciones,
   listarUsuarios,
@@ -17,6 +16,8 @@ import {
   datosDelTipo,
   plural,
 } from './tipos';
+import FormularioAlta from './FormularioAlta';
+import ModalConvertir from './ModalConvertir';
 
 function Numero({ valor, etiqueta }) {
   return (
@@ -34,6 +35,8 @@ function TarjetaInstitucion({ institucion, facilitadores, alCambiar, alAviso, al
   const [nombre, setNombre] = useState(institucion.nombre);
   const [tipo, setTipo] = useState(institucion.tipo);
   const [docenteNuevo, setDocenteNuevo] = useState('');
+  const [convirtiendo, setConvirtiendo] = useState(false);
+  const [dominio, setDominio] = useState(institucion.dominio_correo ?? '');
   const docentes = institucion.docentes ?? [];
   const disponibles = facilitadores.filter((f) => f.institucion?.id !== institucion.id);
   const tipoDatos = datosDelTipo(institucion.tipo);
@@ -82,6 +85,12 @@ function TarjetaInstitucion({ institucion, facilitadores, alCambiar, alAviso, al
           </span>
           <div className="flex flex-col min-w-0">
             <h2 className="m-0 font-headline-sm text-headline-sm text-on-surface break-words">{institucion.nombre}</h2>
+            {institucion.es_prueba && (
+              <span className="self-start font-mono-micro text-mono-micro uppercase px-space-xs py-space-2xs rounded-full bg-tertiary-container text-tertiary">En prueba</span>
+            )}
+            {institucion.es_demostracion && (
+              <span className="self-start font-mono-micro text-mono-micro uppercase px-space-xs py-space-2xs rounded-full bg-tertiary-container text-tertiary">Demostración</span>
+            )}
             <span className="font-mono-micro text-mono-micro text-on-surface-variant">{tipoDatos.etiqueta}</span>
           </div>
         </div>
@@ -99,6 +108,18 @@ function TarjetaInstitucion({ institucion, facilitadores, alCambiar, alAviso, al
           <span>{editando ? 'Cerrar' : 'Editar'}</span>
         </button>
       </header>
+
+      {institucion.es_prueba && (
+        <div className="flex flex-wrap items-center justify-between gap-space-xs p-space-sm rounded-xl bg-tertiary/10 border border-tertiary/30">
+          <span className="font-body-sm text-body-sm text-on-surface min-w-0">
+            Está evaluando el sistema. Cuando cierren el trato, convertila en cliente.
+          </span>
+          <button type="button" disabled={ocupado} onClick={() => setConvirtiendo(true)} className={BOTON_PRINCIPAL}>
+            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">handshake</span>
+            Convertir en cliente
+          </button>
+        </div>
+      )}
 
       {editando && (
         <form onSubmit={guardarEdicion} noValidate className="flex flex-col sm:flex-row sm:items-end gap-space-xs">
@@ -158,6 +179,38 @@ function TarjetaInstitucion({ institucion, facilitadores, alCambiar, alAviso, al
         )}
       </div>
 
+      <form
+        onSubmit={(evento) => {
+          evento.preventDefault();
+          ejecutar(
+            () => editarInstitucion(institucion.id, { dominio_correo: dominio.trim() }),
+            dominio.trim() ? `Solo entran con correo @${dominio.trim().replace(/^@/, '')}.` : 'Se quitó la restricción de correo institucional.'
+          );
+        }}
+        className="flex flex-col gap-1"
+      >
+        <label htmlFor={`inst-dominio-${institucion.id}`} className={CLASE_ETIQUETA}>Correo institucional (opcional)</label>
+        <div className="flex flex-col sm:flex-row gap-space-xs">
+          <input
+            id={`inst-dominio-${institucion.id}`}
+            value={dominio}
+            onChange={(e) => setDominio(e.target.value)}
+            maxLength={100}
+            autoCapitalize="none"
+            spellCheck={false}
+            placeholder="colegio.edu.bo"
+            className={`${CLASE_INPUT} flex-1`}
+          />
+          <button type="submit" disabled={ocupado || dominio.trim() === (institucion.dominio_correo ?? '')} className={BOTON_NEUTRO}>
+            Guardar dominio
+          </button>
+        </div>
+        <span className="font-mono-micro text-mono-micro text-on-surface-variant leading-relaxed">
+          Si lo definís, a los cursos de esta institución solo entran jugadores que comprobaron la propiedad de un correo de ese dominio, mediante Google o un código enviado por correo.
+          Vacío = entra cualquiera con el código. Las cuentas que el docente crea desde el curso no dependen del dominio. Esto no declara la autorización de las familias: esa se configura en el curso.
+        </span>
+      </form>
+
       <section aria-label={`Docentes de ${institucion.nombre}`} className="flex flex-col gap-space-xs">
         <span className={CLASE_ETIQUETA}>{plural(docentes.length, 'docente', 'docentes')}</span>
         {docentes.length > 0 && (
@@ -214,6 +267,17 @@ function TarjetaInstitucion({ institucion, facilitadores, alCambiar, alAviso, al
           </button>
         </div>
       </section>
+      {convirtiendo && (
+        <ModalConvertir
+          institucion={institucion}
+          alCerrar={() => setConvirtiendo(false)}
+          alConvertida={async (nombreFinal) => {
+            setConvirtiendo(false);
+            alAviso(`«${nombreFinal}» ahora es cliente. Su director conserva todo lo que armó.`);
+            await alCambiar();
+          }}
+        />
+      )}
     </article>
   );
 }
@@ -224,10 +288,6 @@ export default function Instituciones() {
   const [facilitadores, setFacilitadores] = useState([]);
   const [error, setError] = useState(null);
   const [aviso, setAviso] = useState(null);
-  const [nombre, setNombre] = useState('');
-  const [tipo, setTipo] = useState(TIPOS_INSTITUCION[0].valor);
-  const [administradorId, setAdministradorId] = useState('');
-  const [creando, setCreando] = useState(false);
 
   const cargar = useCallback(async () => {
     try {
@@ -243,32 +303,6 @@ export default function Instituciones() {
   useEffect(() => {
     cargar();
   }, [cargar]);
-
-  async function crear(evento) {
-    evento.preventDefault();
-    if (nombre.trim().length < 3) {
-      setError('El nombre tiene que tener al menos 3 caracteres.');
-      return;
-    }
-    setCreando(true);
-    setError(null);
-    setAviso(null);
-    try {
-      const creada = await crearInstitucion({
-        nombre,
-        tipo,
-        administradorId: administradorId === '' ? null : Number(administradorId),
-      });
-      setAviso(`Creaste «${creada.nombre}».`);
-      setNombre('');
-      setAdministradorId('');
-      await cargar();
-    } catch (err) {
-      setError(err.message || 'No se pudo crear la institución.');
-    } finally {
-      setCreando(false);
-    }
-  }
 
   return (
     <div className="w-full px-space-lg py-space-lg flex flex-col gap-space-lg animate-in fade-in duration-500">
@@ -299,51 +333,7 @@ export default function Instituciones() {
         </div>
       )}
 
-      <section className="flex flex-col gap-space-sm bg-surface-container-low p-space-md rounded-xl shadow-md">
-        <h2 className="m-0 font-headline-sm text-headline-sm text-on-surface">Nueva institución</h2>
-        <form onSubmit={crear} noValidate className="flex flex-col lg:flex-row lg:flex-wrap lg:items-end gap-space-xs">
-          <div className="flex flex-col gap-1 flex-1 min-w-0 lg:min-w-56">
-            <label htmlFor="inst-nombre-nueva" className={CLASE_ETIQUETA}>Nombre</label>
-            <input
-              id="inst-nombre-nueva"
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
-              maxLength={80}
-              placeholder="Ej.: Asociación de Ajedrez de Santa Cruz"
-              className={CLASE_INPUT}
-            />
-          </div>
-          <div className="flex flex-col gap-1 lg:w-56 min-w-0">
-            <label htmlFor="inst-tipo-nueva" className={CLASE_ETIQUETA}>Tipo</label>
-            <select id="inst-tipo-nueva" value={tipo} onChange={(e) => setTipo(e.target.value)} className={CLASE_INPUT}>
-              {TIPOS_INSTITUCION.map((t) => (
-                <option key={t.valor} value={t.valor}>{t.etiqueta}</option>
-              ))}
-            </select>
-          </div>
-          <div className="flex flex-col gap-1 lg:w-64 min-w-0">
-            <label htmlFor="inst-admin-nueva" className={CLASE_ETIQUETA}>Administrador (opcional)</label>
-            <select
-              id="inst-admin-nueva"
-              value={administradorId}
-              onChange={(e) => setAdministradorId(e.target.value)}
-              className={CLASE_INPUT}
-            >
-              <option value="">Lo defino después</option>
-              {facilitadores.map((f) => (
-                <option key={f.id} value={f.id}>{f.nombre} · {f.email}</option>
-              ))}
-            </select>
-          </div>
-          <button type="submit" disabled={creando} className={BOTON_PRINCIPAL}>
-            <span className="material-symbols-outlined text-[16px]" aria-hidden="true">add</span>
-            <span>{creando ? 'Creando…' : 'Crear institución'}</span>
-          </button>
-        </form>
-        <p className="m-0 font-mono-micro text-mono-micro text-on-surface-variant">
-          El administrador y los docentes tienen que ser facilitadores. Los alumnos entran con el código de un curso de cualquiera de sus docentes.
-        </p>
-      </section>
+      <FormularioAlta facilitadores={facilitadores} alCrear={cargar} alError={setError} />
 
       {instituciones === null ? (
         <div className="flex flex-col items-center justify-center py-space-xl text-on-surface-variant">

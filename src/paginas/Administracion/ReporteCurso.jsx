@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
-import { obtenerReporteCurso } from '../../api/backend';
+import { obtenerProgresoCurso, obtenerReporteCurso } from '../../api/backend';
 import { InsigniaProvisional, InsigniaRango } from '../../componentes/InsigniaNivel';
 import { textoUltimaActividad } from '../../formatoTiempo';
+import AntesDespuesGrupo from '../Progreso/AntesDespuesGrupo';
+import InformeAlumno from '../Progreso/InformeAlumno';
 
 const BOTON_ACTUALIZAR =
   'flex items-center justify-center gap-1 px-space-sm py-space-2xs min-h-10 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface font-mono-label text-mono-label transition-colors motion-reduce:transition-none disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary';
@@ -289,6 +291,7 @@ export default function ReporteCurso({ cursoId }) {
   const [cargando, setCargando] = useState(true);
   const [recarga, setRecarga] = useState(0);
   const [actualizadoEn, setActualizadoEn] = useState(null);
+  const [informeDe, setInformeDe] = useState(null); // id del alumno cuyo informe está abierto
 
   useEffect(() => {
     let vigente = true;
@@ -386,10 +389,29 @@ export default function ReporteCurso({ cursoId }) {
             </Indicador>
           </div>
 
-          <AlumnosComoTarjetas alumnos={alumnos} />
-          <AlumnosComoTabla alumnos={alumnos} />
+          <AntesDespuesGrupo
+            titulo="Antes y después del curso"
+            cargar={() => obtenerProgresoCurso(cursoId)}
+            recarga={recarga}
+            alVerInforme={setInformeDe}
+          />
+
+          <details className="group">
+            <summary className="cursor-pointer list-none flex items-center gap-space-xs min-h-10 font-body-sm text-body-sm text-on-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded-lg">
+              <span className="material-symbols-outlined text-[18px] text-primary transition-transform group-open:rotate-90 motion-reduce:transition-none" aria-hidden="true">
+                chevron_right
+              </span>
+              Ranking y actividad del curso
+            </summary>
+            <div className="flex flex-col gap-space-sm pt-space-xs">
+              <AlumnosComoTarjetas alumnos={alumnos} />
+              <AlumnosComoTabla alumnos={alumnos} />
+            </div>
+          </details>
         </div>
       )}
+
+      {informeDe != null && <InformeAlumno alumnoId={informeDe} alCerrar={() => setInformeDe(null)} />}
     </div>
   );
 }

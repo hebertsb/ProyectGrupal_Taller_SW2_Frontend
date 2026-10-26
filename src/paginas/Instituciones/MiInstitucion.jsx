@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
-import { listarAlumnosDeMiInstitucion, listarDocentesDeMiInstitucion, obtenerMiInstitucion } from '../../api/backend';
+import { listarAlumnosDeMiInstitucion, listarDocentesDeMiInstitucion, obtenerMiInstitucion, obtenerProgresoInstitucion } from '../../api/backend';
+import PanelInvitaciones from '../Administracion/PanelInvitaciones';
+import AntesDespuesGrupo from '../Progreso/AntesDespuesGrupo';
+import InformeAlumno from '../Progreso/InformeAlumno';
 import { CLASE_ETIQUETA, datosDelTipo, plural } from './tipos';
 
 function Numero({ icono, valor, etiqueta }) {
@@ -24,6 +27,7 @@ export default function MiInstitucion() {
   const [alumnos, setAlumnos] = useState([]);
   const [error, setError] = useState(null);
   const [cargando, setCargando] = useState(true);
+  const [informeDe, setInformeDe] = useState(null); // id del alumno cuyo informe está abierto
 
   useEffect(() => {
     let cancelado = false;
@@ -115,10 +119,18 @@ export default function MiInstitucion() {
                 ))}
               </ul>
               <p className="m-0 font-mono-micro text-mono-micro text-on-surface-variant">
-                Para sumar o quitar docentes, pedíselo a la plataforma.
+                Para sumar un docente, usá «Invitar a un docente» de arriba. Para quitarlo, pedíselo a la plataforma.
               </p>
             </section>
           )}
+
+          {institucion.es_administrador && (
+            <section aria-label="Progreso de la institución" className="bg-surface-container-low p-space-lg rounded-xl shadow-md">
+              <AntesDespuesGrupo titulo="Antes y después de tu institución" cargar={() => obtenerProgresoInstitucion()} alVerInforme={setInformeDe} />
+            </section>
+          )}
+
+          {institucion.es_administrador && <PanelInvitaciones modo="institucion" institucion={{ id: institucion.id, nombre: institucion.nombre }} />}
 
           {institucion.es_administrador && (
             <section aria-label="Alumnos de la institución" className="flex flex-col gap-space-xs bg-surface-container-low p-space-lg rounded-xl shadow-md">
@@ -150,6 +162,8 @@ export default function MiInstitucion() {
           )}
         </>
       )}
+
+      {informeDe != null && <InformeAlumno alumnoId={informeDe} alCerrar={() => setInformeDe(null)} />}
     </div>
   );
 }

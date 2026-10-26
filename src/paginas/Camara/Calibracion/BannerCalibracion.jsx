@@ -12,7 +12,7 @@ const INTERVALO_MS = 60000;
  *
  * `onIrACalibrar`: lleva a la pantalla donde está el asistente.
  */
-export default function BannerCalibracion({ onIrACalibrar }) {
+export default function BannerCalibracion({ onIrACalibrar = null }) {
   const [estado, setEstado] = useState(null);
   const { tieneSecundaria, calibradas } = useCamarasConfiguradas();
   const secundariaSinCalibrar = tieneSecundaria && !calibradas.includes('secundaria');

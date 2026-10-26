@@ -1,7 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
-import { login as loginApi, loginGoogle, registro as registroApi } from '../../api/backend';
+import { login as loginApi, loginGoogle, registro as registroApi, verificarCodigoFacilitador } from '../../api/backend';
+import { capturarCursoDelEnlace, cursoPendiente } from '../../enlaceCurso';
+import { capturarEnlaceDeJuego, enlaceDeJuegoPendiente } from '../../enlaceJuego';
+import { borrarInvitacionDelEnlace, leerInvitacionDelEnlace } from '../../enlaceInvitacion';
+import PasoDobleFactor from './PasoDobleFactor';
+import RecuperarPassword from './RecuperarPassword';
 import CampoCodigoInvitacion from './CampoCodigoInvitacion';
 import { guardarSesion } from '../../api/sesion';
+
+const DOMINIO_DE_ALUMNOS = 'alumnos.example.com';
+
+/** Las cuentas que crea un docente entran con un usuario corto (`ana.perez4k`): se le completa el dominio reservado. Un correo se deja tal cual. */
+function correoDeIngreso(texto) {
+  const limpio = texto.trim();
+  return limpio.includes('@') ? limpio : `${limpio.toLowerCase()}@${DOMINIO_DE_ALUMNOS}`;
+}
 
 export default function Login({ onLoginSuccess }) {
   const [modo, setModo] = useState('login'); // 'login' | 'registro'
@@ -23,6 +36,54 @@ export default function Login({ onLoginSuccess }) {
   const [mostrarPassword, setMostrarPassword] = useState(false);
   // Al crear una cuenta con correo hay que aceptar los términos (y declarar la autorización si es menor de edad).
   const [aceptaTerminos, setAceptaTerminos] = useState(false);
+  // Solo jugadores: la edad se pide siempre; si es menor puede cargar el contacto de su madre, padre o tutor y declarar su autorización
+  // (si su curso o su colegio ya la tiene, no hace falta).
+  const [edad, setEdad] = useState('');
+  const [tutorNombre, setTutorNombre] = useState('');
+  const [tutorTelefono, setTutorTelefono] = useState('');
+  const [tutorEmail, setTutorEmail] = useState('');
+  const [autorizaTutor, setAutorizaTutor] = useState(false);
+  const edadNumero = edad === '' ? null : Number(edad);
+  const esMenorDeclarado = edadNumero != null && edadNumero < 18;
+  // Si la cuenta tiene verificación en dos pasos, el login devuelve esta constancia y falta el código de la app.
+  const [token2fa, setToken2fa] = useState(null);
+  const [recuperandoPassword, setRecuperandoPassword] = useState(false);
+  // Si se llegó por un enlace de invitación (`/#invitacion=CÓDIGO`): a qué se invita, o `{ valido: false }` si el enlace ya no sirve.
+  const [invitacion, setInvitacion] = useState(null);
+  // Si se llegó por el enlace o el código QR de un curso (`/#curso=CÓDIGO`): el código queda guardado hasta que el alumno tenga sesión.
+  const [hayCursoPendiente, setHayCursoPendiente] = useState(() => cursoPendiente() != null);
+  // Lo mismo con el enlace de una partida (`/#sala=CÓDIGO`) o de una amistad (`/#amigo=CÓDIGO`): `{ tipo, codigo }` o `null`.
+  const [enlaceDeJuego, setEnlaceDeJuego] = useState(() => enlaceDeJuegoPendiente());
+  useEffect(() => {
+    const leerCurso = () => {
+      if (capturarCursoDelEnlace() || capturarEnlaceDeJuego()) {
+        setModo('registro');
+        setRolEsperado('jugador');
+      }
+      setHayCursoPendiente(cursoPendiente() != null);
+      setEnlaceDeJuego(enlaceDeJuegoPendiente());
+    };
+    leerCurso();
+    window.addEventListener('hashchange', leerCurso);
+    return () => window.removeEventListener('hashchange', leerCurso);
+  }, []);
+  useEffect(() => {
+    // Se lee al abrir la página y también si se pega el enlace en una pestaña que ya estaba en el ingreso (cambia solo el `#`).
+    const leerEnlace = () => {
+      const codigo = leerInvitacionDelEnlace();
+      if (!codigo) return;
+      borrarInvitacionDelEnlace(); // el código ya se leyó: no queda a la vista ni en el historial
+      setModo('registro');
+      setRolEsperado('facilitador');
+      setClaveFacilitador(codigo.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 8));
+      verificarCodigoFacilitador(codigo)
+        .then((respuesta) => setInvitacion(respuesta))
+        .catch(() => setInvitacion(null)); // sin red: el campo del código igual lo verifica solo
+    };
+    leerEnlace();
+    window.addEventListener('hashchange', leerEnlace);
+    return () => window.removeEventListener('hashchange', leerEnlace);
+  }, []);
   // Las credenciales de prueba van abiertas solo en pantallas anchas y altas; en el resto quedan
   // plegadas para que la tarjeta entre completa sin desplazarse.
   const pantallaAncha = typeof window !== 'undefined' && window.matchMedia('(min-width: 640px) and (min-height: 900px)').matches;
@@ -184,6 +245,13 @@ export default function Login({ onLoginSuccess }) {
     try {
       let data;
       if (modo === 'registro') {
+        if (!email.includes('@')) throw new Error('Escribí un correo válido, por ejemplo tu.correo@gmail.com.');
+        if (rolEsperado === 'jugador' && (edadNumero == null || !Number.isInteger(edadNumero) || edadNumero < 3 || edadNumero > 120)) {
+          throw new Error('Escribí tu edad (entre 3 y 120 años).');
+        }
+        if (rolEsperado === 'jugador' && esMenorDeclarado && autorizaTutor && (tutorNombre.trim().length < 2 || tutorTelefono.replace(/\D/g, '').length < 7)) {
+          throw new Error('Para declarar la autorización escribí el nombre y el teléfono de tu madre, padre o tutor.');
+        }
         setMensajeEstado('Registrando nuevo operador en el nodo...');
         setProgresoTrack(45);
         data = await registroApi(
@@ -191,20 +259,43 @@ export default function Login({ onLoginSuccess }) {
           nombre.trim() || email.split('@')[0],
           password,
           rolEsperado,
-          rolEsperado === 'facilitador' ? claveFacilitador : null
+          rolEsperado === 'facilitador' ? claveFacilitador : null,
+          rolEsperado === 'jugador'
+            ? {
+                edad: edadNumero,
+                tutorNombre: esMenorDeclarado ? tutorNombre.trim() : '',
+                tutorTelefono: esMenorDeclarado ? tutorTelefono.trim() : '',
+                tutorEmail: esMenorDeclarado ? tutorEmail.trim() : '',
+                autorizacionTutor: esMenorDeclarado && autorizaTutor,
+              }
+            : {},
         );
       } else {
         setMensajeEstado('Verificando tus datos...');
         setProgresoTrack(50);
-        data = await loginApi(email.trim(), password, rolEsperado);
+        // Las cuentas que crea el docente entran con un usuario corto, sin correo: se completa el dominio reservado.
+        data = await loginApi(correoDeIngreso(email), password, rolEsperado);
       }
 
+      if (data?.requiere_2fa) {
+        setToken2fa(data.token_2fa);
+        setCargando(false);
+        setProgresoTrack(0);
+        return;
+      }
       ejecutarSecuenciaExito(data);
     } catch (err) {
       if (!pedirCodigoSiHaceFalta(err)) setError(err.message || 'Error al procesar la autenticación');
       setCargando(false);
       setProgresoTrack(0);
     }
+  };
+
+  // El código de la app llegó bien: sigue la misma secuencia que un login sin doble factor.
+  const completarSegundoPaso = (data) => {
+    setToken2fa(null);
+    setCargando(true);
+    ejecutarSecuenciaExito(data);
   };
 
   // Rellenar credenciales de prueba
@@ -218,6 +309,13 @@ export default function Login({ onLoginSuccess }) {
 
   return (
     <div className="min-h-screen bg-[#0c0e14] text-slate-200 font-sans antialiased flex flex-col justify-between relative overflow-x-hidden select-none">
+      {token2fa && <PasoDobleFactor token={token2fa} alCompletar={completarSegundoPaso} alCancelar={() => setToken2fa(null)} />}
+      {recuperandoPassword && <RecuperarPassword correoInicial={email} alCerrar={() => setRecuperandoPassword(false)} alCompletar={(correo) => {
+        setRecuperandoPassword(false);
+        setEmail(correo);
+        setPassword('');
+        setNotificacion('Cambiaste tu contraseña. Iniciá sesión con la nueva clave. Las sesiones anteriores se cerraron.');
+      }} />}
       {/* ESTILOS DEEP-TECH EMBEBIDOS */}
       <style>{`
         .bg-tech-grid {
@@ -362,11 +460,12 @@ export default function Login({ onLoginSuccess }) {
                 {/* Jugador */}
                 <button
                   type="button"
+                  disabled={invitacion?.valido === true}
                   onClick={() => {
                     setRolEsperado('jugador');
                     setError(null);
                   }}
-                  className={`relative flex items-center justify-center py-2.5 px-3 rounded-lg text-xs font-semibold tracking-wide transition-all duration-200 ${
+                  className={`relative flex items-center justify-center py-2.5 px-3 rounded-lg text-xs font-semibold tracking-wide transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed ${
                     rolEsperado === 'jugador'
                       ? 'bg-[#00e5ff] text-black shadow-[0_0_16px_rgba(0,229,255,0.45)]'
                       : 'text-slate-400 hover:text-white hover:bg-white/5'
@@ -398,6 +497,53 @@ export default function Login({ onLoginSuccess }) {
                 </button>
               </div>
             </div>
+
+            {/* CURSO: llegaste por el enlace o el QR de un curso */}
+            {hayCursoPendiente && (
+              <div role="status" className="mb-4 p-3 rounded-xl border bg-cyan-950/40 border-[#00e5ff]/40 text-slate-200 text-xs leading-snug flex items-start gap-2">
+                <span className="material-symbols-outlined text-[18px] shrink-0 text-[#00e5ff]" aria-hidden="true">groups</span>
+                <span>Te invitaron a un <strong>curso de ajedrez</strong>. Creá tu cuenta de jugador o iniciá sesión y entrás al curso directamente.</span>
+              </div>
+            )}
+
+            {/* PARTIDA O AMISTAD: llegaste por el enlace de un amigo */}
+            {enlaceDeJuego && (
+              <div role="status" className="mb-4 p-3 rounded-xl border bg-cyan-950/40 border-[#00e5ff]/40 text-slate-200 text-xs leading-snug flex items-start gap-2">
+                <span className="material-symbols-outlined text-[18px] shrink-0 text-[#00e5ff]" aria-hidden="true">swords</span>
+                <span>
+                  {enlaceDeJuego.tipo === 'sala'
+                    ? <>Te invitaron a <strong>jugar una partida de ajedrez</strong>. Creá tu cuenta de jugador o iniciá sesión y entrás directo a la partida.</>
+                    : <>Un amigo te invitó a <strong>jugar al ajedrez</strong>. Creá tu cuenta de jugador o iniciá sesión y le mandamos tu solicitud de amistad.</>}
+                </span>
+              </div>
+            )}
+
+            {/* INVITACIÓN: a qué te invitaron (llegaste por un enlace) */}
+            {invitacion && (
+              <div
+                role="status"
+                className={`mb-4 p-3 rounded-xl border text-xs leading-snug flex items-start gap-2 ${
+                  invitacion.valido ? 'bg-cyan-950/40 border-[#00e5ff]/40 text-slate-200' : 'bg-rose-950/60 border-rose-500/40 text-rose-300'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[18px] shrink-0 text-[#00e5ff]" aria-hidden="true">
+                  {invitacion.valido ? 'mark_email_read' : 'link_off'}
+                </span>
+                <span>
+                  {!invitacion.valido ? (
+                    'Este enlace de invitación ya se usó o venció. Pedí uno nuevo.'
+                  ) : invitacion.es_evaluacion ? (
+                    <>Te invitaron a <strong>evaluar ChessIA</strong> como director de «{invitacion.institucion_nombre}». Creá tu cuenta y vas a poder ver el sistema como director y como jugador.</>
+                  ) : invitacion.como_administrador ? (
+                    <>Te invitaron a ser el <strong>administrador</strong> de «{invitacion.institucion_nombre}». Creá tu cuenta para empezar.</>
+                  ) : invitacion.institucion_nombre ? (
+                    <>Te invitaron a sumarte como <strong>docente</strong> de «{invitacion.institucion_nombre}». Creá tu cuenta para empezar.</>
+                  ) : (
+                    <>Te invitaron a ChessIA como facilitador. Creá tu cuenta para empezar.</>
+                  )}
+                </span>
+              </div>
+            )}
 
             {/* NOTIFICACIÓN O ERROR */}
             {error && (
@@ -495,19 +641,25 @@ export default function Login({ onLoginSuccess }) {
 
               {/* Correo electrónico */}
               <div>
-                <label className="block text-[11px] font-mono tracking-wide text-slate-300 mb-1">
-                  CORREO ELECTRÓNICO
+                <label htmlFor="campoCorreo" className="block text-[11px] font-mono tracking-wide text-slate-300 mb-1">
+                  {modo === 'login' ? 'CORREO O USUARIO' : 'CORREO ELECTRÓNICO'}
                 </label>
                 <div className="relative rounded-lg shadow-sm">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
                     <span className="material-symbols-outlined text-[18px]">person</span>
                   </div>
                   <input
-                    type="email"
+                    id="campoCorreo"
+                    type={modo === 'login' ? 'text' : 'email'}
+                    inputMode="email"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    autoComplete="username"
+                    spellCheck={false}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    placeholder="tu.correo@gmail.com"
+                    placeholder={modo === 'login' ? 'tu.correo@gmail.com o tu usuario' : 'tu.correo@gmail.com'}
                     className="block w-full pl-9 pr-3 py-2 bg-[#0a0d14] border border-white/10 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#00e5ff] focus:border-[#00e5ff] font-mono transition duration-150"
                   />
                 </div>
@@ -522,7 +674,7 @@ export default function Login({ onLoginSuccess }) {
                   {modo === 'login' && (
                     <button
                       type="button"
-                      onClick={() => setNotificacion('Para restablecer tu contraseña, pedíselo a tu facilitador o entrá con "Continuar con Google" si tu cuenta usa Gmail.')}
+                      onClick={() => setRecuperandoPassword(true)}
                       className="text-[11px] text-[#00e5ff]/80 hover:text-[#00e5ff] transition"
                     >
                       ¿Olvidaste tu contraseña?
@@ -559,6 +711,91 @@ export default function Login({ onLoginSuccess }) {
                   <p className="mt-1 mb-0 text-[10px] leading-snug text-slate-500">Mínimo 8 caracteres, con letras y números.</p>
                 )}
               </div>
+
+              {/* Edad y, si es menor, el contacto de su madre, padre o tutor (solo jugadores al crear la cuenta) */}
+              {modo === 'registro' && rolEsperado === 'jugador' && (
+                <div className="space-y-2.5">
+                  <div>
+                    <label htmlFor="campoEdad" className="block text-[11px] font-mono tracking-wide text-slate-300 mb-1">
+                      TU EDAD
+                    </label>
+                    <input
+                      id="campoEdad"
+                      type="number"
+                      inputMode="numeric"
+                      min={3}
+                      max={120}
+                      value={edad}
+                      onChange={(e) => setEdad(e.target.value)}
+                      required
+                      placeholder="Ej. 12"
+                      className="block w-full px-3 py-2 bg-[#0a0d14] border border-white/10 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#00e5ff] focus:border-[#00e5ff] font-mono transition duration-150"
+                    />
+                    <p className="mt-1 mb-0 text-[10px] leading-snug text-slate-500">
+                      Con ella cuidamos tu cuenta: si sos menor de 18 años, jugás con otras personas cuando tu familia o tu colegio lo autorizan.
+                    </p>
+                  </div>
+                  {esMenorDeclarado && (
+                    <div className="p-2.5 rounded-lg bg-cyan-950/30 border border-[#00e5ff]/30 space-y-2">
+                      <p className="m-0 text-[11px] leading-snug text-slate-300">
+                        <span className="font-mono text-[#00e5ff]">SOS MENOR DE EDAD.</span> Podés jugar contra Turing y Stockfish desde ya. Para jugar con compañeros y
+                        amigos hace falta la autorización de tu madre, padre o tutor{' '}
+                        <span className="text-slate-400">(si tu docente o tu colegio ya la tiene, no necesitás cargarla acá)</span>.
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                          <label htmlFor="campoTutorNombre" className="block text-[10px] font-mono tracking-wide text-slate-400 mb-1">
+                            NOMBRE DE TU MADRE, PADRE O TUTOR
+                          </label>
+                          <input
+                            id="campoTutorNombre"
+                            type="text"
+                            autoComplete="off"
+                            maxLength={100}
+                            value={tutorNombre}
+                            onChange={(e) => setTutorNombre(e.target.value)}
+                            className="block w-full px-3 py-2 bg-[#0a0d14] border border-white/10 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#00e5ff] focus:border-[#00e5ff] transition duration-150"
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="campoTutorTelefono" className="block text-[10px] font-mono tracking-wide text-slate-400 mb-1">
+                            SU TELÉFONO (WHATSAPP)
+                          </label>
+                          <input
+                            id="campoTutorTelefono"
+                            type="tel"
+                            inputMode="tel"
+                            autoComplete="off"
+                            maxLength={30}
+                            value={tutorTelefono}
+                            onChange={(e) => setTutorTelefono(e.target.value)}
+                            placeholder="Ej. 7xxxxxxx"
+                            className="block w-full px-3 py-2 bg-[#0a0d14] border border-white/10 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#00e5ff] focus:border-[#00e5ff] font-mono transition duration-150"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label htmlFor="campoTutorEmail" className="block text-[10px] font-mono tracking-wide text-slate-400 mb-1">SU CORREO (OPCIONAL)</label>
+                        <input id="campoTutorEmail" type="email" autoComplete="off" maxLength={254} value={tutorEmail} onChange={(e) => setTutorEmail(e.target.value)}
+                          className="block w-full px-3 py-2 bg-[#0a0d14] border border-white/10 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#00e5ff] focus:border-[#00e5ff] transition duration-150" />
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <input
+                          id="autorizaTutor"
+                          type="checkbox"
+                          checked={autorizaTutor}
+                          onChange={(e) => setAutorizaTutor(e.target.checked)}
+                          className="mt-0.5 h-4 w-4 shrink-0 text-[#00e5ff] focus:ring-[#00e5ff] bg-[#090d15] border-white/20 rounded cursor-pointer"
+                        />
+                        <label htmlFor="autorizaTutor" className="block text-[11px] leading-snug text-slate-300 cursor-pointer">
+                          Mi madre, padre o tutor sabe que uso la plataforma y me autorizó a jugar con otras personas. Su docente o la plataforma podrán
+                          contactarlo si hace falta.
+                        </label>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Clave de Seguridad de Facilitador (cuando aplica) */}
               {rolEsperado === 'facilitador' && (modo === 'registro' || codigoRequerido) && (

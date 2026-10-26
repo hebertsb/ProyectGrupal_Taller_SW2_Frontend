@@ -13,7 +13,8 @@ export default function ModalBajaCuenta({ usuario, alCerrar, alEliminar }) {
   const [mostrar, setMostrar] = useState(false);
   const [eliminando, setEliminando] = useState(false);
   const [error, setError] = useState(null);
-  const conPassword = usuario?.tiene_password !== false;
+  // Con Google no se pide contraseña de ChessIA: se confirma escribiendo el correo.
+  const conPassword = usuario?.tiene_password !== false && !usuario?.google_id;
   const esFacilitador = usuario?.rol === 'facilitador';
 
   useModalAccesible(dialogoRef, { alCerrar: eliminando ? null : alCerrar, focoInicialRef: campoRef });

@@ -13,9 +13,18 @@ const ACCIONES = {
   'institucion.docente_quitar': { texto: 'Quitó un docente de una institución', icono: 'person_off' },
   'codigo.generar': { texto: 'Generó un código de invitación', icono: 'key' },
   'codigo.anular': { texto: 'Anuló un código de invitación', icono: 'key_off' },
+  'pago.avisar': { texto: 'Una institución avisó un pago', icono: 'request_quote' },
+  'pago.confirmar': { texto: 'Confirmó un pago', icono: 'paid' },
+  'pago.rechazar': { texto: 'Rechazó un pago', icono: 'money_off' },
+  'suscripcion.extender_prueba': { texto: 'Alargó la prueba gratis de una institución', icono: 'more_time' },
+  'demostracion.cargar': { texto: 'Cargó datos de demostración', icono: 'science' },
+  'demostracion.quitar': { texto: 'Quitó los datos de demostración', icono: 'delete_sweep' },
+  'doble_factor.activar': { texto: 'Activó la verificación en dos pasos', icono: 'phonelink_lock' },
+  'doble_factor.desactivar': { texto: 'Desactivó la verificación en dos pasos', icono: 'phonelink_erase' },
+  'doble_factor.reiniciar': { texto: 'Reinició la verificación en dos pasos de una cuenta', icono: 'lock_reset' },
 };
 
-const OBJETIVOS = { usuario: 'la cuenta', institucion: 'la institución', codigo_invitacion: 'el código' };
+const OBJETIVOS = { usuario: 'la cuenta', institucion: 'la institución', codigo_invitacion: 'el código', pago: 'el pago' };
 
 function textoDeAccion(accion) {
   return ACCIONES[accion]?.texto ?? accion;

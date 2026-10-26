@@ -6,8 +6,8 @@
  * se actualiza acá y se sube `VERSION`.
  */
 
-const VERSION = '1 (piloto)';
-const FECHA = '25 de octubre de 2026';
+const VERSION = '2 (piloto)';
+const FECHA = '26 de octubre de 2026';
 // Correo de contacto para pedidos de datos o de baja. Vacío = el texto manda a pedirlo al docente o a la plataforma.
 const CORREO_CONTACTO = '';
 
@@ -24,11 +24,12 @@ const SECCIONES = [
     id: 'datos',
     titulo: '2. Qué datos guardamos',
     items: [
-      'Tu cuenta: correo, nombre y contraseña (la contraseña se guarda cifrada, nadie puede leerla). Si entrás con Google, guardamos el identificador de tu cuenta de Google y su foto de perfil.',
-      'Tu perfil, si lo completás: edad, descripción y foto.',
+      'Tu cuenta: correo o usuario asignado por el docente, nombre y una huella de tu contraseña. Si entrás con Google, guardamos el identificador de tu cuenta de Google y su foto de perfil.',
+      'Tu perfil: edad declarada, descripción y foto. Si se cargan, el nombre, el teléfono y el correo de tu madre, padre o tutor, y la fecha de la declaración de autorización familiar.',
+      'Tu aula: avisos del docente, tareas y su avance, inscripciones a torneos, sus partidas y resultados. También tus amistades, bloqueos y las denuncias que hagas o recibas.',
       'Tu juego: las partidas con todas sus jugadas, tu nivel estimado y su historial, y tus medallas.',
       'Tus conversaciones con Turing, el tutor.',
-      'Tu lugar en la enseñanza: el curso en el que estás y la institución de tu docente.',
+      'Tu lugar en la enseñanza: el curso en el que estás y la institución de tu docente. Para las instituciones, además, su suscripción y los pagos que avisan (monto, fecha y el dato que escriban para identificarlos).',
       'Un registro de las acciones de los administradores (por ejemplo, quién eliminó una cuenta). Solo guarda números de cuenta, no tu correo ni tu nombre, y se conserva un año.',
       'Imágenes del tablero, cuando se juega con el tablero físico y la cámara. La cámara apunta al tablero y sirve para reconocer las piezas; la plataforma puede guardar algunas imágenes para mejorar ese reconocimiento.',
     ],
@@ -48,10 +49,10 @@ const SECCIONES = [
     titulo: '4. Quién puede ver tus datos',
     items: [
       'Vos, siempre, en tu perfil y en tus partidas.',
-      'Tu docente: el progreso y las partidas de los alumnos de sus cursos.',
+      'Tu docente: el progreso, las partidas, las tareas y el contacto de la familia de los alumnos de sus cursos. El docente responsable puede revisar denuncias relacionadas con sus alumnos.',
       'El administrador de tu institución: la lista de alumnos de sus docentes, con su curso y su nivel.',
       'Los administradores de la plataforma, para mantener el sistema, dar soporte y atender pedidos de baja.',
-      'Otros jugadores: solo ven tu nombre abreviado (por ejemplo, «Ana P.») y tu nivel en el ranking de tu curso.',
+      'Otros jugadores: ven tu nombre abreviado (por ejemplo, «Ana P.»), nivel, disponibilidad para jugar y resultados del torneo que comparten. No ven los contactos de tu familia ni tu edad.',
     ],
   },
   {
@@ -59,7 +60,8 @@ const SECCIONES = [
     titulo: '5. Servicios de terceros',
     items: [
       'Google, si elegís entrar con tu cuenta de Google. Aplican sus propias políticas.',
-      'Tu proveedor de correo, solo si el servidor tiene activada la verificación: se usa para mandarte el código de 6 dígitos al correo con el que te registraste.',
+      'El servicio de correo configurado en el servidor: envía códigos de verificación y recuperación de contraseña a las cuentas personales.',
+      'WhatsApp o la aplicación de correo que abra tu docente cuando decide contactar a tu familia o compartir el resumen de progreso. Se abre un borrador; el docente revisa el destinatario y decide si enviarlo.',
       'Groq, el servicio que genera las respuestas de Turing. Tu mensaje y, si preguntás por tu última partida, un resumen de ella se envían a ese servicio para armar la respuesta. No escribas en el chat datos personales como tu dirección o tu teléfono.',
     ],
     parrafos: [
@@ -70,8 +72,9 @@ const SECCIONES = [
     id: 'menores',
     titulo: '6. Menores de edad',
     parrafos: [
-      'Si tenés menos de 18 años, para usar ChessIA necesitás la autorización de tu madre, padre o tutor, o entrar a través de un colegio o academia que cuente con esa autorización. Quien registra una cuenta de un menor se hace responsable de tenerla.',
-      'Hoy el sistema no verifica la edad automáticamente, y no pedimos más datos de los necesarios. Tu madre, padre o tutor puede pedir ver, corregir o eliminar los datos de su hijo o hija, a través de la institución o de la plataforma.',
+      'La web pide la edad declarada al registrar jugadores. Si sos menor de 18 años o todavía no cargaste tu edad, podés practicar de forma individual. Para jugar con otras personas hace falta la declaración de autorización familiar, con nombre y teléfono del responsable, o que el docente declare que su curso ya tiene los permisos de las familias. Estas declaraciones se guardan con su fecha; no comprobamos documentos de identidad ni verificamos que quien completa el formulario sea el tutor.',
+      'En colegios, academias y asociaciones, el docente puede crear cuentas de alumnos sin correo personal y declarar los permisos de su curso. La institución puede exigir un correo de su dominio cuya propiedad se comprueba con Google o un código. Tener ese correo no sustituye la autorización de las familias.',
+      'El contacto familiar es opcional cuando el curso ya tiene autorización. Se usa para acompañar el aprendizaje y comunicarse ante una dificultad. Podés corregir o borrar esos datos y retirar la declaración familiar desde tu perfil. Tu familia también puede pedir ayuda, corrección o baja a la institución o a la plataforma.',
     ],
   },
   {
@@ -94,7 +97,7 @@ const SECCIONES = [
     id: 'seguridad',
     titulo: '9. Seguridad',
     parrafos: [
-      'Las contraseñas se guardan cifradas, la conexión va cifrada (HTTPS), se limitan los intentos fallidos de ingreso y cada perfil (jugador, docente, administrador de institución, plataforma) solo accede a lo que le corresponde. Ningún sistema es perfecto: si encontrás un problema de seguridad, avisanos.',
+      'Las contraseñas se guardan cifradas, la conexión va cifrada (HTTPS), se limitan los intentos fallidos de ingreso, los docentes y administradores pueden activar una verificación en dos pasos con una app de códigos, y cada perfil (jugador, docente, administrador de institución, plataforma) solo accede a lo que le corresponde. Ningún sistema es perfecto: si encontrás un problema de seguridad, avisanos.',
     ],
   },
   {
@@ -102,6 +105,7 @@ const SECCIONES = [
     titulo: '10. Reglas de uso',
     items: [
       'Tratá con respeto a los demás y no compartas tu cuenta.',
+      'Podés bloquear a otro jugador o denunciar un problema desde Jugar con otros o desde la partida. Los bloqueos no se notifican a la otra persona; las denuncias quedan disponibles para revisión del docente responsable o de la plataforma.',
       'No intentes dañar el sistema ni acceder a datos que no son tuyos.',
       'Turing explica ajedrez y puede equivocarse: es una ayuda para aprender, no un consejo profesional.',
       'Si jugás con el brazo robótico, seguí las indicaciones de tu docente y no toques el brazo ni el tablero mientras se mueve.',

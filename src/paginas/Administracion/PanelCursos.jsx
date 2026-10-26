@@ -14,7 +14,9 @@ import {
 import AvatarUsuario from '../../componentes/AvatarUsuario';
 import InsigniaTonoCurso from '../../componentes/InsigniaTonoCurso';
 import { buscarTono, PRESETS_TONO, TONO_HEREDADO, tonoPropioDeCurso } from '../../tonoTuring';
+import ModalQrCurso from './ModalQrCurso';
 import ReporteCurso from './ReporteCurso';
+import PanelAulaCurso from './aula/PanelAulaCurso';
 
 const NOMBRE_MIN = 2;
 const NOMBRE_MAX = 80;
@@ -330,6 +332,7 @@ function TarjetaCurso({
   mostrarDueno = false,
   miId = null,
   facilitadores = null,
+  alMirarPartida = null,
 }) {
   const [renombrando, setRenombrando] = useState(false);
   const [nombreEdicion, setNombreEdicion] = useState(curso.nombre);
@@ -350,9 +353,12 @@ function TarjetaCurso({
   // datos del curso, no cierre ni pise la lista de estudiantes ni el reporte que el facilitador tiene abiertos.
   const [verEstudiantes, setVerEstudiantes] = useState(false);
   const [verReporte, setVerReporte] = useState(false);
+  const [verAula, setVerAula] = useState(false);
+  const [verQr, setVerQr] = useState(false);
   const temporizadorCopiado = useRef(null);
   const idEstudiantes = `estudiantes-curso-${curso.id}`;
   const idReporte = `reporte-curso-${curso.id}`;
+  const idAula = `aula-curso-${curso.id}`;
 
   useEffect(() => () => clearTimeout(temporizadorCopiado.current), []);
 
@@ -534,7 +540,7 @@ function TarjetaCurso({
     Boolean(facilitadores) && !facilitadores.error && facilitadores.lista !== null && destinos.length > 0;
 
   return (
-    <li className="flex flex-col gap-space-sm p-space-md rounded-xl bg-surface-container min-w-0">
+    <li className={`flex flex-col gap-space-sm p-space-md rounded-xl bg-surface-container min-w-0 ${verAula ? 'lg:col-span-2' : ''}`}>
       {/* Nombre */}
       {renombrando ? (
         <form onSubmit={guardarNombre} className="flex flex-col sm:flex-row sm:items-end gap-space-xs">
@@ -619,6 +625,12 @@ function TarjetaCurso({
             </span>
             {copiado ? 'Copiado' : 'Copiar'}
           </button>
+          <button type="button" onClick={() => setVerQr(true)} aria-label={`Mostrar el código QR del curso ${curso.nombre}`} className={BOTON_NEUTRO}>
+            <span className="material-symbols-outlined text-[16px] text-primary" aria-hidden="true">
+              qr_code_2
+            </span>
+            QR
+          </button>
         </div>
         {!abierto && (
           <p className="m-0 font-mono-micro text-mono-micro text-error">
@@ -693,6 +705,26 @@ function TarjetaCurso({
             Reporte
             <span className="material-symbols-outlined text-[16px]" aria-hidden="true">
               {verReporte ? 'expand_less' : 'expand_more'}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setVerAula((v) => !v)}
+            aria-expanded={verAula}
+            aria-controls={idAula}
+            className={BOTON_NEUTRO}
+          >
+            <span className="material-symbols-outlined text-[16px] text-primary" aria-hidden="true">
+              school
+            </span>
+            Aula
+            {curso.permite_retos === false && (
+              <span className="font-mono-micro text-mono-micro uppercase px-space-xs rounded-full bg-tertiary-container text-tertiary" title="Modo clase activado">
+                Modo clase
+              </span>
+            )}
+            <span className="material-symbols-outlined text-[16px]" aria-hidden="true">
+              {verAula ? 'expand_less' : 'expand_more'}
             </span>
           </button>
         </div>
@@ -934,11 +966,19 @@ function TarjetaCurso({
         </div>
       )}
 
+      {verAula && (
+        <div id={idAula} className="min-w-0">
+          <PanelAulaCurso curso={curso} alCambiarCurso={alCambiar} alMirarPartida={alMirarPartida} />
+        </div>
+      )}
+
       {verReporte && (
         <div id={idReporte} className="min-w-0">
           <ReporteCurso cursoId={curso.id} />
         </div>
       )}
+
+      {verQr && <ModalQrCurso curso={curso} alCerrar={() => setVerQr(false)} />}
     </li>
   );
 }
@@ -951,7 +991,7 @@ function TarjetaCurso({
  * Si el usuario es facilitador principal (`es_principal`) suma: ver los cursos de todos los facilitadores,
  * crear un curso a nombre de otro y asignar un curso a otro facilitador. Para los demás no cambia nada.
  */
-export default function PanelCursos({ usuarioActual = null, abiertoAlInicio = false }) {
+export default function PanelCursos({ usuarioActual = null, abiertoAlInicio = false, alMirarPartida = null }) {
   const [abierto, setAbierto] = useState(abiertoAlInicio);
   const [cursos, setCursos] = useState(null); // null = todavía no se cargó
   const [cargando, setCargando] = useState(false);
@@ -1384,6 +1424,7 @@ export default function PanelCursos({ usuarioActual = null, abiertoAlInicio = fa
                     mostrarDueno={pedirTodos}
                     miId={miId}
                     facilitadores={esPrincipal ? facilitadores : null}
+                    alMirarPartida={alMirarPartida}
                   />
                 ))}
               </ul>
