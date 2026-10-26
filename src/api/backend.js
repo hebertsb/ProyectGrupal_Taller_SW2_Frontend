@@ -339,20 +339,38 @@ export function obtenerEstadoCalibracion(camara = "principal") {
   return solicitar(`/vision/calibracion/estado?camara=${camara}`, { method: "GET" });
 }
 
-function formularioDeCalibracion(esquinas, foto, camara = "principal") {
+function formularioDeCalibracion(esquinas, foto, camara = "principal", perfil = null) {
   const formulario = new FormData();
   formulario.append("camara", camara);
   formulario.append("esquinas", JSON.stringify(esquinas));
   formulario.append("foto", foto, "foto.jpg");
+  if (perfil) formulario.append("perfil", perfil);
   return formulario;
 }
 
 /**
  * Guarda la calibración con la foto sobre la que se marcaron las esquinas (de ahí salen la resolución y la referencia para
- * detectar que la cámara se movió). Devuelve el estado, con `advertencias` si algo se ve dudoso; 422 = esquinas inválidas.
+ * detectar que la cámara se movió). Con `perfil` (un tablero nuevo o ya armado) se guarda aparte, sin pisar los demás
+ * tableros de `camara`, y pasa a ser el activo; sin `perfil`, se guarda el que esté activo ahora. Devuelve el estado, con
+ * `advertencias` si algo se ve dudoso; 422 = esquinas inválidas.
  */
-export function guardarCalibracionConFoto(esquinas, foto, camara = "principal") {
-  return solicitarFormulario("/vision/calibracion/guardar", formularioDeCalibracion(esquinas, foto, camara));
+export function guardarCalibracionConFoto(esquinas, foto, camara = "principal", perfil = null) {
+  return solicitarFormulario("/vision/calibracion/guardar", formularioDeCalibracion(esquinas, foto, camara, perfil));
+}
+
+/** Los tableros físicos calibrados (o calibrables) de `camara`: `[{nombre, activo, calibrada, fecha}]`, el activo primero. */
+export function obtenerPerfilesTablero(camara = "principal") {
+  return solicitar(`/vision/calibracion/perfiles?camara=${camara}`, { method: "GET" }).then((r) => r.perfiles);
+}
+
+/** Cambia, sin recalibrar, qué tablero calibrado usa `camara` desde ahora. 404 si `perfil` nunca se calibró. */
+export function activarPerfilTablero(perfil, camara = "principal") {
+  return solicitar(`/vision/calibracion/perfiles/activar?camara=${camara}&perfil=${encodeURIComponent(perfil)}`, { method: "POST" });
+}
+
+/** Borra un tablero calibrado de `camara` (no el por defecto: para ese está `quitarCalibracionCamara`). */
+export function borrarPerfilTablero(perfil, camara = "principal") {
+  return solicitar(`/vision/calibracion/perfiles/${encodeURIComponent(perfil)}?camara=${camara}`, { method: "DELETE" }).then((r) => r.perfiles);
 }
 
 /**

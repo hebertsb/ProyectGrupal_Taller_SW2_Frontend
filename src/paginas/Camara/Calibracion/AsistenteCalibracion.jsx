@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { CLASE_AVISO, CLASE_BOTON, CLASE_BOTON_PRIMARIO } from '../estilos';
 import CapaEsquinas from './CapaEsquinas';
 import GuiaAlineacion from './GuiaAlineacion';
@@ -5,6 +6,40 @@ import { ESQUINAS_ORDEN, GUIA_ESQUINAS } from './esquinas';
 import useAsistenteCalibracion from './useAsistenteCalibracion';
 
 export { EVENTO_CALIBRACION_CAMBIO } from './useAsistenteCalibracion';
+
+const CLASE_CAMPO =
+  'min-w-0 flex-1 px-space-xs py-space-2xs rounded-lg bg-surface-container border border-outline-variant text-body-sm font-body-sm text-on-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary';
+
+/** Los tableros calibrados de la cámara: cuál está activo, activar otro sin recalibrar, o borrar uno que ya no se usa. */
+function SelectorDeTableros({ perfiles, ocupado, onActivar, onBorrar }) {
+  if (perfiles.length < 2) return null;
+  return (
+    <div className="flex flex-col gap-space-2xs">
+      <h5 className="font-mono-micro text-mono-micro uppercase text-on-surface-variant">Tableros calibrados de esta cámara</h5>
+      <ul className="flex flex-col gap-space-2xs list-none p-0 m-0">
+        {perfiles.map((perfil) => (
+          <li key={perfil.nombre} className="flex flex-wrap items-center gap-space-xs">
+            <span className={`font-body-sm text-body-sm ${perfil.activo ? 'text-primary font-medium' : 'text-on-surface'}`}>
+              {perfil.nombre === 'default' ? 'Tablero original' : perfil.nombre}
+              {perfil.activo && ' · activo'}
+              {!perfil.calibrada && ' · sin calibrar'}
+            </span>
+            {!perfil.activo && perfil.calibrada && (
+              <button type="button" className={CLASE_BOTON} onClick={() => onActivar(perfil.nombre)} disabled={ocupado}>
+                Activar
+              </button>
+            )}
+            {perfil.nombre !== 'default' && (
+              <button type="button" className={CLASE_BOTON} onClick={() => onBorrar(perfil.nombre)} disabled={ocupado}>
+                Borrar
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 const PASOS = ['Congelar foto', 'Marcar esquinas', 'Revisar la grilla', 'Guardar'];
 
@@ -23,9 +58,11 @@ function textoFecha(iso) {
  */
 export default function AsistenteCalibracion({ camara = 'principal', onEnCursoChange }) {
   const {
-    estado, paso, foto, puntos, setPuntos, vistaUrl, resultado, comprobacion, ocupado, error,
-    entradaImportarRef, ir, cerrar, congelar, previsualizar, guardar, exportar, importar, quitar, comprobar,
+    estado, perfiles, perfilObjetivo, paso, foto, puntos, setPuntos, vistaUrl, resultado, comprobacion, ocupado, error,
+    entradaImportarRef, ir, cerrar, congelar, calibrarTableroNuevo, previsualizar, guardar, exportar, importar, quitar, comprobar,
+    activarPerfil, borrarPerfilDeCamara,
   } = useAsistenteCalibracion(camara, onEnCursoChange);
+  const [nombreTableroNuevo, setNombreTableroNuevo] = useState('');
 
   const etiquetaEstado =
     estado == null
@@ -45,6 +82,7 @@ export default function AsistenteCalibracion({ camara = 'principal', onEnCursoCh
       <div className="flex flex-wrap items-center justify-between gap-space-xs">
         <h4 id="titulo-calibracion" className="font-body-sm text-body-sm text-on-surface font-medium">
           Paso 1 · Calibración del tablero — cámara {camara}
+          {perfilObjetivo && ` (tablero nuevo: ${perfilObjetivo})`}
         </h4>
         <span className={`font-body-sm text-body-sm ${colorEstado}`} role="status">
           {etiquetaEstado}
@@ -63,6 +101,9 @@ export default function AsistenteCalibracion({ camara = 'principal', onEnCursoCh
 
       {paso === 0 && (
         <>
+          {estado?.perfil && estado.perfil !== 'default' && (
+            <p className="font-body-sm text-body-sm text-primary font-medium">Tablero activo: {estado.perfil}</p>
+          )}
           {estado?.calibrada && estado.vigente !== true && estado.motivo_no_vigente && (
             <p className="font-body-sm text-body-sm text-on-surface-variant">{estado.motivo_no_vigente}</p>
           )}
@@ -71,6 +112,7 @@ export default function AsistenteCalibracion({ camara = 'principal', onEnCursoCh
               Calibrada el {textoFecha(estado.fecha)} · {estado.resolucion?.join('×')} px · cámara «{estado.fuente}»
             </p>
           )}
+          <SelectorDeTableros perfiles={perfiles} ocupado={ocupado} onActivar={activarPerfil} onBorrar={borrarPerfilDeCamara} />
           <div className="flex flex-wrap gap-space-xs">
             <button type="button" className={CLASE_BOTON_PRIMARIO} onClick={() => ir(1)} disabled={ocupado}>
               Calibrar tablero
@@ -97,6 +139,31 @@ export default function AsistenteCalibracion({ camara = 'principal', onEnCursoCh
               Quitar calibración
             </button>
           </div>
+          <form
+            className="flex flex-wrap items-center gap-space-xs pt-space-2xs border-t border-outline-variant/50"
+            onSubmit={(evento) => {
+              evento.preventDefault();
+              calibrarTableroNuevo(nombreTableroNuevo);
+              setNombreTableroNuevo('');
+            }}
+          >
+            <label htmlFor={`tablero-nuevo-${camara}`} className="font-body-sm text-body-sm text-on-surface-variant">
+              ¿Cambiaste de tablero físico? Calibralo aparte, sin perder este:
+            </label>
+            <input
+              id={`tablero-nuevo-${camara}`}
+              type="text"
+              value={nombreTableroNuevo}
+              onChange={(evento) => setNombreTableroNuevo(evento.target.value)}
+              placeholder="Nombre del tablero (ej. mesa 2)"
+              maxLength={40}
+              className={CLASE_CAMPO}
+              disabled={ocupado}
+            />
+            <button type="submit" className={CLASE_BOTON} disabled={ocupado || !nombreTableroNuevo.trim()}>
+              Calibrar tablero nuevo
+            </button>
+          </form>
           {comprobacion && (
             <p
               className={`font-body-sm text-body-sm break-words ${comprobacion.movida === true ? 'text-error' : 'text-on-surface-variant'}`}

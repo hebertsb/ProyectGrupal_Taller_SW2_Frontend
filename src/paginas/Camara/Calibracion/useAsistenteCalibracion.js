@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  activarPerfilTablero,
+  borrarPerfilTablero,
   comprobarCalibracion,
   guardarCalibracionConFoto,
   obtenerEstadoCalibracion,
   obtenerFotoVision,
+  obtenerPerfilesTablero,
   previsualizarCalibracion,
   quitarCalibracionCamara,
 } from '../../../api/backend';
@@ -19,6 +22,10 @@ export const EVENTO_CALIBRACION_CAMBIO = 'calibracion-cambio';
  */
 export default function useAsistenteCalibracion(camara, onEnCursoChange) {
   const [estado, setEstado] = useState(null);
+  const [perfiles, setPerfiles] = useState([]); // [{nombre, activo, calibrada, fecha}], el activo primero
+  // Tablero que se está calibrando en el asistente: `null` mientras se recalibra el que ya está activo (de siempre); un
+  // nombre cuando se arrancó con "Calibrar un tablero nuevo" — ahí `guardar()` lo guarda aparte y lo deja activo.
+  const [perfilObjetivo, setPerfilObjetivo] = useState(null);
   const [paso, setPaso] = useState(0); // 0 = en reposo
   const [foto, setFoto] = useState(null); // { url, blob } de la foto congelada
   const [puntos, setPuntos] = useState([]);
@@ -43,18 +50,28 @@ export default function useAsistenteCalibracion(camara, onEnCursoChange) {
     }
   }, [camara]);
 
+  const cargarPerfiles = useCallback(async () => {
+    try {
+      const datos = await obtenerPerfilesTablero(camara);
+      if (montadoRef.current) setPerfiles(datos);
+    } catch {
+      if (montadoRef.current) setPerfiles([]);
+    }
+  }, [camara]);
+
   useEffect(() => {
     montadoRef.current = true;
     setEstado(null);
     setComprobacion(null);
     cargarEstado();
+    cargarPerfiles();
     const urls = urlsRef.current;
     return () => {
       montadoRef.current = false;
       if (urls.foto) URL.revokeObjectURL(urls.foto);
       if (urls.vista) URL.revokeObjectURL(urls.vista);
     };
-  }, [cargarEstado]);
+  }, [cargarEstado, cargarPerfiles]);
 
   function guardarFotoCongelada(nueva) {
     if (urlsRef.current.foto) URL.revokeObjectURL(urlsRef.current.foto);
@@ -79,8 +96,10 @@ export default function useAsistenteCalibracion(camara, onEnCursoChange) {
     setPuntos([]);
     setResultado(null);
     setError(null);
+    setPerfilObjetivo(null);
     ir(0);
     cargarEstado();
+    cargarPerfiles();
     window.dispatchEvent(new Event(EVENTO_CALIBRACION_CAMBIO));
     window.dispatchEvent(new Event(EVENTO_CAMARAS_CAMBIO));
   }
@@ -107,6 +126,14 @@ export default function useAsistenteCalibracion(camara, onEnCursoChange) {
     ir(2);
   }
 
+  /** Arranca el asistente para armar un tablero NUEVO (`nombre`), sin tocar la calibración del que esté activo ahora. */
+  async function calibrarTableroNuevo(nombre) {
+    const limpio = nombre.trim();
+    if (!limpio) return;
+    setPerfilObjetivo(limpio);
+    await congelar();
+  }
+
   async function previsualizar() {
     const url = await trabajar(() => previsualizarCalibracion(puntosAEsquinas(puntos), foto.blob, camara));
     if (!url) return;
@@ -115,12 +142,34 @@ export default function useAsistenteCalibracion(camara, onEnCursoChange) {
   }
 
   async function guardar() {
-    const guardado = await trabajar(() => guardarCalibracionConFoto(puntosAEsquinas(puntos), foto.blob, camara));
+    const guardado = await trabajar(() => guardarCalibracionConFoto(puntosAEsquinas(puntos), foto.blob, camara, perfilObjetivo));
     if (guardado) {
       setResultado(guardado);
+      cargarPerfiles();
       window.dispatchEvent(new Event(EVENTO_CALIBRACION_CAMBIO));
       window.dispatchEvent(new Event(EVENTO_CAMARAS_CAMBIO));
     }
+  }
+
+  /** Cambia, sin recalibrar, a la calibración ya guardada de `nombre`. */
+  async function activarPerfil(nombre) {
+    const nuevoEstado = await trabajar(() => activarPerfilTablero(nombre, camara));
+    if (!nuevoEstado) return;
+    setEstado(nuevoEstado);
+    await cargarPerfiles();
+    window.dispatchEvent(new Event(EVENTO_CALIBRACION_CAMBIO));
+    window.dispatchEvent(new Event(EVENTO_CAMARAS_CAMBIO));
+  }
+
+  /** Borra un tablero calibrado (no el por defecto). Si era el activo, `camara` vuelve a este. */
+  async function borrarPerfilDeCamara(nombre) {
+    if (!window.confirm(`¿Borrar el tablero «${nombre}»? No se puede deshacer.`)) return;
+    const lista = await trabajar(() => borrarPerfilTablero(nombre, camara));
+    if (!lista) return;
+    setPerfiles(lista);
+    await cargarEstado();
+    window.dispatchEvent(new Event(EVENTO_CALIBRACION_CAMBIO));
+    window.dispatchEvent(new Event(EVENTO_CAMARAS_CAMBIO));
   }
 
   function exportar() {
@@ -177,7 +226,8 @@ export default function useAsistenteCalibracion(camara, onEnCursoChange) {
   }
 
   return {
-    estado, paso, foto, puntos, setPuntos, vistaUrl, resultado, comprobacion, ocupado, error, setError,
-    entradaImportarRef, ir, cerrar, congelar, previsualizar, guardar, exportar, importar, quitar, comprobar,
+    estado, perfiles, perfilObjetivo, paso, foto, puntos, setPuntos, vistaUrl, resultado, comprobacion, ocupado, error, setError,
+    entradaImportarRef, ir, cerrar, congelar, calibrarTableroNuevo, previsualizar, guardar, exportar, importar, quitar, comprobar,
+    activarPerfil, borrarPerfilDeCamara,
   };
 }
