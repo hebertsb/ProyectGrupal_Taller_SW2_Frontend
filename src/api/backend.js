@@ -1722,7 +1722,7 @@ export const unirseASala = (codigo) => solicitarAuth(`/sala/${encodeURIComponent
 /**
  * El estado de la sala: tablero, turno, quién juega (`blancas`/`negras` con nombre público, nivel y `ausente_s`), los tiempos que le quedan a cada lado
  * (`tiempo_blancas_ms`, `tiempo_negras_ms`, ya descontado lo que lleva gastado el que tiene el turno), `reloj_corre`, `resultado` y `motivo_fin`
- * (`mate`, `tablas`, `abandono`, `tiempo`, `ausencia`, `inactividad`). Consultarla es también la señal de que el jugador sigue en pantalla.
+ * (`mate`, `tablas`, `abandono`, `tiempo`, `ausencia`, `sin_respuesta`, `inactividad`). Consultarla es también la señal de que el jugador sigue en pantalla.
  */
 export const obtenerSala = (codigo) => solicitarAuth(`/sala/${encodeURIComponent(codigo)}`);
 /** Solo docentes: las salas abiertas en las que juega algún alumno que el docente puede ver, con el código para mirarlas en vivo. */

@@ -32,6 +32,7 @@ const MOTIVOS = {
   abandono: 'por abandono',
   tiempo: 'por tiempo',
   ausencia: 'por ausencia: se fue de la partida con reloj',
+  sin_respuesta: 'por inactividad: no respondió en 2 días',
   inactividad: 'por inactividad',
 };
 
