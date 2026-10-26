@@ -20,9 +20,15 @@ const CAMPOS = [
   ['largo_pinza_mm', 'Largo de la pinza: de la brida a la punta de los dedos (mm)', 100, 400],
   ['altura_segura_mm', 'Altura segura para trasladarse (mm)', 20, 200],
   ['margen_agarre_mm', 'Margen de agarre sobre el tablero (mm)', 0, 30],
+  ['velocidad_bajada', 'Velocidad al bajar y subir cerca del tablero (%): lenta, para no golpearlo', 1, 100],
+  ['aceleracion_bajada', 'Aceleración al bajar y subir cerca del tablero (%)', 1, 100],
+  ['altura_borde_mm', 'Cuánto sobresale el marco del tablero sobre la superficie de juego (mm)', 0, 50],
+  ['holgura_traslado_mm', 'Aire al trasladar una pieza por encima de las demás (mm)', 0, 60],
+  ['elevacion_al_soltar_mm', 'Al SOLTAR la pieza, quedarse más arriba que al agarrar (mm): para no chocar con el tablero', 0, 30],
   ['giro_diagonal_grados', 'Giro de los dedos (°)', -180, 180],
 ];
-const PIEZAS = [['n', 'Caballo'], ['b', 'Alfil'], ['r', 'Torre'], ['q', 'Dama'], ['k', 'Rey']];
+const PIEZAS = [['p', 'Peón'], ['n', 'Caballo'], ['b', 'Alfil'], ['r', 'Torre'], ['q', 'Dama'], ['k', 'Rey']];
+// El peón no tiene un valor propio en la lista: usa el de arriba (`apertura_aproximacion` y `margen_agarre_mm`), así que su casilla edita ese mismo campo y las dos se ven igual.
 
 const CAMPO =
   'min-h-[44px] w-full min-w-0 px-space-sm rounded-xl border border-outline-variant bg-surface-container text-on-surface font-body-sm text-body-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
@@ -70,6 +76,10 @@ export default function ParametrosBrazo({ emulador }) {
     setValores((v) => ({ ...v, [clave]: texto === '' ? '' : Number(texto) }));
   }
   function cambiarApertura(letra, texto) {
+    if (letra === 'p') {
+      cambiar('apertura_aproximacion', texto);
+      return;
+    }
     setValores((v) => {
       const aperturas = { ...v.aperturas_por_pieza };
       if (texto === '') delete aperturas[letra];
@@ -78,6 +88,10 @@ export default function ParametrosBrazo({ emulador }) {
     });
   }
   function cambiarMargen(letra, texto) {
+    if (letra === 'p') {
+      cambiar('margen_agarre_mm', texto);
+      return;
+    }
     setValores((v) => {
       const margenes = { ...v.margenes_por_pieza };
       if (texto === '') delete margenes[letra];
@@ -118,8 +132,8 @@ export default function ParametrosBrazo({ emulador }) {
           </label>
         ))}
       </div>
-      <p className="font-body-sm text-body-sm text-on-surface m-0">Apertura de la pinza al bajar sobre cada pieza (0–1000; el peón usa la de arriba)</p>
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-space-xs">
+      <p className="font-body-sm text-body-sm text-on-surface m-0">Apertura de la pinza al bajar sobre cada pieza (0–1000). La del peón es la misma de «Apertura al bajar sobre un peón», arriba.</p>
+      <div className="grid grid-cols-2 sm:grid-cols-6 gap-space-xs">
         {PIEZAS.map(([letra, etiqueta]) => (
           <label key={letra} className="font-body-sm text-body-sm text-on-surface-variant flex flex-col gap-1">
             {etiqueta}
@@ -128,18 +142,40 @@ export default function ParametrosBrazo({ emulador }) {
               type="number"
               min="0"
               max="1000"
-              value={valores.aperturas_por_pieza?.[letra] ?? ''}
+              value={(letra === 'p' ? valores.apertura_aproximacion : valores.aperturas_por_pieza?.[letra]) ?? ''}
               onChange={(e) => cambiarApertura(letra, e.target.value)}
               placeholder="sin medir"
             />
           </label>
         ))}
       </div>
+      <p className="font-body-sm text-body-sm text-on-surface m-0">Alto de cada pieza, medido con regla (mm): con esto el brazo sube lo necesario para pasar por encima de la más alta con aire de sobra.</p>
+      <div className="grid grid-cols-2 sm:grid-cols-6 gap-space-xs">
+        {PIEZAS.map(([letra, etiqueta]) => (
+          <label key={letra} className="font-body-sm text-body-sm text-on-surface-variant flex flex-col gap-1">
+            {etiqueta}
+            <input
+              className={CAMPO}
+              type="number"
+              min="0"
+              max="200"
+              value={valores.alturas_piezas_mm?.[letra] ?? ''}
+              onChange={(e) => setValores((v) => {
+                const alturas = { ...v.alturas_piezas_mm };
+                if (e.target.value === '') delete alturas[letra];
+                else alturas[letra] = Number(e.target.value);
+                return { ...v, alturas_piezas_mm: alturas };
+              })}
+              placeholder="sin medir"
+            />
+          </label>
+        ))}
+      </div>
       <p className="font-body-sm text-body-sm text-on-surface m-0">
-        Margen de agarre sobre el tablero al bajar sobre cada pieza (mm, 0–30; el peón usa el de arriba). Si la pinza choca contra el
+        Margen de agarre sobre el tablero al bajar sobre cada pieza (mm, 0–30). El del peón es el mismo de «Margen de agarre sobre el tablero», arriba.. Si la pinza choca contra el
         tablero con una pieza puntual, subile el margen acá — no hace falta tocar el de arriba, que sigue valiendo para las demás.
       </p>
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-space-xs">
+      <div className="grid grid-cols-2 sm:grid-cols-6 gap-space-xs">
         {PIEZAS.map(([letra, etiqueta]) => (
           <label key={letra} className="font-body-sm text-body-sm text-on-surface-variant flex flex-col gap-1">
             {etiqueta}
@@ -149,7 +185,7 @@ export default function ParametrosBrazo({ emulador }) {
               min="0"
               max="30"
               step="0.1"
-              value={valores.margenes_por_pieza?.[letra] ?? ''}
+              value={(letra === 'p' ? valores.margen_agarre_mm : valores.margenes_por_pieza?.[letra]) ?? ''}
               onChange={(e) => cambiarMargen(letra, e.target.value)}
               placeholder={String(valores.margen_agarre_mm ?? '')}
             />

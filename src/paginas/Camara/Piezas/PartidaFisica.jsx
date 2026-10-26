@@ -15,7 +15,8 @@ import TableroSoloLectura from '../../../componentes/TableroSoloLectura';
 import { CLASE_AVISO, CLASE_BOTON, CLASE_BOTON_PRIMARIO, CLASE_TARJETA } from '../estilos';
 import VistaDecision from './VistaDecision';
 
-const INTERVALO_MS = 1000;
+const INTERVALO_MS = 500; // el backend mira el tablero 10 veces por segundo; la pantalla se entera a este ritmo
+const CADA_CUANTOS_CON_VISTA = 2; // las fotos de la comparación pesan: una de cada dos veces
 
 const ETIQUETA = {
   esperando_humano: ['Tu turno: mové una pieza', 'text-on-surface'],
@@ -52,11 +53,13 @@ export default function PartidaFisica() {
   const verDecisionRef = useRef(true);
   const montadoRef = useRef(true);
   const temporizadorRef = useRef(null);
+  const contadorRef = useRef(0);
 
   const consultar = useCallback(async () => {
     try {
-      const datos = await estadoPartidaFisica(verDecisionRef.current);
-      if (montadoRef.current) setEstado(datos);
+      contadorRef.current += 1;
+      const datos = await estadoPartidaFisica(verDecisionRef.current && contadorRef.current % CADA_CUANTOS_CON_VISTA === 0);
+      if (montadoRef.current) setEstado((anterior) => ({ ...datos, vista: datos.vista ?? anterior?.vista }));
     } catch (e) {
       if (montadoRef.current) setError(e.message);
     }

@@ -1619,8 +1619,9 @@ export const aplicarOrientacionCalibracion = () => solicitar("/vision/calibracio
  * Empieza a seguir la partida por diferencias entre imágenes (un cuadro por segundo, sin clasificar piezas). `fen` (opcional): la posición de la que se parte
  * (por defecto la inicial). 409 = la cámara no está calibrada, 422 = FEN inválido. Devuelve `{activo, estado, fen, jugadas, turno, alerta}`.
  */
-export const iniciarSeguimientoPartida = (fen = null, camara = "principal") =>
-  solicitar("/vision/seguimiento/iniciar", { method: "POST", body: JSON.stringify({ fen, camara }) });
+/** `intervaloS`: cada cuántos segundos la pantalla va a pedir un cuadro (de ahí sale cuántos cuadros quietos hacen falta: a 0,25 s, la jugada se reconoce ~0,5 s después de soltar la pieza). */
+export const iniciarSeguimientoPartida = (fen = null, camara = "principal", intervaloS = 1) =>
+  solicitar("/vision/seguimiento/iniciar", { method: "POST", body: JSON.stringify({ fen, camara, intervalo_s: intervaloS }) });
 
 /**
  * Procesa el último cuadro de la cámara y dice qué pasó: `{estado, mensaje, fen, jugada, cambiadas, jugadas, turno}` con `estado` = tomando_base | esperando |
@@ -1694,6 +1695,19 @@ export const moverArticulacionesBrazo = (angulos) => controlBrazo("/mover-articu
 export const moverRelativoBrazo = (dx = 0, dy = 0, dz = 0, velocidadMmS = 20) =>
   controlBrazo("/mover-relativo", "POST", { dx, dy, dz, velocidad_mm_s: velocidadMmS });
 export const irAPosicionInicialBrazo = () => controlBrazo("/posicion-inicial");
+/** La calibración del tablero que usa el brazo: `{casillas, paso_mm, angulos_cero, avisos, sugerencia_cementerio}` (`null` si no hay). */
+export const tableroCalibradoBrazo = () => controlBrazo("/calibracion/tablero", "GET");
+/**
+ * Guarda y aplica (sin reconectar) la calibración del tablero con las poses `[x, y, z, rx, ry, rz]` de a1, h1 y a8 (h8 opcional) y los 6 ángulos de la posición cero, tomados del brazo
+ * real llevado a mano. 409 = es el emulador o hay un movimiento en curso; 422 = los datos no sirven (faltan casillas, la pinza apunta distinto…).
+ */
+export const calibrarTableroBrazo = (puntos, angulosCero) => controlBrazo("/calibracion/tablero", "POST", { puntos, angulos_cero: angulosCero });
+/** Baja despacio, con la pinza abierta, sobre la pieza de `casilla` y se queda ahí para centrarla (con `moverRelativoBrazo`) y guardar cuánto se corrió. */
+export const centrarBajarBrazo = (casilla, tipoPieza = "p") => controlBrazo("/centrar/bajar", "POST", { casilla, tipo_pieza: tipoPieza });
+/** Guarda el corrimiento medido (`{corrimiento_x_mm, corrimiento_y_mm}`): desde ahí todo el tablero lo lleva. */
+export const centrarGuardarBrazo = () => controlBrazo("/centrar/guardar");
+/** Sube de la pieza y vuelve a la posición de descanso. */
+export const centrarSubirBrazo = () => controlBrazo("/centrar/subir");
 /** Baja con la pinza abierta (sin cerrarla) sobre la pieza de `casilla`, a la apertura de ese tipo de pieza, espera unos segundos y sube: para medir cada apertura. */
 export const probarAperturaBrazo = (casilla, tipoPieza = "p") => controlBrazo("/probar-apertura", "POST", { casilla, tipo_pieza: tipoPieza });
 /** Lleva la punta, SIN pieza, sobre `cementerio:K` (K de 0 a 29), `reserva:dama_negra` o `reserva:dama_blanca`, baja hasta unos mm de donde soltaría y vuelve (para revisarlos antes de jugar). */

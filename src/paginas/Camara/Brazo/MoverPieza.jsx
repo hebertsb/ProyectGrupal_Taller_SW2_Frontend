@@ -89,6 +89,21 @@ export default function MoverPieza({ estado }) {
     }
   }
 
+  /** Un solo botón para la primera prueba: el peón de e2 a e4 (casilla del centro, lejos de los bordes). Hace el ensayo (que avisa si falta algo) y pide confirmar una vez. */
+  async function pruebaRapidaMover() {
+    setAccion('llevar');
+    setTipoPieza('p');
+    setOrigen('e2');
+    setDestino('e4');
+    setModo(null);
+    const plan = await correr(() => ensayoMoverPieza('e2', 'e4', 'p'));
+    if (!plan) return;
+    setPasos(plan);
+    if (window.confirm('Prueba de movimiento: el brazo tomará el peón de E2 y lo dejará en E4. ¿Hay un peón en e2, e4 está vacía y tenés la mano en la parada de emergencia?')) {
+      await correr(() => moverPiezaBrazo('e2', 'e4', 'p'));
+    }
+  }
+
   function borrar() {
     setPasos(null);
     setOrigen('');
@@ -133,6 +148,15 @@ export default function MoverPieza({ estado }) {
         pieza del destino al cementerio y después hace la jugada: es lo mismo que hace en la partida. Pruébalo primero en el emulador.
       </p>
       <div className="flex flex-wrap items-center gap-space-xs">
+        <button
+          type="button"
+          className={CLASE_BOTON_PRIMARIO}
+          disabled={ocupado || enCurso || !habilitado}
+          title={!habilitado ? 'Conectá y habilitá el brazo (o el emulador) primero' : 'Ensayo y movimiento del peón de e2 a e4 con un solo botón'}
+          onClick={pruebaRapidaMover}
+        >
+          ▶ Probar mover: peón de e2 a e4
+        </button>
         <button
           type="button"
           className={CLASE_BOTON_PRIMARIO}

@@ -3,7 +3,10 @@ import { estadoControlBrazo, pararBrazo } from '../../../api/backend';
 import { CLASE_AVISO } from '../estilos';
 import ConexionBrazo from './ConexionBrazo';
 import MoverPieza from './MoverPieza';
+import CalibracionTableroBrazo from './CalibracionTableroBrazo';
+import CentradoBrazo from './CentradoBrazo';
 import ParametrosBrazo from './ParametrosBrazo';
+import ZonasBrazo from './ZonasBrazo';
 import RutinasBrazo from './RutinasBrazo';
 
 const INTERVALO_MS = 700;
@@ -84,6 +87,9 @@ export default function PanelBrazo() {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-space-md items-start">
         <div className="flex flex-col gap-space-md min-w-0">
           <ConexionBrazo estado={estado} onCambio={leer} />
+          {estado?.conectado && <CalibracionTableroBrazo estado={estado} alCambio={leer} />}
+          {estado?.conectado && <CentradoBrazo estado={estado} />}
+          {estado?.conectado && <ZonasBrazo estado={estado} />}
           {estado?.conectado && <MoverPieza estado={estado} />}
         </div>
         <div className="min-w-0">

@@ -11,7 +11,8 @@ import TableroSoloLectura from '../../../componentes/TableroSoloLectura';
 import { CLASE_AVISO, CLASE_BOTON, CLASE_BOTON_PRIMARIO, CLASE_TARJETA } from '../estilos';
 import VistaDecision from './VistaDecision';
 
-const INTERVALO_MS = 1000;
+const INTERVALO_MS = 250; // cuatro cuadros por segundo: la jugada se reconoce ~0,5 s después de soltar la pieza
+const CADA_CUANTOS_CON_VISTA = 4; // las fotos de la comparación pesan: se piden una de cada cuatro veces
 const FEN_INICIAL = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
 const ETIQUETA = {
@@ -53,6 +54,7 @@ export default function SeguimientoPartida() {
   const temporizadorRef = useRef(null);
   const montadoRef = useRef(true);
   const blancasEmpiezanRef = useRef(true);
+  const contadorRef = useRef(0);
 
   const detenerBucle = useCallback(() => {
     if (temporizadorRef.current) clearTimeout(temporizadorRef.current);
@@ -61,9 +63,10 @@ export default function SeguimientoPartida() {
 
   const pasar = useCallback(async () => {
     try {
-      const respuesta = await avanzarSeguimientoPartida(verDecisionRef.current);
+      contadorRef.current += 1;
+      const respuesta = await avanzarSeguimientoPartida(verDecisionRef.current && contadorRef.current % CADA_CUANTOS_CON_VISTA === 0);
       if (!montadoRef.current) return;
-      setDatos(respuesta);
+      setDatos((anterior) => ({ ...respuesta, vista: respuesta.vista ?? anterior?.vista }));
       setError(null);
       if (respuesta.estado === 'jugada') setAvisoJugada(`${respuesta.mensaje}`);
     } catch (e) {
@@ -92,7 +95,7 @@ export default function SeguimientoPartida() {
     setAvisoJugada(null);
     try {
       const fen = fenTexto.trim() || FEN_INICIAL;
-      const inicio = await iniciarSeguimientoPartida(fen);
+      const inicio = await iniciarSeguimientoPartida(fen, 'principal', INTERVALO_MS / 1000);
       blancasEmpiezanRef.current = (fen.split(' ')[1] ?? 'w') === 'w';
       setDatos({ ...inicio, mensaje: 'Esperando que el tablero esté quieto para tomar la foto base…' });
       setActivo(true);
