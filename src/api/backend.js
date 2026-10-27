@@ -1747,8 +1747,8 @@ export const obtenerSaludInstituciones = () => solicitarAuth("/progreso/instituc
 /** Controles de tiempo de una sala, en milisegundos por lado: sin reloj, 3, 5, 10 y 15 minutos. */
 export const CONTROLES_DE_TIEMPO_SALA = [0, 180000, 300000, 600000, 900000];
 /** Crea una sala con el color (`"blancas" | "negras" | "aleatorio"`) y el reloj elegidos. `{codigo, partida_id, estado, rol, control_tiempo_ms, ...}`. */
-export const crearSala = (color = "aleatorio", controlTiempoMs = 0) =>
-  solicitarAuth("/sala", { method: "POST", body: JSON.stringify({ color, control_tiempo_ms: controlTiempoMs }) });
+export const crearSala = (color = "aleatorio", controlTiempoMs = 0, puntuada = true) =>
+  solicitarAuth("/sala", { method: "POST", body: JSON.stringify({ color, control_tiempo_ms: controlTiempoMs, puntuada }) });
 /** Se sienta en la sala con el código (o la mira si está llena). `{codigo, partida_id, rol}`; 404 si no existe. */
 export const unirseASala = (codigo) => solicitarAuth(`/sala/${encodeURIComponent(codigo)}/unirse`, { method: "POST" });
 /**
@@ -1791,17 +1791,22 @@ export const aceptarSolicitudDeAmistad = (id) => solicitarAuthSinCuerpo(`/social
 export const rechazarSolicitudDeAmistad = (id) => solicitarAuthSinCuerpo(`/social/amigos/solicitudes/${id}/rechazar`);
 export const quitarAmigo = (usuarioId) => solicitarAuthSinCuerpo(`/social/amigos/${usuarioId}`, { method: "DELETE" });
 /** Reta a un compañero o amigo. `{id, codigo, tu_color, control_tiempo_ms, segundos_restantes}`; 403 si no lo es, 409 si alguno ya juega. */
-export const retarJugador = ({ retadoId, color = "aleatorio", controlTiempoMs = 0 }) =>
-  solicitarAuth("/social/retos", { method: "POST", body: JSON.stringify({ retado_id: retadoId, color, control_tiempo_ms: controlTiempoMs }) });
+export const retarJugador = ({ retadoId, color = "aleatorio", controlTiempoMs = 0, puntuada = true }) =>
+  solicitarAuth("/social/retos", { method: "POST", body: JSON.stringify({ retado_id: retadoId, color, control_tiempo_ms: controlTiempoMs, puntuada }) });
 /** Acepta un reto: devuelve `{codigo}` de la sala, que ya está en curso. */
 export const aceptarReto = (id) => solicitarAuth(`/social/retos/${id}/aceptar`, { method: "POST" });
 export const rechazarReto = (id) => solicitarAuthSinCuerpo(`/social/retos/${id}/rechazar`);
 export const cancelarReto = (id) => solicitarAuthSinCuerpo(`/social/retos/${id}`, { method: "DELETE" });
 /** Pide la revancha de una partida que acaba de terminar (colores cambiados, mismo reloj). */
 export const pedirRevancha = (codigo) => solicitarAuth(`/social/retos/revancha/${encodeURIComponent(codigo)}`, { method: "POST" });
-/** Se pone a buscar un rival de nivel parecido. `{estado: "buscando" | "encontrado" | "sin_rival", codigo?, rival?, segundos}`. */
-export const buscarRival = (controlTiempoMs = 0) =>
-  solicitarAuth("/social/emparejamiento", { method: "POST", body: JSON.stringify({ control_tiempo_ms: controlTiempoMs }) });
+/**
+ * Se pone a buscar un rival: de nivel parecido o, con `filtros` (`{elo_min, elo_max, nivel_min, nivel_max}`, solo los que se eligen), dentro de ese rango de Elo y/o de nivel.
+ * `{estado: "buscando" | "encontrado" | "sin_rival", codigo?, rival?, segundos, filtros?}`.
+ */
+export const buscarRival = (controlTiempoMs = 0, filtros = {}, puntuada = true) =>
+  solicitarAuth("/social/emparejamiento", { method: "POST", body: JSON.stringify({ control_tiempo_ms: controlTiempoMs, puntuada, ...filtros }) });
+/** Mi Elo (empieza en 1000), cuántas partidas lo movieron, si es provisional y mis últimas partidas con lo que cambió en cada una. */
+export const obtenerMiElo = () => solicitarAuth("/social/mi-elo");
 export const dejarDeBuscarRival = () => solicitarAuthSinCuerpo("/social/emparejamiento", { method: "DELETE" });
 
 // --- Tablas, bloqueos y denuncias ---

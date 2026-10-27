@@ -4,6 +4,7 @@ import MiCurso from './MiCurso';
 import ModalBajaCuenta from './ModalBajaCuenta';
 import TarjetaCambiarPassword from './TarjetaCambiarPassword';
 import TarjetaDobleFactor from './TarjetaDobleFactor';
+import TarjetaMiElo from './TarjetaMiElo';
 import TarjetaMiFamilia from './TarjetaMiFamilia';
 import TarjetaMiProgreso from './TarjetaMiProgreso';
 import TarjetaMisMedallas from './TarjetaMisMedallas';
@@ -387,6 +388,9 @@ export default function Perfil({ usuario, alActualizarUsuario, alVerAlbum, alEli
 
         {/* Informe de progreso del jugador: el antes y el después, para mostrar a la familia (ver TarjetaMiProgreso.jsx). */}
         {!esFacilitador && <TarjetaMiProgreso />}
+
+        {/* Elo entre jugadores: cómo le va contra otras personas (ver TarjetaMiElo.jsx). */}
+        {!esFacilitador && <TarjetaMiElo />}
 
         {/* Curso del jugador — entra con el código de su facilitador (ver MiCurso.jsx). */}
         {!esFacilitador && <MiCurso />}

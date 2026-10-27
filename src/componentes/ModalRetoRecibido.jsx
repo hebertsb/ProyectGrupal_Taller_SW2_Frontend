@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import useModalAccesible from '../useModalAccesible';
 import { textoDeReloj } from '../enlaceJuego';
+import { textoDePersona } from '../elo';
 
 /** Un aviso corto para que el jugador se entere aunque esté mirando otra cosa: vibra el celular y suena un tono breve (si el navegador lo permite). */
 function avisarConSonido() {
@@ -81,13 +82,13 @@ export default function ModalRetoRecibido({ reto, ocupado, error, alAceptar, alR
             <span className="font-mono-micro text-mono-micro uppercase tracking-wider text-primary">Te retan a una partida</span>
             <h2 id="titulo-reto" className="m-0 font-headline-sm text-headline-sm text-on-surface truncate">{retador.nombre}</h2>
             <span className="font-mono-micro text-mono-micro text-on-surface-variant">
-              {retador.nivel != null ? `Nivel ${retador.nivel}${retador.rango ? ` · ${retador.rango}` : ''}` : 'Nivel sin medir'}
+              {textoDePersona(retador)}
             </span>
           </div>
         </div>
 
         <p id="detalle-reto" className="m-0 font-body-sm text-body-sm text-on-surface">
-          {textoDeReloj(reto.control_tiempo_ms)}{reto.control_tiempo_ms ? ' por lado' : ''} · vos jugás con <strong>{reto.tu_color}</strong>. Vence en {segundos} s.
+          {textoDeReloj(reto.control_tiempo_ms)}{reto.control_tiempo_ms ? ' por lado' : ''} · vos jugás con <strong>{reto.tu_color}</strong>.{reto.puntuada === false ? ' Es una partida amistosa: no mueve el Elo.' : ''} Vence en {segundos} s.
         </p>
         {error && <p role="alert" className="m-0 p-space-xs rounded-lg bg-error-container text-on-error-container font-body-sm text-body-sm">{error}</p>}
 

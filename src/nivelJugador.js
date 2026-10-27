@@ -19,6 +19,12 @@ export const NIVEL_MAX_MODELO = 18;
 /** Nivel fijo de Stockfish contra el que se juega la primera partida (diagnóstico). */
 export const NIVEL_DIAGNOSTICO = 8;
 
+/**
+ * Máximo de niveles de desafío que Turing suma al nivel del jugador (lo calcula el servidor con sus últimas
+ * 5 partidas contra él; ver `backend/servicios/calibracion/desafio.py`). Es solo para mostrarlo en pantalla.
+ */
+export const DESAFIO_MAX_TURING = 3;
+
 /** Bandas por defecto, por si el backend todavía no manda `escala.bandas`. */
 export const BANDAS_POR_DEFECTO = {
   Principiante: [0, 6],

@@ -1,3 +1,5 @@
+import { textoDeElo } from '../elo';
+
 /** Texto de un resultado de torneo: `1-0` ganó el de las blancas, `0-1` el de las negras, `1/2-1/2` tablas, `0-0` quedó sin terminar. */
 export function textoDeResultado(resultado) {
   if (resultado === '1-0') return 'Ganaron blancas';
@@ -45,7 +47,11 @@ export default function TablaDeTorneo({ torneo, yoId = null, alMirar = null }) {
                   <td className="px-space-sm py-space-xs text-on-surface break-words">
                     {fila.nombre}
                     {fila.id === yoId && <span className="ml-space-xs font-mono-micro text-mono-micro text-primary">(vos)</span>}
-                    {fila.rango && <span className="block font-mono-micro text-mono-micro text-on-surface-variant">{fila.rango}</span>}
+                    {(fila.rango || fila.elo != null) && (
+                      <span className="block font-mono-micro text-mono-micro text-on-surface-variant">
+                        {[fila.rango, fila.elo != null ? `Elo ${textoDeElo(fila)}` : null].filter(Boolean).join(' · ')}
+                      </span>
+                    )}
                   </td>
                   <td className="px-space-sm py-space-xs text-right font-medium">{textoDePuntos(fila.puntos)}</td>
                   <td className="px-space-sm py-space-xs text-right">{fila.victorias}</td>

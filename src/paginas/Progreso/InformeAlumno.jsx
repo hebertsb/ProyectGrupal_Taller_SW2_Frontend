@@ -6,8 +6,9 @@ import { enlaceWhatsApp } from '../../whatsapp';
 import { enlaceCorreoFamilia } from '../../contactoFamilia';
 import { fechaDesdeIso } from '../../formatoTiempo';
 import useModalAccesible from '../../useModalAccesible';
+import GraficoElo from './GraficoElo';
 import GraficoEvolucion from './GraficoEvolucion';
-import { NOMBRE_DE_FASE, TENDENCIAS, haceCuanto, mensajeParaElResponsable, numero, porcentaje, puntos } from './comunes';
+import { NOMBRE_DE_FASE, TENDENCIAS, haceCuanto, mensajeParaElResponsable, numero, porcentaje, puntos, variacionElo } from './comunes';
 
 const BOTON =
   'flex items-center justify-center gap-space-2xs px-space-md py-space-xs min-h-10 rounded-lg font-body-sm text-body-sm transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
@@ -102,6 +103,50 @@ function BarraDeFase({ fase }) {
   );
 }
 
+/** Su Elo y lo que ganó, empató y perdió contra compañeros, con las amistosas aparte (esas no mueven el Elo). No se muestra si nunca jugó con otra persona. */
+function ConCompaneros({ competencia }) {
+  if (!competencia || (competencia.total === 0 && competencia.partidas_elo === 0 && !competencia.puestos_en_torneos?.length)) return null;
+  const serias = ['ganadas', 'empatadas', 'perdidas'].map((clave) => (competencia.puntuadas?.[clave] ?? 0) + (competencia.torneos?.[clave] ?? 0));
+  const amistosas = ['ganadas', 'empatadas', 'perdidas'].map((clave) => competencia.amistosas?.[clave] ?? 0);
+  const detalleElo = [competencia.elo_provisional ? 'provisional' : null, competencia.partidas_elo > 0 ? `${variacionElo(competencia.elo_cambio_30_dias)} en 30 días` : null]
+    .filter(Boolean)
+    .join(' · ');
+  return (
+    <section aria-label="Con compañeros" className="flex flex-col gap-space-xs">
+      <h3 className="m-0 font-headline-sm text-headline-sm text-on-surface">Jugando con compañeros</h3>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-space-xs">
+        <Cifra etiqueta="Elo" valor={competencia.partidas_elo > 0 ? competencia.elo : '—'} detalle={detalleElo || 'todavía sin partidas puntuadas'} />
+        <Cifra etiqueta="Puntuadas y torneos" valor={serias.join(' · ')} detalle="ganadas · empatadas · perdidas" />
+        <Cifra etiqueta="Amistosas" valor={amistosas.join(' · ')} detalle="no mueven el Elo" />
+      </div>
+      {competencia.serie_elo?.length > 1 && (
+        <div className="flex flex-col gap-space-2xs">
+          <h4 className="m-0 font-body-sm text-body-sm font-medium text-on-surface">Cómo fue cambiando su Elo</h4>
+          <GraficoElo serie={competencia.serie_elo} />
+        </div>
+      )}
+      {competencia.puestos_en_torneos?.length > 0 && (
+        <div className="flex flex-col gap-space-2xs">
+          <h4 className="m-0 font-body-sm text-body-sm font-medium text-on-surface">Torneos</h4>
+          <ul className="m-0 p-0 list-none flex flex-col gap-space-2xs">
+            {competencia.puestos_en_torneos.map((torneo) => (
+              <li key={`${torneo.nombre}-${torneo.fecha}`} className="flex flex-wrap items-center justify-between gap-space-xs p-space-xs rounded-lg bg-surface-container font-body-sm text-body-sm">
+                <span className="text-on-surface break-words min-w-0">{torneo.nombre}</span>
+                <span className="font-mono-metric text-mono-metric text-on-surface-variant">
+                  {torneo.estado === 'terminado' ? `Puesto ${torneo.puesto} de ${torneo.de}` : `Va ${torneo.puesto} de ${torneo.de} · en juego`} · {numero(torneo.puntos)} {torneo.puntos === 1 ? 'punto' : 'puntos'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <p className="m-0 font-mono-micro text-mono-micro text-on-surface-variant">
+        El Elo mide resultados contra otras personas: empieza en 1000 y es provisional hasta las 20 partidas. No es lo mismo que el nivel, que mide la calidad de las jugadas.
+      </p>
+    </section>
+  );
+}
+
 function ContenidoDelInforme({ informe }) {
   const { alumno, progreso, actividad, resultados, medallas } = informe;
   const donde = [alumno.curso, alumno.docente && `Docente: ${alumno.docente}`, alumno.institucion].filter(Boolean).join(' · ');
@@ -138,6 +183,8 @@ function ContenidoDelInforme({ informe }) {
         <Cifra etiqueta="Racha de victorias" valor={resultados.racha_victorias} />
         <Cifra etiqueta="Medallas" valor={medallas.total ?? 0} detalle={medallas.destacadas?.length ? medallas.destacadas.map((m) => m.nombre).join(', ') : null} />
       </section>
+
+      <ConCompaneros competencia={informe.competencia} />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-space-md">
         <section aria-label="Precisión por fase" className="flex flex-col gap-space-xs">

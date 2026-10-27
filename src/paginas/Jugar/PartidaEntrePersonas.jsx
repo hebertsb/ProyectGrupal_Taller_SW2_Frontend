@@ -14,6 +14,7 @@ import ModalDenunciar from '../../componentes/ModalDenunciar';
 import TableroJugable from '../../componentes/TableroJugable';
 import { aplicarJugadaUciAFen, esPromocionDePeon, piezaEnCasilla } from '../../ajedrez';
 import { enlaceDeSala, mensajeDeSala, textoDeReloj } from '../../enlaceJuego';
+import { textoDeCambio, textoDePersona } from '../../elo';
 import { enlaceDeWhatsApp } from '../../enlaceInvitacion';
 import SelectorPromocion from '../SalaControl/SelectorPromocion';
 import { formatearReloj } from '../SalaControl/useRelojAjedrez';
@@ -31,6 +32,7 @@ const MOTIVOS = {
   acuerdo: 'por acuerdo: los dos aceptaron las tablas',
   abandono: 'por abandono',
   tiempo: 'por tiempo',
+  tiempo_sin_material: 'por tiempo: el rival no tenía material para dar mate',
   ausencia: 'por ausencia: se fue de la partida con reloj',
   sin_respuesta: 'por inactividad: no respondió en 2 días',
   inactividad: 'por inactividad',
@@ -82,7 +84,7 @@ function BarraJugador({ jugador, etiquetaColor, ms, activo, sinTiempo, esYo, con
             <span className="ml-space-xs font-mono-micro text-mono-micro text-on-surface-variant uppercase">{etiquetaColor}</span>
           </span>
           <span className="font-mono-micro text-mono-micro text-on-surface-variant truncate">
-            {jugador?.nivel != null ? `Nivel ${jugador.nivel}${jugador.rango ? ` · ${jugador.rango}` : ''}` : jugador ? 'Nivel sin medir' : ''}
+            {textoDePersona(jugador)}
           </span>
           {ausente && (
             <span role="status" className="font-mono-micro text-mono-micro text-error">
@@ -320,6 +322,8 @@ export default function PartidaEntrePersonas({ codigo, alSalir, alCambiarPartida
   };
 
   // Tablas: se ofrecen, el rival las acepta (la partida termina empatada) o las rechaza. La oferta vale mientras no se juegue otra jugada.
+  // Antes de cierta cantidad de jugadas el servidor no deja ofrecerlas (evita pactar tablas al instante para mover puntos sin jugar).
+  const demasiadoPronto = sala.jugadas.length < (sala.medias_jugadas_para_tablas ?? 0);
   const responderTablas = async (funcion, mensajeError) => {
     setError(null);
     try {
@@ -410,6 +414,13 @@ export default function PartidaEntrePersonas({ codigo, alSalir, alCambiarPartida
             ultimaJugada={sala.ultima_jugada_uci}
             alClicCasilla={alClicCasilla}
             deshabilitado={!puedeMover}
+            miColor={miColor}
+            miTurno={puedeMover}
+            activoAnticipar={enCurso && miColor != null}
+            puedeAnticipar={enCurso && miColor != null && !puedeMover && !promocion}
+            obtenerDestinosLegales={(casilla) => jugadasLegalesSala(codigo, casilla)}
+            jugar={(origen, destino, promocionLetra) => enviarJugada(`${origen}${destino}${promocionLetra}`)}
+            claveDePartida={codigo}
           />
           <BarraJugador
             jugador={jugadorDe(abajo)}
@@ -430,11 +441,25 @@ export default function PartidaEntrePersonas({ codigo, alSalir, alCambiarPartida
               <h1 className="m-0 font-headline-sm text-headline-sm text-on-surface">
                 {esperando ? 'Esperando rival' : resultado ? resultado.titulo : miTurno ? 'Te toca jugar' : sentado ? 'Juega el rival' : 'Mirando la partida'}
               </h1>
-              <span className="font-mono-micro text-mono-micro uppercase px-space-xs py-space-2xs rounded-full bg-surface-container-high text-on-surface-variant">
-                {textoDeReloj(sala.control_tiempo_ms)}
+              <span className="flex flex-wrap items-center gap-space-2xs">
+                {sala.puntuada === false && (
+                  <span className="font-mono-micro text-mono-micro uppercase px-space-xs py-space-2xs rounded-full bg-tertiary/15 text-on-surface">Amistosa</span>
+                )}
+                <span className="font-mono-micro text-mono-micro uppercase px-space-xs py-space-2xs rounded-full bg-surface-container-high text-on-surface-variant">
+                  {textoDeReloj(sala.control_tiempo_ms)}
+                </span>
               </span>
             </div>
             {resultado?.detalle && <p className="m-0 font-body-sm text-body-sm text-on-surface-variant">Terminó {resultado.detalle}.</p>}
+            {resultado && sentado && sala.puntuada === false && (
+              <p className="m-0 font-body-sm text-body-sm text-on-surface-variant">Fue una partida amistosa: no mueve el Elo.</p>
+            )}
+            {resultado && sentado && sala.elo?.[miColor] && (
+              <p role="status" className="m-0 font-body-sm text-body-sm text-on-surface">
+                Tu Elo: {sala.elo[miColor].antes} → <strong>{sala.elo[miColor].despues}</strong>{' '}
+                <span className={sala.elo[miColor].cambio > 0 ? 'text-primary' : sala.elo[miColor].cambio < 0 ? 'text-error' : 'text-on-surface-variant'}>({textoDeCambio(sala.elo[miColor].cambio)})</span>
+              </p>
+            )}
             {enCurso && conReloj && sentado && (
               <p className="m-0 flex items-start gap-space-xs font-mono-micro text-mono-micro text-on-surface-variant">
                 <span className="material-symbols-outlined text-[16px] shrink-0 text-primary" aria-hidden="true">timer</span>
@@ -500,15 +525,22 @@ export default function PartidaEntrePersonas({ codigo, alSalir, alCambiarPartida
                 </div>
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={() => responderTablas(ofrecerTablas, 'No se pudieron ofrecer las tablas.')}
-                disabled={sala.tablas_ofrecidas_por === miColor}
-                className={`${BOTON_NEUTRO} self-start`}
-              >
-                <span className="material-symbols-outlined text-[18px] text-primary" aria-hidden="true">handshake</span>
-                {sala.tablas_ofrecidas_por === miColor ? 'Tablas ofrecidas, esperando respuesta…' : 'Ofrecer tablas'}
-              </button>
+              <div className="flex flex-col gap-space-2xs self-start">
+                <button
+                  type="button"
+                  onClick={() => responderTablas(ofrecerTablas, 'No se pudieron ofrecer las tablas.')}
+                  disabled={sala.tablas_ofrecidas_por === miColor || demasiadoPronto}
+                  className={BOTON_NEUTRO}
+                >
+                  <span className="material-symbols-outlined text-[18px] text-primary" aria-hidden="true">handshake</span>
+                  {sala.tablas_ofrecidas_por === miColor ? 'Tablas ofrecidas, esperando respuesta…' : 'Ofrecer tablas'}
+                </button>
+                {demasiadoPronto && (
+                  <p className="m-0 font-mono-micro text-mono-micro text-on-surface-variant">
+                    Se pueden ofrecer tablas cuando cada uno lleve {Math.ceil(sala.medias_jugadas_para_tablas / 2)} jugadas.
+                  </p>
+                )}
+              </div>
             )
           )}
 

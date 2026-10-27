@@ -3,6 +3,7 @@ import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import './SalaControl.css';
 import AvatarAgente3D from '../../componentes/AvatarAgente3D';
+import InsigniaElo from '../../componentes/InsigniaElo';
 import SimuladorBrazoTablero3D from '../../componentes/SimuladorBrazoTablero3D';
 import { useRazonamiento } from '../../contexto/ContextoRazonamiento';
 import { useEstadoModelo } from '../../contexto/ContextoEstadoModelo';
@@ -42,7 +43,11 @@ import { aplicarJugadaUciAFen,
   rutaImagenPieza,
   turnoDeFen,
 } from '../../ajedrez';
-import { NIVEL_DIAGNOSTICO, NIVEL_MAX_MODELO, NIVEL_MAX_STOCKFISH } from '../../nivelJugador';
+import { DESAFIO_MAX_TURING, NIVEL_DIAGNOSTICO, NIVEL_MAX_MODELO, NIVEL_MAX_STOCKFISH } from '../../nivelJugador';
+import { esDelColor } from '../../anticipadas';
+import useAnticipadas from '../../useAnticipadas';
+import useArrastrePiezas from '../../useArrastrePiezas';
+import ResumenAnticipadas from '../../componentes/ResumenAnticipadas';
 import { CATEGORIAS, clasificarJugada, comoMejorarPorCategoria, ESTILO_CATEGORIA, winPercent } from '../../aprendizaje';
 import { pedirRevisionMedallas } from '../../medallas';
 
@@ -55,7 +60,11 @@ const PAUSA_ANTES_DE_LA_RESPUESTA_MS = 800;
 // Controles de tiempo ofrecidos, en minutos por lado (0 = sin reloj).
 const OPCIONES_RELOJ_MIN = [0, 3, 5, 10, 15];
 const RELOJ_POR_DEFECTO_MIN = 10;
+// La partida de diagnóstico se juega con reloj: sin él, quien entra por primera vez la deja a medias y nunca se mide su nivel. 10 minutos por lado, con la misma regla de las demás
+// partidas con reloj (si se va más de 20 segundos, el tiempo sigue corriendo y pierde).
+const RELOJ_DIAGNOSTICO_MIN = 10;
 const CLAVE_RELOJ_MIN = 'reloj_minutos';
+const CLAVE_DESAFIO_TURING = 'desafio_turing_activo';
 const INTERVALO_GUARDADO_RELOJ_MS = 5000;
 // Cada cuánto se avisa al servidor que el jugador sigue en una partida con reloj. El servidor da la partida por perdida
 // si pasan más de 20 segundos sin aviso, así que tiene que ser bastante menos.
@@ -69,6 +78,15 @@ function leerRelojGuardado() {
     // Sin almacenamiento: se usa el valor por defecto.
   }
   return RELOJ_POR_DEFECTO_MIN;
+}
+
+/** El desafío progresivo de Turing viene encendido; el jugador lo puede apagar y se recuerda en este navegador. */
+function leerDesafioActivo() {
+  try {
+    return localStorage.getItem(CLAVE_DESAFIO_TURING) !== 'no';
+  } catch {
+    return true;
+  }
 }
 const esperar = (ms) => new Promise((resolver) => setTimeout(resolver, ms));
 
@@ -90,9 +108,11 @@ function categoriaDeNivel(n, esTuring = false) {
  * Nivel con el que se juega contra un rival: el del perfil/selector, recortado
  * al techo de Turing si el rival es el modelo. El valor sin recortar se conserva
  * en el estado, así al volver a Stockfish no se pierde un 19-20 del perfil.
+ * Contra Turing se le suma además el `desafio` progresivo (0 a 3 niveles según
+ * las últimas partidas del jugador contra él), siempre con el mismo techo.
  */
-function nivelSegunOponente(nivel, tipoOponente) {
-  return tipoOponente === 'modelo' ? Math.min(nivel, NIVEL_MAX_MODELO) : nivel;
+function nivelSegunOponente(nivel, tipoOponente, desafio = 0) {
+  return tipoOponente === 'modelo' ? Math.min(nivel + desafio, NIVEL_MAX_MODELO) : nivel;
 }
 
 // Estados de HTTP en los que el endpoint de calibración simplemente no existe
@@ -151,6 +171,13 @@ export default function SalaControl({
   const numeroDePartidaDiagnostico = Math.min(partidasCalibradas + 1, partidasDiagnostico);
   const nivelInicial = esFacilitador ? 20 : (usuario?.nivel_estimado ?? (diagnosticoPendiente ? NIVEL_DIAGNOSTICO : 5));
   const [nivel, setNivel] = useState(nivelInicial);
+  // Desafío progresivo: contra Turing se suman 0 a 3 niveles al del perfil según las últimas 5 partidas contra él (lo
+  // calcula el servidor: `usuario.desafio_turing`). El nivel medido del jugador no cambia. Si el jugador mueve el selector
+  // a mano (o retoma una partida), manda lo que eligió y no se suma nada hasta que el perfil se recalibre.
+  const [desafioActivo, setDesafioActivo] = useState(leerDesafioActivo);
+  const [nivelManual, setNivelManual] = useState(false);
+  const desafioTuring = !esFacilitador && !diagnosticoPendiente && desafioActivo ? Math.max(0, usuario?.desafio_turing ?? 0) : 0;
+  const desafioAplicado = nivelManual ? 0 : desafioTuring;
   // Control de tiempo de la próxima partida, en minutos por lado (0 = sin reloj). Se recuerda entre sesiones.
   const [relojMin, setRelojMin] = useState(leerRelojGuardado);
   // Lo que le queda a cada lado al abrir o reanudar la partida (viene del servidor: el reloj es parte de la partida).
@@ -263,7 +290,7 @@ export default function SalaControl({
   const tipoOponenteSeleccionado = diagnosticoPendiente ? 'motor' : tipoOponente;
   const nivelSeleccionado = diagnosticoPendiente
     ? NIVEL_DIAGNOSTICO
-    : nivelSegunOponente(nivel, tipoOponenteSeleccionado);
+    : nivelSegunOponente(nivel, tipoOponenteSeleccionado, desafioAplicado);
   // "En curso" = ya se jugó al menos una jugada. Una partida recién creada (se crea sola al abrir la
   // pantalla) todavía no cuenta: si contara, el nivel y el rival quedarían bloqueados desde el primer
   // segundo y nunca se podrían elegir antes de empezar a jugar.
@@ -271,8 +298,7 @@ export default function SalaControl({
   const selectoresBloqueados = partidaEnCurso || viendoPartidaAjena;
   const seleccionBloqueada = selectoresBloqueados || diagnosticoPendiente;
   // El reloj es parte de la partida (control de tiempo y tiempo restante viven en el servidor): al reanudarla
-  // sigue donde se quedó y no corre mientras el jugador estuvo fuera. No corre en la partida de diagnóstico
-  // (la presión de tiempo distorsionaría la medición de nivel): esa partida se crea sin reloj.
+  // sigue donde se quedó y no corre mientras el jugador estuvo fuera. La partida de diagnóstico también tiene reloj (`RELOJ_DIAGNOSTICO_MIN`).
   const controlRelojMs = configPartida?.controlTiempoMs ?? 0;
   const {
     tiempos: tiemposReloj,
@@ -382,7 +408,32 @@ export default function SalaControl({
   const maximoNivelSlider = oponenteEnSelector === 'modelo' ? NIVEL_MAX_MODELO : NIVEL_MAX_STOCKFISH;
   // Turing se adapta al nivel del perfil del estudiante. Si lo cambiaron a mano, se avisa en pantalla.
   const nivelPerfilTuring =
-    !esFacilitador && usuario?.nivel_estimado != null ? nivelSegunOponente(usuario.nivel_estimado, 'modelo') : null;
+    !esFacilitador && usuario?.nivel_estimado != null ? nivelSegunOponente(usuario.nivel_estimado, 'modelo', desafioTuring) : null;
+  const nivelBaseJugador = !esFacilitador ? (usuario?.nivel_estimado ?? null) : null;
+  const muestraDesafio = !esFacilitador && !diagnosticoPendiente && !viendoPartidaAjena && oponenteEnSelector === 'modelo' && nivelBaseJugador !== null;
+  const eligioAMano = nivelManual && !selectoresBloqueados;
+  const desafioEnUso = muestraDesafio && !eligioAMano ? Math.max(0, nivelEnSelector - nivelBaseJugador) : 0;
+  let textoDesafio = '';
+  if (muestraDesafio) {
+    if (!desafioActivo) {
+      textoDesafio = `Desafío apagado: Turing juega siempre a tu nivel (${nivelBaseJugador}).${selectoresBloqueados ? ' Se nota desde la próxima partida.' : ''}`;
+    } else if (eligioAMano) {
+      textoDesafio = 'Elegiste el nivel a mano: no se suma desafío.';
+    } else if (desafioEnUso > 0) {
+      textoDesafio = `Turing: nivel ${nivelEnSelector} (tu nivel ${nivelBaseJugador} + ${desafioEnUso} de desafío por tus victorias recientes).`;
+    } else {
+      textoDesafio = `Turing juega a tu nivel (${nivelBaseJugador}). Si le ganás seguido, suma hasta ${DESAFIO_MAX_TURING} niveles de desafío.`;
+    }
+  }
+  const alternarDesafio = () => {
+    const nuevo = !desafioActivo;
+    setDesafioActivo(nuevo);
+    try {
+      localStorage.setItem(CLAVE_DESAFIO_TURING, nuevo ? 'si' : 'no');
+    } catch {
+      // Sin almacenamiento: el cambio vale solo para esta sesión.
+    }
+  };
   const nivelTuringElegidoAMano =
     oponenteEnSelector === 'modelo' && nivelPerfilTuring !== null && nivelEnSelector !== nivelPerfilTuring;
   const nivelPendienteDeAplicar =
@@ -679,6 +730,7 @@ export default function SalaControl({
     if (ultimoNivelPerfilAplicadoRef.current === nivelPerfil) return;
     ultimoNivelPerfilAplicadoRef.current = nivelPerfil;
     setNivel(nivelPerfil);
+    setNivelManual(false);
   }, [usuario?.nivel_estimado, diagnosticoPendiente, partidaEnCurso, esFacilitador]);
 
   // Al terminar una partida propia se calcula el nivel del jugador. Solo se dispara cuando la
@@ -756,6 +808,7 @@ export default function SalaControl({
       // debe usar el nivel vigente del jugador, no el de aquella.
       if (!partida.terminada) {
         setNivel(partida.nivel);
+        setNivelManual(true); // `partida.nivel` ya incluye el desafío con el que se creó: no se suma de nuevo
         if (partida.tipo_oponente) {
           setTipoOponente(partida.tipo_oponente);
         }
@@ -874,8 +927,8 @@ export default function SalaControl({
       const opElegido = esDiagnostico ? 'motor' : oponenteDeseado !== undefined ? oponenteDeseado : tipoOponente;
       // Sin modelo disponible no se crea una partida contra Turing: fallaría en la primera jugada del rival.
       const op = opElegido === 'modelo' && turingNoDisponible ? 'motor' : opElegido;
-      const nivelPartida = esDiagnostico ? NIVEL_DIAGNOSTICO : nivelSegunOponente(nivelBase, op);
-      const controlTiempoMs = esDiagnostico ? 0 : relojMin * 60_000;
+      const nivelPartida = esDiagnostico ? NIVEL_DIAGNOSTICO : nivelSegunOponente(nivelBase, op, desafioAplicado);
+      const controlTiempoMs = (esDiagnostico ? RELOJ_DIAGNOSTICO_MIN : relojMin) * 60_000;
       const partida = await crearPartida(nivelPartida, null, op, controlTiempoMs);
       setRelojInicial(datosDeRelojDe(partida).relojInicial);
       setPartidaId(partida.id);
@@ -1027,6 +1080,37 @@ export default function SalaControl({
   function cancelarCoronacion() {
     setPromocionPendiente(null);
   }
+
+  // --- Arrastrar piezas y jugadas anticipadas (ver `useArrastrePiezas` y `useAnticipadas`) -----------------------------------------------------
+  // Mientras el rival piensa (o responde) los clics y arrastres arman hasta 7 jugadas que se hacen solas cuando te toca. El humano juega siempre con blancas contra Turing o Stockfish.
+  const partidaJugable = Boolean(partidaId) && !terminada && !viendoPartidaAjena && !demostracionDeOtraPartida;
+  const rivalPiensa = Boolean(fen) && (turnoDeFen(fen) === 'b' || cargando === 'mover' || cargando === 'jugada');
+  const anticiparActivo = partidaJugable && !esFacilitador && !promocionPendiente;
+  const puedeAnticiparAhora = anticiparActivo && rivalPiensa;
+  const anticipadas = useAnticipadas({
+    fen,
+    miColor: 'blancas',
+    activo: anticiparActivo,
+    miTurno: Boolean(fen) && turnoDeFen(fen) === 'w' && !cargando,
+    puedeAnticipar: puedeAnticiparAhora,
+    obtenerDestinosLegales: async (casilla) => (await obtenerJugadasLegales(partidaId, casilla)).casillas,
+    jugar: (origen, destino, promocion) => jugarMovimiento(origen, destino, promocion),
+    claveDePartida: partidaId ?? '',
+  });
+  const clicEnCasilla = (casilla) => {
+    if (!anticipadas.clic(casilla)) manejarClicCasilla(casilla);
+  };
+  const arrastre = useArrastrePiezas({
+    habilitado: partidaJugable,
+    puedeArrastrar: (casilla, pieza) => (puedeAnticiparAhora ? esDelColor(pieza, 'blancas') : esPiezaDelTurno(casilla)),
+    seleccionada: puedeAnticiparAhora ? anticipadas.seleccion : casillaOrigen,
+    clic: clicEnCasilla,
+  });
+  const matrizTablero = anticipadas.matrizMostrada(fen);
+  const casillaElegidaEnTablero = puedeAnticiparAhora ? anticipadas.seleccion : casillaOrigen;
+  const destinosEnTablero = puedeAnticiparAhora ? anticipadas.destinos : destinosValidos;
+  const origenesAnticipados = new Set(anticipadas.cola.map((m) => m.origen));
+  const destinosAnticipados = new Set(anticipadas.cola.map((m) => m.destino));
 
   /**
    * Manda al servidor la jugada `origen` → `destino` (con la letra de coronación `promocion` si la hay) y
@@ -1313,6 +1397,7 @@ export default function SalaControl({
                       ? usuario.rango_estimado.toUpperCase()
                       : `NIVEL ${usuario.nivel_estimado ?? 5}`}
                 </span>
+                <InsigniaElo />
               </>
             )}
           </span>
@@ -1367,7 +1452,7 @@ export default function SalaControl({
               Para medir tu nivel con fiabilidad se juegan {partidasDiagnostico} partidas contra Stockfish (nivel{' '}
               {NIVEL_DIAGNOSTICO}): una sola depende demasiado del azar. Al terminar cada una el sistema compara tus
               jugadas con las de Stockfish y te muestra un nivel provisional; al completar las {partidasDiagnostico}{' '}
-              queda confirmado, y Turing y tus próximas partidas se ajustan a él.
+              queda confirmado, y Turing y tus próximas partidas se ajustan a él. Cada una se juega con {RELOJ_DIAGNOSTICO_MIN} minutos por lado: si salís de la pantalla más de 20 segundos, tu reloj sigue corriendo.
             </p>
           </div>
         </section>
@@ -1750,7 +1835,15 @@ export default function SalaControl({
               />
             </div>
           ) : (
-            <div className="panel-entrada relative w-full max-w-[660px] flex items-center justify-center">
+            <div
+              className="panel-entrada relative w-full max-w-[660px] flex items-center justify-center"
+              onContextMenu={(evento) => {
+                if (anticipadas.cola.length > 0) {
+                  evento.preventDefault();
+                  anticipadas.cancelar();
+                }
+              }}
+            >
               {analisis && (
                 <div
                   className="absolute -left-7 top-6 bottom-6 w-3 rounded-full bg-surface-container-high shadow-inner max-lg:left-0 max-lg:right-0 max-lg:top-[-0.75rem] max-lg:bottom-auto max-lg:h-2.5 max-lg:w-auto"
@@ -1777,25 +1870,30 @@ export default function SalaControl({
                   style={{ background: 'linear-gradient(180deg, #1b0e08 0%, #2d180f 100%)' }}
                 >
                   <div className="w-full h-full grid grid-cols-8 grid-rows-8 rounded shadow-2xl overflow-hidden relative">
-                    {matriz &&
-                      matriz.map((fila, indiceFila) =>
+                    {matrizTablero &&
+                      matrizTablero.map((fila, indiceFila) =>
                         fila.map((pieza, indiceColumna) => {
                           const casilla = nombreCasilla(indiceFila, indiceColumna);
                           const clara = (indiceFila + indiceColumna) % 2 === 0;
-                          const seleccionada = casilla === casillaOrigen;
-                          const esDestinoValido = destinosValidos.includes(casilla);
+                          const seleccionada = casilla === casillaElegidaEnTablero;
+                          const esDestinoValido = destinosEnTablero.includes(casilla);
                           return (
                             <button
                               key={casilla}
                               ref={(nodo) => registrarCasillaRef(casilla, nodo)}
                               type="button"
-                              onClick={() => manejarClicCasilla(casilla)}
+                              data-casilla={casilla}
+                              onClick={() => arrastre.alClic(casilla, clicEnCasilla)}
+                              {...arrastre.propsDeCasilla(casilla, pieza)}
                               disabled={viendoPartidaAjena || demostracionDeOtraPartida}
                               aria-label={`Casilla ${casilla}${pieza ? ', pieza ' + pieza : ', vacía'}${esDestinoValido ? ', jugada válida' : ''}${viendoPartidaAjena ? ', solo lectura' : ''}${demostracionDeOtraPartida ? ', no disponible mientras se transmite otra partida' : ''}`}
                               className={`relative flex items-center justify-center ${clara ? 'bg-[#b89772]' : 'bg-[#543423]'} ${seleccionada ? 'ring-2 ring-inset ring-primary' : ''} ${viendoPartidaAjena || demostracionDeOtraPartida ? 'cursor-default' : ''}`}
                             >
+                              {(origenesAnticipados.has(casilla) || destinosAnticipados.has(casilla)) && (
+                                <span aria-hidden="true" className={`pointer-events-none absolute inset-0 ${destinosAnticipados.has(casilla) ? 'bg-orange-500/50' : 'bg-orange-400/35'}`} />
+                              )}
                               {pieza && (
-                                <div className={claseDePieza(pieza)}>
+                                <div className={`${claseDePieza(pieza)} ${casilla === arrastre.origenArrastrado ? 'opacity-30' : ''}`}>
                                   <img
                                     className="chess-piece-imagen"
                                     src={rutaImagenPieza(pieza)}
@@ -1829,6 +1927,13 @@ export default function SalaControl({
               </div>
             </div>
           )}
+
+          {vistaTablero !== '3d' && anticipadas.cola.length > 0 && (
+            <div className="w-full max-w-[660px] mt-2">
+              <ResumenAnticipadas cola={anticipadas.cola} alCancelar={anticipadas.cancelar} />
+            </div>
+          )}
+          {arrastre.fantasma}
 
           {controlRelojMs > 0 && (
             <div className="w-full max-w-[660px] mt-2">
@@ -1962,7 +2067,10 @@ export default function SalaControl({
                     max={maximoNivelSlider}
                     step={1}
                     value={nivelEnSelector}
-                    onChange={(evento) => setNivel(Number(evento.target.value))}
+                    onChange={(evento) => {
+                      setNivelManual(true);
+                      setNivel(Number(evento.target.value));
+                    }}
                     disabled={seleccionBloqueada}
                     aria-valuetext={`Nivel ${nivelEnSelector}, ${categoriaDeNivel(nivelEnSelector, oponenteEnSelector === 'modelo')}`}
                     aria-describedby={notasNivelId}
@@ -1982,10 +2090,10 @@ export default function SalaControl({
                   </label>
                   <select
                     id="relojSelector"
-                    value={diagnosticoPendiente ? 0 : selectoresBloqueados ? Math.round(controlRelojMs / 60_000) : relojMin}
+                    value={diagnosticoPendiente ? RELOJ_DIAGNOSTICO_MIN : selectoresBloqueados ? Math.round(controlRelojMs / 60_000) : relojMin}
                     onChange={(evento) => manejarCambioDeReloj(Number(evento.target.value))}
                     disabled={seleccionBloqueada}
-                    title={diagnosticoPendiente ? 'La partida de diagnóstico se juega sin reloj.' : seleccionBloqueada ? motivoBloqueoSeleccion : undefined}
+                    title={diagnosticoPendiente ? `La partida de diagnóstico se juega con ${RELOJ_DIAGNOSTICO_MIN} minutos por lado.` : seleccionBloqueada ? motivoBloqueoSeleccion : undefined}
                     className="bg-transparent font-mono-metric text-mono-metric text-on-surface font-semibold cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 max-sm:min-h-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"
                   >
                     {OPCIONES_RELOJ_MIN.map((minutos) => (
@@ -2044,10 +2152,29 @@ export default function SalaControl({
                 <p className="flex items-start gap-1">
                   <span className="material-symbols-outlined text-[13px] shrink-0" aria-hidden="true">tune</span>
                   <span>
-                    Nivel elegido a mano: tu perfil está en el nivel {nivelPerfilTuring}. Turing vuelve a ese nivel
-                    cuando tu perfil se recalibra.
+                    Nivel elegido a mano: Turing vuelve a su nivel normal ({nivelPerfilTuring}) cuando tu perfil se
+                    recalibra.
                   </span>
                 </p>
+              )}
+              {muestraDesafio && (
+                <div className="flex flex-wrap items-center gap-space-xs">
+                  <p className="flex items-start gap-1 min-w-0 flex-1 basis-56">
+                    <span className="material-symbols-outlined text-[13px] shrink-0" aria-hidden="true">trending_up</span>
+                    <span>{textoDesafio}</span>
+                  </p>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={desafioActivo}
+                    onClick={alternarDesafio}
+                    className={`min-h-11 px-space-md rounded-lg border font-mono-micro text-[10px] uppercase tracking-wide focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
+                      desafioActivo ? 'border-primary/40 bg-primary/10 text-primary' : 'border-outline-variant/40 bg-surface-container-high text-on-surface-variant'
+                    }`}
+                  >
+                    {desafioActivo ? 'Desafío activado' : 'Desafío apagado'}
+                  </button>
+                </div>
               )}
               {oponenteEnSelector === 'modelo' && (
                 <p className="flex items-start gap-1">

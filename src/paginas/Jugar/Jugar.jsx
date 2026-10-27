@@ -9,6 +9,7 @@ import {
   mandarSolicitudDeAmistad,
   obtenerAmigos,
   obtenerBloqueados,
+  obtenerMiElo,
   obtenerSalaActiva,
   quitarAmigo,
   retarJugador,
@@ -17,8 +18,10 @@ import {
   unirseASala,
 } from '../../api/backend';
 import { enlaceDeAmigo, mensajeDeAmigo, textoDeReloj } from '../../enlaceJuego';
+import { FILTROS_VACIOS, errorDeFiltros, filtrosParaEnviar, textoDeElo, textoDeFiltros, textoDePersona } from '../../elo';
 import { enlaceDeWhatsApp } from '../../enlaceInvitacion';
 import useModalAccesible from '../../useModalAccesible';
+import FiltrosDeBusqueda from '../../componentes/FiltrosDeBusqueda';
 import ModalDatosFamilia from '../../componentes/ModalDatosFamilia';
 import ModalDenunciar from '../../componentes/ModalDenunciar';
 import { BOTON_NEUTRO, BOTON_PRINCIPAL, CLASE_ETIQUETA, CLASE_INPUT } from '../Suscripcion/comunes';
@@ -57,6 +60,20 @@ function Opciones({ etiqueta, valor, opciones, alCambiar }) {
 }
 
 const OPCIONES_RELOJ = CONTROLES_DE_TIEMPO_SALA.map((ms) => ({ valor: ms, texto: textoDeReloj(ms) }));
+
+/** Una partida puntuada mueve el Elo de los dos; una amistosa se juega igual pero no lo mueve (sirve para practicar sin miedo a perder puntos). */
+const OPCIONES_PUNTUACION = [
+  { valor: true, texto: 'Puntuada' },
+  { valor: false, texto: 'Amistosa' },
+];
+
+function NotaDePuntuacion({ puntuada }) {
+  return (
+    <p className="m-0 font-mono-micro text-mono-micro text-on-surface-variant">
+      {puntuada ? 'Puntuada: mueve el Elo de los dos.' : 'Amistosa: se juega igual, pero no mueve el Elo. Sirve para practicar sin miedo a perder puntos.'}
+    </p>
+  );
+}
 
 function Tarjeta({ titulo, icono, children, className = '' }) {
   return (
@@ -107,6 +124,7 @@ function ModalRetar({ persona, alEnviar, alCerrar }) {
   const dialogoRef = useRef(null);
   const [color, setColor] = useState('aleatorio');
   const [reloj, setReloj] = useState(300000);
+  const [puntuada, setPuntuada] = useState(true);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState(null);
   useModalAccesible(dialogoRef, { alCerrar: enviando ? null : alCerrar });
@@ -115,7 +133,7 @@ function ModalRetar({ persona, alEnviar, alCerrar }) {
     setEnviando(true);
     setError(null);
     try {
-      await alEnviar(persona, color, reloj);
+      await alEnviar(persona, color, reloj, puntuada);
     } catch (err) {
       setError(err.message || 'No se pudo mandar el reto.');
       setEnviando(false);
@@ -135,12 +153,14 @@ function ModalRetar({ persona, alEnviar, alCerrar }) {
           <div className="flex flex-col min-w-0">
             <h2 id="titulo-retar" className="m-0 font-headline-sm text-headline-sm text-on-surface truncate">Retar a {persona.nombre}</h2>
             <span className="font-mono-micro text-mono-micro text-on-surface-variant">
-              {persona.nivel != null ? `Nivel ${persona.nivel}${persona.rango ? ` · ${persona.rango}` : ''}` : 'Nivel sin medir'} · {persona.en_linea ? 'en línea' : 'sin conexión ahora'}
+              {textoDePersona(persona)} · {persona.en_linea ? 'en línea' : 'sin conexión ahora'}
             </span>
           </div>
         </div>
         <Opciones etiqueta="Tu color" valor={color} opciones={COLORES} alCambiar={setColor} />
         <Opciones etiqueta="Reloj por lado" valor={reloj} opciones={OPCIONES_RELOJ} alCambiar={setReloj} />
+        <Opciones etiqueta="Tipo de partida" valor={puntuada} opciones={OPCIONES_PUNTUACION} alCambiar={setPuntuada} />
+        <NotaDePuntuacion puntuada={puntuada} />
         {reloj > 0 && <p className="m-0 font-mono-micro text-mono-micro text-on-surface-variant">Con reloj no se puede dejar la partida: quien se va más de 20 segundos, pierde.</p>}
         {!persona.en_linea && <p className="m-0 font-mono-micro text-mono-micro text-on-surface-variant">Ahora no está conectado: el reto le llega si abre ChessIA en los próximos 90 segundos.</p>}
         {error && <Mensaje>{error}</Mensaje>}
@@ -168,7 +188,11 @@ export default function Jugar({ usuario, avisos, alRefrescarAvisos, alIrASala, a
   const [buscando, setBuscando] = useState(false);
   const inicioBusqueda = useRef(0);
   const [relojBusqueda, setRelojBusqueda] = useState(300000);
+  const [puntuadaBusqueda, setPuntuadaBusqueda] = useState(true);
+  const [filtros, setFiltros] = useState(FILTROS_VACIOS);
+  const [miElo, setMiElo] = useState(null);
   const [relojPartida, setRelojPartida] = useState(300000);
+  const [puntuadaPartida, setPuntuadaPartida] = useState(true);
   const [colorPartida, setColorPartida] = useState('aleatorio');
   const [creando, setCreando] = useState(false);
   const [codigoSala, setCodigoSala] = useState('');
@@ -190,6 +214,11 @@ export default function Jugar({ usuario, avisos, alRefrescarAvisos, alIrASala, a
       setError((anterior) => anterior ?? (err.message || 'No se pudo cargar tu lista.'));
     }
   }, []);
+
+  // Mi Elo (para orientar los filtros): se vuelve a pedir al terminar una partida, que es cuando cambia.
+  useEffect(() => {
+    obtenerMiElo().then(setMiElo).catch(() => {});
+  }, [salaActiva?.codigo]);
 
   useEffect(() => {
     cargar();
@@ -238,8 +267,8 @@ export default function Jugar({ usuario, avisos, alRefrescarAvisos, alIrASala, a
     }
   };
 
-  const enviarReto = async (persona, color, reloj) => {
-    const reto = await retarJugador({ retadoId: persona.id, color, controlTiempoMs: reloj });
+  const enviarReto = async (persona, color, reloj, puntuada) => {
+    const reto = await retarJugador({ retadoId: persona.id, color, controlTiempoMs: reloj, puntuada });
     setRetando(null);
     setRetoLocal({ id: reto.id, nombre: persona.nombre });
     setAviso(null);
@@ -250,7 +279,7 @@ export default function Jugar({ usuario, avisos, alRefrescarAvisos, alIrASala, a
     accion(async () => {
       inicioBusqueda.current = Date.now();
       setAviso(null);
-      const respuesta = await buscarRival(relojBusqueda);
+      const respuesta = await buscarRival(relojBusqueda, filtrosParaEnviar(filtros), puntuadaBusqueda);
       if (respuesta.estado === 'encontrado') return alIrASala(respuesta.codigo);
       setBuscando(true);
       alRefrescarAvisos?.();
@@ -267,7 +296,7 @@ export default function Jugar({ usuario, avisos, alRefrescarAvisos, alIrASala, a
     setCreando(true);
     setError(null);
     try {
-      const sala = await crearSala(colorPartida, relojPartida);
+      const sala = await crearSala(colorPartida, relojPartida, puntuadaPartida);
       alIrASala(sala.codigo);
     } catch (err) {
       setError(err.message || 'No se pudo crear la partida.');
@@ -432,13 +461,17 @@ export default function Jugar({ usuario, avisos, alRefrescarAvisos, alIrASala, a
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-space-lg items-start">
         <div className="flex flex-col gap-space-lg min-w-0">
-          <Tarjeta titulo="Buscar un rival de mi nivel" icono="travel_explore">
+          <Tarjeta titulo="Buscar un rival" icono="travel_explore">
             <p className="m-0 font-body-sm text-body-sm text-on-surface-variant">
               {usuario?.nivel_estimado != null
-                ? `Tu nivel es ${usuario.nivel_estimado}${usuario.rango_estimado ? ` (${usuario.rango_estimado})` : ''}. Te buscamos a alguien parecido, así la partida es pareja.`
-                : 'Todavía no medimos tu nivel: jugá tus partidas de diagnóstico contra Turing para que te emparejemos mejor. Mientras tanto te buscamos un rival de nivel medio.'}
+                ? `Tu nivel es ${usuario.nivel_estimado}${usuario.rango_estimado ? ` (${usuario.rango_estimado})` : ''}${miElo ? ` y tu Elo es ${textoDeElo(miElo.elo)}${miElo.provisional ? '?' : ''}` : ''}.`
+                : 'Todavía no medimos tu nivel: jugá tus partidas de diagnóstico contra Turing para que te emparejemos mejor.'}{' '}
+              Te buscamos a alguien de nivel parecido, así la partida es pareja, o elegí vos un rango de Elo o de nivel.
             </p>
+            <FiltrosDeBusqueda valor={filtros} alCambiar={setFiltros} miElo={miElo ? { elo: miElo.elo, elo_provisional: miElo.provisional } : null} miNivel={usuario?.nivel_estimado ?? null} deshabilitado={buscando} />
             <Opciones etiqueta="Reloj por lado" valor={relojBusqueda} opciones={OPCIONES_RELOJ} alCambiar={setRelojBusqueda} />
+            <Opciones etiqueta="Tipo de partida" valor={puntuadaBusqueda} opciones={OPCIONES_PUNTUACION} alCambiar={setPuntuadaBusqueda} />
+            <NotaDePuntuacion puntuada={puntuadaBusqueda} />
             {buscando ? (
               <div className="flex flex-wrap items-center justify-between gap-space-sm p-space-sm rounded-xl bg-surface-container">
                 <div className="flex items-center gap-space-sm min-w-0">
@@ -446,12 +479,13 @@ export default function Jugar({ usuario, avisos, alRefrescarAvisos, alIrASala, a
                   <span className="font-body-sm text-body-sm text-on-surface" role="status">
                     Buscando rival… {busqueda?.segundos ?? 0} s
                     {busqueda?.tolerancia != null ? ` · hasta ${busqueda.tolerancia} ${busqueda.tolerancia === 1 ? 'nivel' : 'niveles'} de diferencia` : ''}
+                    {busqueda?.filtros ? ` · ${textoDeFiltros(busqueda.filtros)}` : ''}
                   </span>
                 </div>
                 <button type="button" onClick={dejarDeBuscar} className={BOTON_NEUTRO}>Dejar de buscar</button>
               </div>
             ) : (
-              <button type="button" onClick={empezarBusqueda} disabled={Boolean(salaActiva)} className={`${BOTON_PRINCIPAL} self-start`}>
+              <button type="button" onClick={empezarBusqueda} disabled={Boolean(salaActiva) || errorDeFiltros(filtros) != null} className={`${BOTON_PRINCIPAL} self-start`}>
                 <span className="material-symbols-outlined text-[18px]" aria-hidden="true">search</span>
                 Buscar rival
               </button>
@@ -462,6 +496,8 @@ export default function Jugar({ usuario, avisos, alRefrescarAvisos, alIrASala, a
           <Tarjeta titulo="Crear una partida y mandar el enlace" icono="share">
             <Opciones etiqueta="Tu color" valor={colorPartida} opciones={COLORES} alCambiar={setColorPartida} />
             <Opciones etiqueta="Reloj por lado" valor={relojPartida} opciones={OPCIONES_RELOJ} alCambiar={setRelojPartida} />
+            <Opciones etiqueta="Tipo de partida" valor={puntuadaPartida} opciones={OPCIONES_PUNTUACION} alCambiar={setPuntuadaPartida} />
+            <NotaDePuntuacion puntuada={puntuadaPartida} />
             <button type="button" onClick={crearPartida} disabled={creando || Boolean(salaActiva)} className={`${BOTON_PRINCIPAL} self-start`}>
               <span className="material-symbols-outlined text-[18px]" aria-hidden="true">add</span>
               {creando ? 'Creando…' : 'Crear partida'}
@@ -506,6 +542,7 @@ export default function Jugar({ usuario, avisos, alRefrescarAvisos, alIrASala, a
                       <span className="font-mono-micro text-mono-micro text-on-surface-variant truncate">
                         {RELACIONES[persona.relacion] ?? ''}
                         {persona.nivel != null ? ` · Nivel ${persona.nivel}` : ' · Nivel sin medir'}
+                        {persona.elo != null ? ` · Elo ${textoDeElo(persona)}` : ''}
                         {persona.en_linea ? ' · en línea' : ''}
                       </span>
                     </div>

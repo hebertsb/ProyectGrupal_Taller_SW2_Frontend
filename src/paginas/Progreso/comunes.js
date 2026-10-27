@@ -8,7 +8,28 @@ export const TENDENCIAS = {
   sin_comparacion: { texto: 'En diagnóstico', icono: 'hourglass_top', clase: 'text-on-surface-variant', fondo: 'bg-surface-container-high' },
 };
 
+/** El semáforo de constancia de un alumno: ícono, palabra y color (nunca solo color). */
+export const SEMAFOROS = {
+  verde: { texto: 'Al día', icono: 'check_circle', clase: 'text-primary' },
+  amarillo: { texto: 'Se está alejando', icono: 'schedule', clase: 'text-tertiary-fixed-dim' },
+  rojo: { texto: 'Hace tiempo que no juega', icono: 'warning', clase: 'text-error' },
+  sin_empezar: { texto: 'Sin empezar', icono: 'hourglass_empty', clase: 'text-on-surface-variant' },
+};
+
 export const NOMBRE_DE_FASE = { apertura: 'Apertura', medio: 'Medio juego', final: 'Final' };
+
+/** `{ganadas: 3, empatadas: 1, perdidas: 2}` → `3 G · 1 E · 2 P`; `—` si no jugó ninguna. */
+export function resultadosEntrePersonas(resultados) {
+  if (!resultados) return '—';
+  const { ganadas = 0, empatadas = 0, perdidas = 0 } = resultados;
+  return ganadas + empatadas + perdidas === 0 ? '—' : `${ganadas} G · ${empatadas} E · ${perdidas} P`;
+}
+
+/** `30` → `+30`, `-12` → `−12`, `0` → `0`: lo que se movió el Elo. */
+export function variacionElo(cambio) {
+  if (!cambio) return '0';
+  return `${cambio > 0 ? '+' : '−'}${Math.abs(cambio)}`;
+}
 
 /** `42` → `42 %`; `—` si no hay dato. */
 export function porcentaje(valor) {
@@ -55,6 +76,12 @@ export function mensajeParaElResponsable(informe) {
     lineas.push(`• ${primero} todavía está en su diagnóstico (${progreso.calibradas} de 3 partidas medidas).`);
   }
   lineas.push(`• Jugó ${actividad.partidas} partida${actividad.partidas === 1 ? '' : 's'}, ${actividad.partidas_30_dias} en el último mes.`);
+  const comp = informe.competencia;
+  if (comp && comp.total > 0) {
+    lineas.push(`• Con compañeros jugó ${comp.total} partida${comp.total === 1 ? '' : 's'}; su Elo es ${comp.elo}${comp.elo_provisional ? ' (provisional)' : ''}.`);
+  }
+  const torneo = comp?.puestos_en_torneos?.find((t) => t.estado === 'terminado' && t.partidas > 0);
+  if (torneo) lineas.push(`• En el torneo «${torneo.nombre}» quedó en el puesto ${torneo.puesto} de ${torneo.de}.`);
   lineas.push('La precisión compara cada jugada con la mejor posible según un motor de ajedrez.');
   return lineas.join('\n');
 }

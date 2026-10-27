@@ -87,6 +87,7 @@ function Jugador({ jugador, color, ms, juega }) {
         {jugador ? jugador.nombre : 'Esperando rival…'}
         <span className="ml-space-xs font-mono-micro text-mono-micro uppercase text-on-surface-variant">{color}</span>
         {jugador?.nivel != null && <span className="ml-space-xs font-mono-micro text-mono-micro text-on-surface-variant">N{jugador.nivel}</span>}
+        {jugador?.elo != null && <span className="ml-space-xs font-mono-micro text-mono-micro text-on-surface-variant">Elo {jugador.elo}</span>}
       </span>
       {ms != null && <span className="font-mono-metric text-mono-metric tabular-nums text-on-surface-variant shrink-0">{formatearReloj(ms)}</span>}
     </div>
