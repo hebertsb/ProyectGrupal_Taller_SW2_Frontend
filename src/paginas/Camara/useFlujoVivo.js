@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { leerSesion } from '../../api/sesion';
+import usePestanaVisible from '../../usePestanaVisible';
 
 const DECODIFICADOR = new TextDecoder();
 const REINTENTO_MS = 1500;
@@ -34,9 +35,11 @@ const FIN_CABECERA = new TextEncoder().encode('\r\n\r\n');
  * @param {'principal'|'secundaria'|'todas'} camara qué cámara mostrar; `todas` junta las dos lado a lado (y en modo `piezas`/`vista` fusiona el resultado)
  * @param {'plana'|'cajas'|'ambas'} vista en modo `piezas`: el tablero enderezado, la imagen de la cámara con la caja 3D de cada pieza, o ambas
  * @param {number} maxFps si es mayor que 0, el backend procesa y envía como mucho esos cuadros por segundo (el resto no se analiza): alivia la máquina en el reconocimiento
- * @param {boolean} activo si es false no se conecta (y se desconecta si estaba conectado)
+ * @param {boolean} activo si es false no se conecta (y se desconecta si estaba conectado). Con la pestaña oculta tampoco: el backend no analiza cuadros que nadie ve
  */
-export default function useFlujoVivo({ modo, casillas = [], auto = '', camara = 'principal', vista = 'plana', maxFps = 0, activo = true }) {
+export default function useFlujoVivo({ modo, casillas = [], auto = '', camara = 'principal', vista = 'plana', maxFps = 0, activo: pedido = true }) {
+  const visible = usePestanaVisible();
+  const activo = pedido && visible;
   const [url, setUrl] = useState(null);
   const [datos, setDatos] = useState(null);
   const [error, setError] = useState(null);

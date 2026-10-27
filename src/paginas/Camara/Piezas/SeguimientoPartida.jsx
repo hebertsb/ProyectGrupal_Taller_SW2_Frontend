@@ -41,8 +41,11 @@ function planilla(jugadas, blancasEmpiezan = true) {
  * Seguimiento de la partida por DIFERENCIAS entre imágenes: la app conoce la posición y, una vez por segundo, compara el cuadro de la cámara con el anterior
  * y con la foto base. Cuando el tablero queda quieto, busca la jugada LEGAL que explica las casillas que cambiaron; si ninguna lo explica, avisa de una
  * posición inválida. No clasifica piezas, así que no depende de qué tan bien reconoce el modelo cada una.
+ *
+ * @param {boolean} [bloqueado] hay una partida física en marcha: ella maneja el mismo seguimiento en el backend (que rechaza tocarlo a mano), así que acá no se
+ *   puede empezar ni seguir.
  */
-export default function SeguimientoPartida() {
+export default function SeguimientoPartida({ bloqueado = false }) {
   const [activo, setActivo] = useState(false);
   const [fenTexto, setFenTexto] = useState(FEN_INICIAL);
   const [datos, setDatos] = useState(null);
@@ -62,6 +65,11 @@ export default function SeguimientoPartida() {
   }, []);
 
   const pasar = useCallback(async () => {
+    if (document.hidden) {
+      // Con la pestaña oculta no se avanza (cada avance hace trabajar al backend); al volver se sigue y la jugada hecha mientras tanto se ve igual, contra la foto base.
+      if (montadoRef.current) temporizadorRef.current = setTimeout(pasar, INTERVALO_MS);
+      return;
+    }
     try {
       contadorRef.current += 1;
       const respuesta = await avanzarSeguimientoPartida(verDecisionRef.current && contadorRef.current % CADA_CUANTOS_CON_VISTA === 0);
@@ -73,7 +81,7 @@ export default function SeguimientoPartida() {
       if (!montadoRef.current) return;
       if (e.status === 409) {
         setActivo(false);
-        setError('El seguimiento se detuvo (el backend se reinició o alguien lo paró). Volvé a empezarlo.');
+        setError(/partida física/.test(e.message) ? e.message : 'El seguimiento se detuvo (el backend se reinició o alguien lo paró). Volvé a empezarlo.');
         return;
       }
       setError(e.message);
@@ -88,6 +96,13 @@ export default function SeguimientoPartida() {
       detenerBucle();
     };
   }, [detenerBucle]);
+
+  // Al empezar una partida física el backend reemplaza este seguimiento por el suyo: se suelta el bucle de acá.
+  useEffect(() => {
+    if (!bloqueado) return;
+    detenerBucle();
+    setActivo(false);
+  }, [bloqueado, detenerBucle]);
 
   async function empezar() {
     setOcupado(true);
@@ -165,6 +180,11 @@ export default function SeguimientoPartida() {
         ninguna lo explica, avisa de una posición inválida. No clasifica piezas, así que no depende de que el modelo las reconozca. Hace falta la cámara calibrada,
         las piezas en la posición de partida y buena luz.
       </p>
+      {bloqueado && (
+        <p className={CLASE_AVISO} role="status">
+          Hay una partida física en marcha y ella ya sigue el tablero con la cámara: detenela para usar este seguimiento a mano.
+        </p>
+      )}
       <label className="flex flex-col gap-1 font-body-sm text-body-sm text-on-surface-variant">
         Posición de partida (FEN)
         <input
@@ -177,7 +197,7 @@ export default function SeguimientoPartida() {
       </label>
       <div className="flex flex-wrap gap-space-xs">
         {!activo ? (
-          <button type="button" className={CLASE_BOTON_PRIMARIO} onClick={empezar} disabled={ocupado}>
+          <button type="button" className={CLASE_BOTON_PRIMARIO} onClick={empezar} disabled={ocupado || bloqueado}>
             {ocupado ? 'Empezando…' : 'Empezar a seguir la partida'}
           </button>
         ) : (

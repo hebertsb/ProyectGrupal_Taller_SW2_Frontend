@@ -51,6 +51,9 @@ const colorConfianza = (c) => (c >= 0.8 ? 'text-primary' : c >= 0.5 ? 'text-on-s
  */
 export default function ProbadorPiezas() {
   const [enVivo, setEnVivo] = useState(true);
+  // Mientras hay una partida física, el backend sigue el tablero a cada cuadro de la cámara: el video de piezas (la red en las 64 casillas) se pausa para no
+  // quitarle CPU, y el seguimiento a mano no se puede usar (es el mismo seguimiento).
+  const [partidaFisicaActiva, setPartidaFisicaActiva] = useState(false);
   const { calibradas } = useCamarasConfiguradas();
   const [modelos, setModelos] = useState(null);
   useEffect(() => {
@@ -64,7 +67,7 @@ export default function ProbadorPiezas() {
   const dosCamaras = camaraElegida === 'todas';
   const [vistaPiezas, setVistaPiezas] = useState('ambas');
   const [unoPorSegundo, setUnoPorSegundo] = useState(true); // reconocer cada cuadro de la webcam recarga mucho la máquina: por defecto, 1 por segundo
-  const { url, datos, error: errorFlujo } = useFlujoVivo({ modo: 'piezas', camara: camaraElegida, vista: vistaPiezas, maxFps: unoPorSegundo ? 1 : 0, activo: enVivo });
+  const { url, datos, error: errorFlujo } = useFlujoVivo({ modo: 'piezas', camara: camaraElegida, vista: vistaPiezas, maxFps: unoPorSegundo ? 1 : 0, activo: enVivo && !partidaFisicaActiva });
   const error = errorFlujo ? mensajeError({ message: errorFlujo, status: /entrenado|409/.test(errorFlujo) ? 409 : 0 }) : null;
   const historialRef = useRef([]);
   // ¿Se movió alguna de las cámaras en uso desde que se calibró? Con la grilla corrida el modelo ve recortes que no son casillas y reconoce cualquier cosa.
@@ -207,12 +210,17 @@ export default function ProbadorPiezas() {
         </p>
       )}
       <div className="flex flex-wrap gap-space-xs">
-        <button type="button" className={CLASE_BOTON} onClick={() => setEnVivo((v) => !v)} aria-pressed={enVivo}>
+        <button type="button" className={CLASE_BOTON} onClick={() => setEnVivo((v) => !v)} aria-pressed={enVivo} disabled={partidaFisicaActiva}>
           <span className="inline-flex items-center gap-1">
             <span className="material-symbols-outlined text-[18px]">{enVivo ? 'pause' : 'play_arrow'}</span>
             {enVivo ? 'Pausar' : 'Reanudar en vivo'}
           </span>
         </button>
+        {partidaFisicaActiva && (
+          <p className="font-body-sm text-body-sm text-on-surface-variant m-0 self-center" role="status">
+            En pausa mientras hay una partida física: el seguimiento del tablero necesita la máquina.
+          </p>
+        )}
       </div>
       {error && (
         <p className={CLASE_AVISO} role="alert">
@@ -295,8 +303,8 @@ export default function ProbadorPiezas() {
             </div>
           )}
         </section>
-        <PartidaFisica />
-        <SeguimientoPartida />
+        <PartidaFisica alCambiarActiva={setPartidaFisicaActiva} />
+        <SeguimientoPartida bloqueado={partidaFisicaActiva} />
         <section className={`${CLASE_TARJETA} lg:col-span-2`} aria-labelledby="titulo-probador-entrenar">
           <h3 id="titulo-probador-entrenar" className="font-body-md text-body-md text-on-surface font-medium">
             Entrenar con mis correcciones

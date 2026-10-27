@@ -45,8 +45,11 @@ function planilla(jugadas) {
 /**
  * Partida física: movés una pieza en el tablero real, la cámara lo detecta, Turing responde y el brazo (o vos, sin brazo) mueve su pieza. Si el brazo falla o el
  * tablero no coincide, la partida se detiene en un incidente hasta que lo resuelvas. Solo facilitador.
+ *
+ * @param {(activa: boolean) => void} [alCambiarActiva] avisa cuando empieza o termina la partida: mientras dura, el backend sigue el tablero a cada cuadro de la
+ *   cámara y la pantalla que la contiene tiene que soltar todo lo que también use la cámara (el video de piezas, el seguimiento a mano).
  */
-export default function PartidaFisica() {
+export default function PartidaFisica({ alCambiarActiva }) {
   const [estado, setEstado] = useState(null);
   const [error, setError] = useState(null);
   const [sinConexion, setSinConexion] = useState(false); // la última consulta al backend falló (se reinició o estaba ocupado): se borra sola con la próxima que funcione
@@ -121,7 +124,10 @@ export default function PartidaFisica() {
   const enviarManual = () =>
     ejecutar(() => jugadaManualPartidaFisica(jugadaManual.trim()), () => setJugadaManual(''));
 
-  const activa = estado?.activa;
+  const activa = Boolean(estado?.activa);
+  useEffect(() => {
+    if (alCambiarActiva) alCambiarActiva(activa);
+  }, [activa, alCambiarActiva]);
   const [textoEstado, colorEstado] = ETIQUETA[estado?.estado] ?? ['', 'text-on-surface'];
   const filas = planilla(estado?.jugadas ?? []);
 
