@@ -1554,7 +1554,7 @@ export const borrarConfiguracionBrazo = (nombre) => controlBrazo(`/configuracion
 /** Ensayo: pasos y poses por los que pasaría, sin mover nada. */
 /**
  * Prueba manual del panel. `opciones`: `captura` (el destino tiene una pieza de `tipoCapturada`: se retira primero al cementerio), `alCementerio` (manda la pieza del
- * origen al cementerio, sin destino) y `casillaCementerio` (0 a 29, dónde la deja).
+ * origen al cementerio, sin destino) y `casillaCementerio` (0 a 31, dónde la deja).
  */
 const cuerpoMoverPieza = (origen, destino, tipoPieza, { captura = false, tipoCapturada = "p", alCementerio = false, casillaCementerio = 0 } = {}) => ({
   origen,
@@ -1708,9 +1708,17 @@ export const centrarBajarBrazo = (casilla, tipoPieza = "p") => controlBrazo("/ce
 export const centrarGuardarBrazo = () => controlBrazo("/centrar/guardar");
 /** Sube de la pieza y vuelve a la posición de descanso. */
 export const centrarSubirBrazo = () => controlBrazo("/centrar/subir");
+/**
+ * Enseñar el cementerio llevando una pieza real: el brazo toma la pieza de `origen` (una casilla del tablero), la lleva al lugar que le toca en el cementerio de `zona` ("brazo" o "jugador") y la deja
+ * suspendida ahí, sin soltarla, para corregirla con `moverRelativoBrazo`. `numero` es cuál de esas piezas es (peón 1 a 8, o 1 y 2 para las demás).
+ */
+export const cementerioLlevarBrazo = ({ zona, tipoPieza = "p", numero = 1, origen = "h2" }) =>
+  controlBrazo("/cementerio/llevar", "POST", { zona, tipo_pieza: tipoPieza, numero, origen });
+/** Suelta la pieza donde está y vuelve al descanso; con `guardar` guarda esa posición (origen, paso entre casillas o paso entre filas) y con `guardarAltura`, el desnivel de la mesa. */
+export const cementerioSoltarBrazo = ({ guardar = true, guardarAltura = false } = {}) => controlBrazo("/cementerio/soltar", "POST", { guardar, guardar_altura: guardarAltura });
 /** Baja con la pinza abierta (sin cerrarla) sobre la pieza de `casilla`, a la apertura de ese tipo de pieza, espera unos segundos y sube: para medir cada apertura. */
 export const probarAperturaBrazo = (casilla, tipoPieza = "p") => controlBrazo("/probar-apertura", "POST", { casilla, tipo_pieza: tipoPieza });
-/** Lleva la punta, SIN pieza, sobre `cementerio:K` (K de 0 a 29), `reserva:dama_negra` o `reserva:dama_blanca`, baja hasta unos mm de donde soltaría y vuelve (para revisarlos antes de jugar). */
+/** Lleva la punta, SIN pieza, sobre `cementerio:K` (K de 0 a 31), `reserva:dama_negra` o `reserva:dama_blanca`, baja hasta unos mm de donde soltaría y vuelve (para revisarlos antes de jugar). */
 export const probarLugarBrazo = (lugar) => controlBrazo("/probar-lugar", "POST", { lugar });
 
 /** Límites de las articulaciones y distancias de seguridad que validan las poses: `{limites_articulaciones, margen_mesa_m, distancia_minima_eslabones_m, punta_minima_m, z_tope_mm}`. */

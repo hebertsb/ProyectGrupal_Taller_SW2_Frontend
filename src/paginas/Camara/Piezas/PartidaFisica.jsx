@@ -13,9 +13,13 @@ import {
 } from '../../../api/backend';
 import TableroSoloLectura from '../../../componentes/TableroSoloLectura';
 import { CLASE_AVISO, CLASE_BOTON, CLASE_BOTON_PRIMARIO, CLASE_TARJETA } from '../estilos';
+import PlanoCementerio from './PlanoCementerio';
 import VistaDecision from './VistaDecision';
 
 const INTERVALO_MS = 300; // el backend mira el tablero a los cuadros por segundo de la cámara; la pantalla se entera a este ritmo (el estado solo pesa unos bytes)
+const INTERVALO_SIN_PARTIDA_MS = 1500; // sin partida en marcha no hace falta mirar tan seguido
+const INTERVALO_OCULTA_MS = 3000; // con la pestaña oculta tampoco
+const INTERVALO_SIN_CONEXION_MS = 2000; // si el backend no contesta, no se lo martilla: seguir pidiendo cada 300 ms lo empeora cuando está ocupado
 const CADA_CUANTOS_CON_VISTA = 3; // las fotos de la comparación pesan (~80 KB): una de cada tres veces
 const FPS_LENTA = 15; // por debajo de esto la cámara es el límite de qué tan rápido se reconoce una jugada
 
@@ -58,17 +62,22 @@ export default function PartidaFisica() {
   const contadorRef = useRef(0);
 
   const consultar = useCallback(async () => {
+    let espera = INTERVALO_MS;
+    const visible = document.visibilityState === 'visible';
     try {
       contadorRef.current += 1;
-      const datos = await estadoPartidaFisica(verDecisionRef.current && contadorRef.current % CADA_CUANTOS_CON_VISTA === 0);
+      const datos = await estadoPartidaFisica(visible && verDecisionRef.current && contadorRef.current % CADA_CUANTOS_CON_VISTA === 0);
       if (montadoRef.current) {
         setEstado((anterior) => ({ ...datos, vista: datos.vista ?? anterior?.vista }));
         setSinConexion(false);
       }
+      if (!datos.activa) espera = INTERVALO_SIN_PARTIDA_MS;
     } catch {
       if (montadoRef.current) setSinConexion(true);
+      espera = INTERVALO_SIN_CONEXION_MS;
     }
-    if (montadoRef.current) temporizadorRef.current = setTimeout(consultar, INTERVALO_MS);
+    if (!visible) espera = Math.max(espera, INTERVALO_OCULTA_MS);
+    if (montadoRef.current) temporizadorRef.current = setTimeout(consultar, espera);
   }, []);
 
   useEffect(() => {
@@ -165,6 +174,11 @@ export default function PartidaFisica() {
       {error && (
         <p className={CLASE_AVISO} role="alert">
           {error}
+        </p>
+      )}
+      {!activa && estado?.descartada && (
+        <p className={CLASE_AVISO} role="status">
+          {estado.mensaje}
         </p>
       )}
       {sinConexion && (
@@ -283,9 +297,12 @@ export default function PartidaFisica() {
               </ul>
             </details>
           </div>
-          <div className="w-full flex flex-col items-center gap-1">
-            <TableroSoloLectura fen={estado.fen} />
-            <span className="font-mono-micro text-mono-micro text-on-surface-variant break-all text-center">{estado.fen}</span>
+          <div className="w-full flex flex-col items-center gap-space-sm min-w-0">
+            <div className="w-full flex flex-col items-center gap-1">
+              <TableroSoloLectura fen={estado.fen} />
+              <span className="font-mono-micro text-mono-micro text-on-surface-variant break-all text-center">{estado.fen}</span>
+            </div>
+            <PlanoCementerio cementerio={estado.cementerio} />
           </div>
         </div>
       )}

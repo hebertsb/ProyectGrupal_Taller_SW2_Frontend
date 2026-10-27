@@ -25,6 +25,8 @@ const CAMPOS = [
   ['altura_borde_mm', 'Cuánto sobresale el marco del tablero sobre la superficie de juego (mm)', 0, 50],
   ['holgura_traslado_mm', 'Aire al trasladar una pieza por encima de las demás (mm)', 0, 60],
   ['elevacion_al_soltar_mm', 'Al SOLTAR la pieza, quedarse más arriba que al agarrar (mm): para no chocar con el tablero', 0, 30],
+  ['desnivel_cementerio_mm', 'Cementerio: cuánto más baja que la superficie del tablero está la mesa (mm). Con valor, la pieza baja hasta la mesa al soltarla; 0 = a la altura del tablero', 0, 60],
+  ['holgura_cementerio_mm', 'Cementerio: aire entre la base de la pieza y la mesa al soltarla (mm)', 0, 20],
   ['giro_diagonal_grados', 'Giro de los dedos (°)', -180, 180],
 ];
 const PIEZAS = [['p', 'Peón'], ['n', 'Caballo'], ['b', 'Alfil'], ['r', 'Torre'], ['q', 'Dama'], ['k', 'Rey']];
@@ -103,7 +105,7 @@ export default function ParametrosBrazo({ emulador }) {
   async function aplicar() {
     // El cementerio y las reservas se editan en «Llevar una pieza»: acá no se tocan (si no, se pisarían con los valores viejos de esta pantalla).
     // eslint-disable-next-line no-unused-vars
-    const { z_tope, cementerio_origen, cementerio_paso, cementerio_paso_fila, cementerio_columnas, reservas, ...resto } = valores;
+    const { z_tope, cementerio_origen, cementerio_paso, cementerio_paso_fila, cementerio_columnas, cementerio_por_piezas, cementerio_peones_por_fila, cementerio_jugador_origen, cementerio_jugador_paso, cementerio_jugador_paso_fila, reservas, ...resto } = valores;
     const nuevos = await correr(
       () => actualizarParametrosBrazo({ ...resto, z_tope }, guardarEnDisco && !emulador),
       guardarEnDisco && !emulador ? 'Aplicado y guardado en brazo.json.' : 'Aplicado al brazo.'

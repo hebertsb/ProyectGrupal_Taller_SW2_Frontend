@@ -9,6 +9,11 @@ const CLASE_CAMPO =
 
 const FILAS = [8, 7, 6, 5, 4, 3, 2, 1];
 const PIEZAS = [['p', 'Peón'], ['n', 'Caballo'], ['b', 'Alfil'], ['r', 'Torre'], ['q', 'Dama'], ['k', 'Rey']];
+const LUGARES_DE_PRACTICA = Array.from({ length: 32 }, (_, indice) => ({
+  indice,
+  fila: Math.floor(indice / 8) + 1,
+  posicion: (indice % 8) + 1,
+}));
 const ACCIONES = [
   ['llevar', 'Llevar a una casilla vacía'],
   ['capturar', 'Capturar (come la pieza del destino)'],
@@ -25,7 +30,7 @@ export default function MoverPieza({ estado }) {
   const [accion, setAccion] = useState('llevar');
   const [tipoPieza, setTipoPieza] = useState('p');
   const [tipoCapturada, setTipoCapturada] = useState('p');
-  const [casillaCem, setCasillaCem] = useState(1); // 1 a 30 en pantalla; el backend usa 0 a 29
+  const [casillaCem, setCasillaCem] = useState(1); // 1 a 32 en pantalla; el backend usa 0 a 31
   const [pasos, setPasos] = useState(null);
   const [error, setError] = useState(null);
   const [ocupado, setOcupado] = useState(false);
@@ -36,6 +41,10 @@ export default function MoverPieza({ estado }) {
   const tarea = estado?.tarea;
   const habilitado = estado?.modo === 5;
   const enCurso = tarea?.estado === 'ejecutando';
+  const nombreLugarDePractica = (indice = casillaCem - 1) => {
+    const lugar = LUGARES_DE_PRACTICA[indice];
+    return lugar ? `fila ${lugar.fila}, lugar ${lugar.posicion}` : 'lugar elegido';
+  };
 
   function elegir(casilla) {
     if (!modo || enCurso) return;
@@ -82,7 +91,7 @@ export default function MoverPieza({ estado }) {
     setPasos(plan);
     if (
       window.confirm(
-        'Prueba de captura: el brazo llevará el peón BLANCO de d4 a la casilla 1 del cementerio y después el peón NEGRO de c5 a d4. ¿Están los dos peones en su sitio, el cementerio despejado y tenés la mano en la parada de emergencia?'
+        'Prueba de captura: el brazo llevará el peón BLANCO de d4 al primer lugar de práctica del cementerio y después el peón NEGRO de c5 a d4. ¿Están los dos peones en su sitio, el cementerio despejado y tenés la mano en la parada de emergencia?'
       )
     ) {
       await correr(() => moverPiezaBrazo('c5', 'd4', 'p', opcionesPrueba));
@@ -120,9 +129,9 @@ export default function MoverPieza({ estado }) {
           : 'Ahora toca la casilla a la que va (destino).'
         : 'Selección lista y bloqueada. Para cambiarla usa los botones de arriba; luego haz el ensayo.';
   const textoConfirmar = alCementerio
-    ? `Vas a mover el brazo: tomará la pieza de ${origen.toUpperCase()} y la dejará en la casilla ${casillaCem} del cementerio. ¿La pieza está en ${origen.toUpperCase()}? Ten la mano cerca del botón de parada.`
+    ? `Vas a mover el brazo: tomará la pieza de ${origen.toUpperCase()} y la dejará en el cementerio, ${nombreLugarDePractica()}. ¿La pieza está en ${origen.toUpperCase()}? Ten la mano cerca del botón de parada.`
     : accion === 'capturar'
-      ? `Vas a mover el brazo: primero llevará la pieza de ${destino.toUpperCase()} a la casilla ${casillaCem} del cementerio y después la de ${origen.toUpperCase()} a ${destino.toUpperCase()}. ¿Están las dos piezas en su sitio? Ten la mano cerca del botón de parada.`
+      ? `Vas a mover el brazo: primero llevará la pieza de ${destino.toUpperCase()} al cementerio, ${nombreLugarDePractica()}, y después la de ${origen.toUpperCase()} a ${destino.toUpperCase()}. ¿Están las dos piezas en su sitio? Ten la mano cerca del botón de parada.`
       : `Vas a mover el brazo: tomará la pieza de ${origen.toUpperCase()} y la dejará en ${destino.toUpperCase()}. ¿La pieza está en ${origen.toUpperCase()} y ${destino.toUpperCase()} está vacía? Ten la mano cerca del botón de parada.`;
 
   async function correr(accion) {
@@ -220,18 +229,29 @@ export default function MoverPieza({ estado }) {
           </label>
         )}
         {accion !== 'llevar' && (
-          <label className="font-body-sm text-body-sm text-on-surface-variant flex flex-col gap-1">
-            Casilla del cementerio (1 a 30)
-            <input
-              className={`${CLASE_CAMPO} w-24`}
-              type="number"
-              min="1"
-              max="30"
-              value={casillaCem}
-              disabled={enCurso}
-              onChange={(e) => { setPasos(null); setCasillaCem(Math.max(1, Math.min(30, Number(e.target.value) || 1))); }}
-            />
-          </label>
+          <div className="flex flex-col gap-1 w-full">
+            <span className="font-body-sm text-body-sm text-on-surface-variant">Lugar temporal de práctica en el cementerio</span>
+            <div className="grid grid-cols-8 gap-1 max-w-sm" role="group" aria-label="Lugar temporal del cementerio">
+              {LUGARES_DE_PRACTICA.map((lugar) => {
+                const seleccionado = casillaCem - 1 === lugar.indice;
+                return (
+                  <button
+                    key={lugar.indice}
+                    type="button"
+                    className={`aspect-square rounded border text-mono-micro ${seleccionado ? 'bg-primary text-on-primary border-primary ring-2 ring-primary' : 'bg-surface-container border-outline-variant text-on-surface-variant'}`}
+                    aria-pressed={seleccionado}
+                    aria-label={`Fila ${lugar.fila}, lugar ${lugar.posicion}`}
+                    title={`Fila ${lugar.fila}, lugar ${lugar.posicion}`}
+                    disabled={enCurso}
+                    onClick={() => { setPasos(null); setCasillaCem(lugar.indice + 1); }}
+                  >
+                    {lugar.posicion}
+                  </button>
+                );
+              })}
+            </div>
+            <span className="font-mono-micro text-mono-micro text-on-surface-variant">Seleccionado: {nombreLugarDePractica()}.</span>
+          </div>
         )}
       </div>
       <div className="flex flex-wrap gap-space-xs" role="group" aria-label="Qué casilla elegir al tocar el tablero">
@@ -357,7 +377,7 @@ export default function MoverPieza({ estado }) {
       <details className="font-body-sm text-body-sm text-on-surface">
         <summary className="cursor-pointer text-on-surface-variant min-h-[44px] flex items-center">Cementerio y damas de reserva (dónde están, y probarlos sin pieza)</summary>
         <div className="pt-space-xs">
-          <CementerioBrazo pose={estado?.pose} emulador={Boolean(estado?.emulador)} deshabilitado={!habilitado || enCurso} />
+          <CementerioBrazo pose={estado?.pose} emulador={Boolean(estado?.emulador)} deshabilitado={!habilitado || enCurso} estado={estado} />
         </div>
       </details>
     </section>

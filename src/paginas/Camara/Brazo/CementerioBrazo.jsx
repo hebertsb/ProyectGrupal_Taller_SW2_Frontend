@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { actualizarParametrosBrazo, obtenerParametrosBrazo, probarLugarBrazo } from '../../../api/backend';
+import AjusteCementerioBrazo from './AjusteCementerioBrazo';
 import { CLASE_AVISO, CLASE_BOTON, CLASE_BOTON_PRIMARIO } from '../estilos';
 
 const CAMPO =
@@ -9,12 +10,18 @@ const LUGARES = [
   ['cementerio_origen', null, 'Primera casilla del cementerio', true],
   ['cementerio_paso', null, 'Paso entre casillas de una fila (dx, dy mm)', false],
   ['cementerio_paso_fila', null, 'Paso entre filas (dx, dy mm)', false],
-  ['reservas', 'dama_negra', 'Dama negra de reserva (la que usa Turing)', true],
+  ['cementerio_jugador_origen', null, 'Cementerio del JUGADOR, del lado contrario: primera casilla (solo si ordenás por piezas)', true],
+  ['cementerio_jugador_paso', null, 'Cementerio del jugador: paso entre casillas de una fila (dx, dy mm)', false],
+  ['cementerio_jugador_paso_fila', null, 'Cementerio del jugador: paso entre filas (dx, dy mm)', false],
+  ['reservas', 'dama_negra', 'Dama negra de reserva (la que usa Turing; no se usa si ordenás por piezas)', true],
   ['reservas', 'dama_blanca', 'Dama blanca de reserva (solo si el brazo corona con blancas)', true],
 ];
 const PRUEBAS = [
   ['cementerio:0', 'Primera casilla'],
-  ['cementerio:29', 'Última casilla (la 30)'],
+  ['cementerio:31', 'Última casilla (la 32)'],
+  ['cementerio_jugador:0', 'Jugador: primera casilla'],
+  ['cementerio_jugador:14', 'Jugador: dama 1 (para coronar)'],
+  ['cementerio_jugador:15', 'Jugador: dama 2'],
   ['reserva:dama_negra', 'Dama negra'],
   ['reserva:dama_blanca', 'Dama blanca'],
 ];
@@ -23,7 +30,7 @@ const PRUEBAS = [
  * Dónde está el cementerio (piezas capturadas y peones coronados) y las damas de reserva, y cómo probarlos SIN pieza. Se lleva la punta al lugar con el modo en
  * vivo, se toca «Usar la posición actual» y se prueba primero en el emulador. `pose` es la pose actual del brazo conectado.
  */
-export default function CementerioBrazo({ pose, emulador, deshabilitado }) {
+export default function CementerioBrazo({ pose, emulador, deshabilitado, estado = null }) {
   const [valores, setValores] = useState(null);
   const [guardarEnDisco, setGuardarEnDisco] = useState(false);
   const [mensaje, setMensaje] = useState(null);
@@ -38,6 +45,11 @@ export default function CementerioBrazo({ pose, emulador, deshabilitado }) {
         cementerio_paso: p.cementerio_paso,
         cementerio_paso_fila: p.cementerio_paso_fila,
         cementerio_columnas: p.cementerio_columnas,
+        cementerio_por_piezas: p.cementerio_por_piezas ?? false,
+        cementerio_peones_por_fila: p.cementerio_peones_por_fila ?? 8,
+        cementerio_jugador_origen: p.cementerio_jugador_origen ?? null,
+        cementerio_jugador_paso: p.cementerio_jugador_paso,
+        cementerio_jugador_paso_fila: p.cementerio_jugador_paso_fila,
         reservas: p.reservas ?? {},
       });
     } catch (e) {
@@ -122,6 +134,47 @@ export default function CementerioBrazo({ pose, emulador, deshabilitado }) {
           </div>
         );
       })}
+      <label className="min-h-[44px] flex items-center gap-2 font-body-sm text-body-sm text-on-surface cursor-pointer">
+        <input
+          type="checkbox"
+          className="w-5 h-5 accent-primary"
+          checked={Boolean(valores.cementerio_por_piezas)}
+          onChange={(e) => setValores((v) => ({
+            ...v,
+            cementerio_por_piezas: e.target.checked,
+            // Ocho peones no forman un cuadrado perfecto; 4 × 2 es el bloque compacto pedido para una instalación nueva.
+            cementerio_peones_por_fila: e.target.checked && v.cementerio_peones_por_fila === 8 ? 4 : v.cementerio_peones_por_fila,
+          }))}
+        />
+        Ordenar el cementerio por piezas
+      </label>
+      {valores.cementerio_por_piezas && (
+        <div className="font-body-sm text-body-sm text-on-surface-variant flex flex-col gap-1">
+          <p className="m-0">
+            Hay dos cementerios con el mismo orden, uno a cada lado del tablero: el del brazo y el del jugador. Cada uno tiene un bloque de ocho peones (4 × 2 recomendado) y, después, una fila recta
+            de caballos, alfiles, torres y damas (dos de cada una).
+          </p>
+          <ul className="m-0 pl-space-md flex flex-col gap-0.5">
+            <li>El brazo deja en SU cementerio las piezas blancas que captura. Si vos coronás, tomás la dama blanca de ahí.</li>
+            <li>Vos dejás en TU cementerio las piezas negras que capturás, en su casilla. Si Turing corona, el brazo toma la dama de la dama 1 (y después de la dama 2): dejá ahí la dama negra capturada o una de repuesto.</li>
+            <li>El peón de Turing que corona lo deja el brazo en la fila de peones de tu cementerio.</li>
+          </ul>
+          <p className="m-0">Las damas de reserva de arriba (reservas) no se usan en este modo. Las casillas por fila tienen que ser 8 o más.</p>
+        </div>
+      )}
+      {valores.cementerio_por_piezas && (
+        <label className="font-body-sm text-body-sm text-on-surface-variant flex flex-col gap-1 sm:max-w-xs">
+          Peones por fila (4 = bloque compacto de 4 × 2; 8 = todos en una línea)
+          <input
+            className={CAMPO}
+            type="number"
+            min="1"
+            max="8"
+            value={valores.cementerio_peones_por_fila ?? ''}
+            onChange={(e) => setValores((v) => ({ ...v, cementerio_peones_por_fila: e.target.value === '' ? '' : Number(e.target.value) }))}
+          />
+        </label>
+      )}
       <label className="font-body-sm text-body-sm text-on-surface-variant flex flex-col gap-1 sm:max-w-xs">
         Casillas por fila del cementerio
         <input
@@ -155,6 +208,12 @@ export default function CementerioBrazo({ pose, emulador, deshabilitado }) {
           </button>
         ))}
       </div>
+      <AjusteCementerioBrazo
+        estado={estado}
+        porPiezas={Boolean(valores.cementerio_por_piezas)}
+        peonesPorFila={Number(valores.cementerio_peones_por_fila) || 4}
+        alCambio={cargar}
+      />
       {mensaje && (
         <p className="font-body-sm text-body-sm text-on-surface m-0" role="status">
           {mensaje}
