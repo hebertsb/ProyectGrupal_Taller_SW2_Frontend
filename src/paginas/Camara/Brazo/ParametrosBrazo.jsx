@@ -19,7 +19,7 @@ const CAMPOS = [
   ['apertura_extra_soltar', 'Apertura extra al soltar la pieza (0–1000)', 0, 1000],
   ['largo_pinza_mm', 'Largo de la pinza: de la brida a la punta de los dedos (mm)', 100, 400],
   ['altura_segura_mm', 'Altura segura para trasladarse (mm)', 20, 200],
-  ['margen_agarre_mm', 'Margen de agarre sobre el tablero (mm)', 0, 30],
+  ['margen_agarre_mm', 'Margen de agarre sobre el tablero (mm)', 0, 60],
   ['velocidad_bajada', 'Velocidad al bajar y subir cerca del tablero (%): lenta, para no golpearlo', 1, 100],
   ['aceleracion_bajada', 'Aceleración al bajar y subir cerca del tablero (%)', 1, 100],
   ['altura_borde_mm', 'Cuánto sobresale el marco del tablero sobre la superficie de juego (mm)', 0, 50],
@@ -172,7 +172,7 @@ export default function ParametrosBrazo({ emulador }) {
         ))}
       </div>
       <p className="font-body-sm text-body-sm text-on-surface m-0">
-        Margen de agarre sobre el tablero al bajar sobre cada pieza (mm, 0–30). El del peón es el mismo de «Margen de agarre sobre el tablero», arriba.. Si la pinza choca contra el
+        Margen de agarre sobre el tablero al bajar sobre cada pieza (mm, 0–60). El del peón es el mismo de «Margen de agarre sobre el tablero», arriba.. Si la pinza choca contra el
         tablero con una pieza puntual, subile el margen acá — no hace falta tocar el de arriba, que sigue valiendo para las demás.
       </p>
       <div className="grid grid-cols-2 sm:grid-cols-6 gap-space-xs">
@@ -183,7 +183,7 @@ export default function ParametrosBrazo({ emulador }) {
               className={CAMPO}
               type="number"
               min="0"
-              max="30"
+              max="60"
               step="0.1"
               value={(letra === 'p' ? valores.margen_agarre_mm : valores.margenes_por_pieza?.[letra]) ?? ''}
               onChange={(e) => cambiarMargen(letra, e.target.value)}

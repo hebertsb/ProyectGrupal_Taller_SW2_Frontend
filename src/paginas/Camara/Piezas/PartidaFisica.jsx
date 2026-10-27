@@ -15,8 +15,9 @@ import TableroSoloLectura from '../../../componentes/TableroSoloLectura';
 import { CLASE_AVISO, CLASE_BOTON, CLASE_BOTON_PRIMARIO, CLASE_TARJETA } from '../estilos';
 import VistaDecision from './VistaDecision';
 
-const INTERVALO_MS = 500; // el backend mira el tablero 10 veces por segundo; la pantalla se entera a este ritmo
-const CADA_CUANTOS_CON_VISTA = 2; // las fotos de la comparación pesan: una de cada dos veces
+const INTERVALO_MS = 300; // el backend mira el tablero a los cuadros por segundo de la cámara; la pantalla se entera a este ritmo (el estado solo pesa unos bytes)
+const CADA_CUANTOS_CON_VISTA = 3; // las fotos de la comparación pesan (~80 KB): una de cada tres veces
+const FPS_LENTA = 15; // por debajo de esto la cámara es el límite de qué tan rápido se reconoce una jugada
 
 const ETIQUETA = {
   esperando_humano: ['Tu turno: mové una pieza', 'text-on-surface'],
@@ -44,6 +45,7 @@ function planilla(jugadas) {
 export default function PartidaFisica() {
   const [estado, setEstado] = useState(null);
   const [error, setError] = useState(null);
+  const [sinConexion, setSinConexion] = useState(false); // la última consulta al backend falló (se reinició o estaba ocupado): se borra sola con la próxima que funcione
   const [ocupado, setOcupado] = useState(false);
   const [usarBrazo, setUsarBrazo] = useState(false);
   const [precauciones, setPrecauciones] = useState(false);
@@ -59,9 +61,12 @@ export default function PartidaFisica() {
     try {
       contadorRef.current += 1;
       const datos = await estadoPartidaFisica(verDecisionRef.current && contadorRef.current % CADA_CUANTOS_CON_VISTA === 0);
-      if (montadoRef.current) setEstado((anterior) => ({ ...datos, vista: datos.vista ?? anterior?.vista }));
-    } catch (e) {
-      if (montadoRef.current) setError(e.message);
+      if (montadoRef.current) {
+        setEstado((anterior) => ({ ...datos, vista: datos.vista ?? anterior?.vista }));
+        setSinConexion(false);
+      }
+    } catch {
+      if (montadoRef.current) setSinConexion(true);
     }
     if (montadoRef.current) temporizadorRef.current = setTimeout(consultar, INTERVALO_MS);
   }, []);
@@ -162,6 +167,11 @@ export default function PartidaFisica() {
           {error}
         </p>
       )}
+      {sinConexion && (
+        <p className={CLASE_AVISO} role="status">
+          Sin respuesta del backend (se está reiniciando o está muy ocupado): reintentando…
+        </p>
+      )}
 
       {activa && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-space-md items-start">
@@ -172,6 +182,19 @@ export default function PartidaFisica() {
               {estado.usa_brazo ? '' : ' · sin brazo'}
             </p>
             <p className="font-body-sm text-body-sm text-on-surface-variant m-0 break-words">{estado.mensaje}</p>
+            {estado.referencia_vacia === false && (
+              <p className={CLASE_AVISO} role="status">
+                Falta la foto del tablero vacío (se borra sola al recalibrar la cámara): sin ella no se puede comprobar que las piezas quedaron bien después de cada jugada del
+                brazo. Sacala en «Entrenamiento de piezas» con el botón «Casilla vacía», con el tablero sin piezas.
+              </p>
+            )}
+            {estado.rendimiento?.fps_camara != null && (
+              <p className="font-mono-micro text-mono-micro text-on-surface-variant m-0" aria-label="Rendimiento de la cámara">
+                Cámara: {estado.rendimiento.fps_camara} cuadros/s{estado.rendimiento.formato ? ` (${estado.rendimiento.formato})` : ''}
+                {estado.rendimiento.ms_cuadro != null ? ` · ${estado.rendimiento.ms_cuadro} ms por cuadro` : ''}
+                {estado.rendimiento.fps_camara < FPS_LENTA ? ' · lenta: la jugada se reconoce con atraso (probá otro puerto USB o más luz)' : ''}
+              </p>
+            )}
 
             {estado.estado === 'incidente' && (
               <div className={CLASE_AVISO} role="alert">
