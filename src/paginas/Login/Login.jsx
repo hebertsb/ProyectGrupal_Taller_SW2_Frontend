@@ -17,8 +17,8 @@ function correoDeIngreso(texto) {
   return limpio.includes('@') ? limpio : `${limpio.toLowerCase()}@${DOMINIO_DE_ALUMNOS}`;
 }
 
-export default function Login({ onLoginSuccess, apariencia }) {
-  const [modo, setModo] = useState('login'); // 'login' | 'registro'
+export default function Login({ onLoginSuccess, apariencia, modoInicial = 'login', alVolver = null }) {
+  const [modo, setModo] = useState(modoInicial); // 'login' | 'registro'
   const [rolEsperado, setRolEsperado] = useState('jugador'); // 'jugador' | 'facilitador'
   const [nombre, setNombre] = useState('');
   const [email, setEmail] = useState('');
@@ -310,6 +310,16 @@ export default function Login({ onLoginSuccess, apariencia }) {
 
   return (
     <div className="min-h-screen bg-surface-container-lowest text-on-surface font-sans antialiased flex flex-col justify-between relative overflow-x-hidden select-none">
+      {alVolver && (
+        <button
+          type="button"
+          onClick={alVolver}
+          className="fixed bottom-3 left-3 z-50 flex items-center gap-1 px-3 py-1.5 rounded-lg border border-cyan-500/40 bg-black/80 backdrop-blur text-cyan-300 text-xs font-mono hover:bg-cyan-950/60"
+        >
+          <span className="material-symbols-outlined text-[16px]" aria-hidden="true">arrow_back</span>
+          Inicio
+        </button>
+      )}
       {token2fa && <PasoDobleFactor token={token2fa} alCompletar={completarSegundoPaso} alCancelar={() => setToken2fa(null)} />}
       {recuperandoPassword && <RecuperarPassword correoInicial={email} alCerrar={() => setRecuperandoPassword(false)} alCompletar={(correo) => {
         setRecuperandoPassword(false);

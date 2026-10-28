@@ -10,6 +10,7 @@ import {
   pausarPartidaFisica,
   reanudarPartidaFisica,
   resolverIncidentePartidaFisica,
+  retomarFotoBasePartidaFisica,
 } from '../../../api/backend';
 import TableroSoloLectura from '../../../componentes/TableroSoloLectura';
 import { CLASE_AVISO, CLASE_BOTON, CLASE_BOTON_PRIMARIO, CLASE_TARJETA } from '../estilos';
@@ -25,6 +26,7 @@ const FPS_LENTA = 15; // por debajo de esto la cámara es el límite de qué tan
 
 const ETIQUETA = {
   esperando_humano: ['Tu turno: mové una pieza', 'text-on-surface'],
+  leyendo: ['Leí tu jugada…', 'text-primary'],
   turing_decide: ['Turing está pensando…', 'text-primary'],
   brazo_ejecuta: ['El brazo está moviendo una pieza', 'text-primary'],
   verificando: ['Preparando la cámara para tu turno', 'text-primary'],
@@ -124,6 +126,7 @@ export default function PartidaFisica({ alCambiarActiva }) {
   const detener = () => ejecutar(async () => { await detenerPartidaFisica(); setEstado({ activa: false }); return null; });
   const alternarPausa = () => ejecutar(() => (estado?.pausada ? reanudarPartidaFisica() : pausarPartidaFisica()));
   const resolver = (accion) => ejecutar(() => resolverIncidentePartidaFisica(accion));
+  const retomarBase = () => ejecutar(() => retomarFotoBasePartidaFisica());
   const enviarManual = () =>
     ejecutar(() => jugadaManualPartidaFisica(jugadaManual.trim()), () => setJugadaManual(''));
 
@@ -234,9 +237,13 @@ export default function PartidaFisica({ alCambiarActiva }) {
             )}
 
             {estado.seguimiento?.estado === 'invalida' && estado.estado === 'esperando_humano' && (
-              <p className={CLASE_AVISO} role="alert">
-                {estado.seguimiento.mensaje}
-              </p>
+              <div className={CLASE_AVISO} role="alert">
+                <p className="m-0">{estado.seguimiento.mensaje}</p>
+                <p className="m-0 mt-1">Si las piezas ya están como en el tablero digital y el aviso no se va, volvé a tomar la foto base.</p>
+                <button type="button" className={`${CLASE_BOTON} mt-space-xs`} onClick={retomarBase} disabled={ocupado}>
+                  Volver a tomar la foto base
+                </button>
+              </div>
             )}
 
             <div className="font-mono-micro text-mono-micro text-on-surface" aria-label="Jugadas">

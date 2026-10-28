@@ -14,12 +14,14 @@ import Onboarding from './paginas/Onboarding/Onboarding';
 import DemostracionEnVivo from './paginas/DemostracionEnVivo/DemostracionEnVivo';
 import Monitoreo from './paginas/Monitoreo/Monitoreo';
 import CamaraBrazo from './paginas/CamaraBrazo/CamaraBrazo';
+import Exposicion from './paginas/Exposicion/Exposicion';
 import EntrenarCamara from './paginas/EntrenarCamara/EntrenarCamara';
 import BannerCalibracion from './paginas/Camara/Calibracion/BannerCalibracion';
 import ConfiguracionEnsenanza from './paginas/ConfiguracionEnsenanza/ConfiguracionEnsenanza';
 import EntrenamientoModelo from './paginas/EntrenamientoModelo/EntrenamientoModelo';
 import Perfil from './paginas/Perfil/Perfil';
 import Login from './paginas/Login/Login';
+import Landing from './paginas/Landing/Landing';
 import Politica from './paginas/Politica/Politica';
 import Confianza from './paginas/Confianza/Confianza';
 import AccesoRestringido from './componentes/AccesoRestringido';
@@ -103,6 +105,22 @@ export default function App() {
     window.history.replaceState(null, '', window.location.pathname + window.location.search);
     setVerConfianza(false);
   };
+  // La landing pública vive en su propio sitio (https://chessia-tau.vercel.app). Este front abre directo el ingreso de la app:
+  // `verLanding` arranca en false y solo se activa con el botón «volver» del Login.
+  const [verLanding, setVerLanding] = useState(false);
+  const [modoIngreso, setModoIngreso] = useState<'login' | 'registro'>('login');
+  const irAlIngreso = (modo: 'login' | 'registro') => {
+    setModoIngreso(modo);
+    setVerLanding(false);
+    window.scrollTo(0, 0);
+  };
+  useEffect(() => {
+    const alCambiarHash = () => {
+      if (window.location.hash.includes('=')) setVerLanding(false);
+    };
+    window.addEventListener('hashchange', alCambiarHash);
+    return () => window.removeEventListener('hashchange', alCambiarHash);
+  }, []);
   // Secciones del menú lateral que el facilitador abrió o cerró a mano (id de sección -> abierta).
   const [seccionesAbiertas, setSeccionesAbiertas] = useState<Record<string, boolean>>({});
   // En pantallas angostas (menos de lg) la barra lateral arranca cerrada: si no, tapa el contenido.
@@ -607,6 +625,7 @@ export default function App() {
       titulo: 'Brazo y modelo',
       icono: 'precision_manufacturing',
       items: [
+        { id: 'exposicion', texto: 'Jugar contra Turing', icono: 'smart_toy', visible: esPrincipal },
         { id: 'camaraBrazo', texto: 'Cámara y Brazo', icono: 'videocam', visible: esPrincipal },
         {
           id: 'entrenamiento',
@@ -631,11 +650,12 @@ export default function App() {
   if (verPolitica) return <Politica alVolver={cerrarPolitica} />;
   if (verConfianza) return <Confianza alVolver={cerrarConfianza} />;
 
-  // Si no hay usuario, mostrar login
+  // Si no hay usuario: primero la landing pública; desde ahí se pasa al ingreso.
   if (!usuario) {
+    if (verLanding) return <Landing alRegistrarse={() => irAlIngreso('registro')} alIngresar={() => irAlIngreso('login')} />;
     return (
       <ProveedorRazonamiento>
-        <Login onLoginSuccess={manejarLogin} apariencia={apariencia} />
+        <Login key={modoIngreso} onLoginSuccess={manejarLogin} modoInicial={modoIngreso} apariencia={apariencia} alVolver={() => setVerLanding(true)} />
       </ProveedorRazonamiento>
     );
   }
@@ -881,6 +901,9 @@ export default function App() {
                   <button onClick={() => setPantallaActiva('monitoreo')} className={headerNavClasses('monitoreo')}>MONITOREO</button>
                 )}
                 {esPrincipal && (
+                  <button onClick={() => setPantallaActiva('exposicion')} className={headerNavClasses('exposicion')}>JUGAR CONTRA TURING</button>
+                )}
+                {esPrincipal && (
                   <button onClick={() => setPantallaActiva('camaraBrazo')} className={headerNavClasses('camaraBrazo')}>CÁMARA Y BRAZO</button>
                 )}
                 {esPrincipal && (
@@ -1095,6 +1118,9 @@ export default function App() {
             ) : (
               soloPlataforma('Cámara y Brazo')
             )
+          )}
+          {pantallaActiva === 'exposicion' && (
+            esPrincipal ? <Exposicion /> : soloPlataforma('La pantalla de exposición')
           )}
           {pantallaActiva === 'entrenarCamara' && (
             esPrincipal ? (

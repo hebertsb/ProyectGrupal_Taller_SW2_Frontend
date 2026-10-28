@@ -1643,8 +1643,15 @@ export const fijarPosicionSeguimiento = (fen) => solicitar("/vision/seguimiento/
  * Partida física (cámara + Turing + brazo). Solo facilitador. `estado` = esperando_humano | turing_decide | brazo_ejecuta | verificando | esperando_robot_manual |
  * incidente | fin. 404 = la partida no existe, 409 = cámara sin calibrar / sin partida física, 422 = no se puede.
  */
-export const iniciarPartidaFisica = (partidaId, camara = "principal") =>
-  solicitar("/partida-fisica/iniciar", { method: "POST", body: JSON.stringify({ partida_id: partidaId, camara }) });
+export const iniciarPartidaFisica = (partidaId, camara = "principal", opciones = {}) =>
+  solicitar("/partida-fisica/iniciar", { method: "POST", body: JSON.stringify({ partida_id: partidaId, camara, ...opciones }) });
+/**
+ * «¡No, era otra!»: anula la jugada recién leída antes de que Turing la reciba (409 si ya no se puede). Con `opciones` de `iniciarPartidaFisica`, `tiempo_persona_s` y
+ * `tiempo_turing_s` (0 = sin límite) arman el reloj y `brazo_cuenta` hace que el tiempo del brazo se descuente del de Turing.
+ */
+export const cancelarLecturaPartidaFisica = () => solicitar("/partida-fisica/cancelar-lectura", { method: "POST" });
+/** Dice cómo están DE VERDAD las piezas (FEN) y la partida sigue desde ahí, sin reiniciar; 422 si la posición es imposible, 409 si Turing o el brazo están moviendo. */
+export const corregirPosicionPartidaFisica = (fen) => solicitar("/partida-fisica/posicion", { method: "POST", body: JSON.stringify({ fen }) });
 /** Con `conVista`, el estado trae `vista`: la foto base, la actual y la comparación casilla por casilla (como el seguimiento por diferencias). */
 export const estadoPartidaFisica = (conVista = false) => solicitar(`/partida-fisica/estado${conVista ? "?vista=true" : ""}`, { method: "GET" });
 export const pausarPartidaFisica = () => solicitar("/partida-fisica/pausar", { method: "POST" });
@@ -1655,6 +1662,13 @@ export const jugadaManualPartidaFisica = (movimiento) =>
 /** `accion`: `continuar` (el tablero físico ya coincide con la partida) o `reintentar` (quedó como antes de la jugada del brazo y se repite). */
 export const resolverIncidentePartidaFisica = (accion) =>
   solicitar("/partida-fisica/resolver-incidente", { method: "POST", body: JSON.stringify({ accion }) });
+/**
+ * Lista de verificación antes de empezar (solo lectura: no mueve ni cambia nada del brazo): `{listo, items: [{id, etiqueta, estado, detalle, brazo}]}`, con `estado` = ok | error | aviso | info
+ * y `brazo: true` en lo que solo importa si la partida usa el brazo.
+ */
+export const preparacionPartidaFisica = () => solicitar("/partida-fisica/preparacion", { method: "GET" });
+/** Vuelve a tomar la foto base con el tablero como está ahora: para cuando las piezas ya coinciden con la partida pero la cámara sigue avisando de una posición inválida. */
+export const retomarFotoBasePartidaFisica = () => solicitar("/partida-fisica/foto-base", { method: "POST" });
 export const detenerPartidaFisica = () => solicitar("/partida-fisica", { method: "DELETE" });
 
 /** Deja de seguir la partida. */

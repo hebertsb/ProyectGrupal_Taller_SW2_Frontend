@@ -1,0 +1,88 @@
+/* Estilos propios de la landing («Cyber-Chess Arena»): fondo de cuadrícula, tarjetas de vidrio y el haz de escaneo. */
+
+.landing {
+  --lp-verde: #00e676;
+  --lp-cian: #00d2ff;
+  --lp-fondo: #060d17;
+  --lp-tarjeta: #0b1523;
+  background-color: var(--lp-fondo);
+  background-image:
+    radial-gradient(ellipse at 50% 0%, rgba(0, 210, 255, 0.08) 0%, transparent 65%),
+    linear-gradient(to right, rgba(0, 210, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 210, 255, 0.04) 1px, transparent 1px);
+  background-size: 100% 100%, 28px 28px, 28px 28px;
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.landing ::selection {
+  background: var(--lp-verde);
+  color: #000;
+}
+
+.lp-vidrio {
+  background: rgba(11, 21, 35, 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(0, 210, 255, 0.16);
+}
+
+.lp-neon-verde {
+  text-shadow: 0 0 14px rgba(0, 230, 118, 0.65);
+}
+
+.lp-haz {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--lp-verde), var(--lp-cian), transparent);
+  box-shadow: 0 0 12px var(--lp-cian), 0 0 20px var(--lp-verde);
+  animation: lp-escaneo 3.6s linear infinite;
+}
+
+@keyframes lp-escaneo {
+  0% { top: 0%; opacity: 0.8; }
+  50% { opacity: 0.3; }
+  100% { top: 100%; opacity: 0.8; }
+}
+
+.lp-boton-primario {
+  background: var(--lp-verde);
+  color: #000;
+  box-shadow: 0 4px 22px rgba(0, 230, 118, 0.65);
+  transition: background-color 0.15s, transform 0.1s;
+}
+.lp-boton-primario:hover { background: #34d399; }
+.lp-boton-primario:active { transform: scale(0.97); }
+
+.lp-boton-secundario {
+  background: rgba(11, 21, 35, 0.9);
+  border: 1px solid rgba(34, 211, 238, 0.5);
+  color: #67e8f9;
+  transition: background-color 0.15s, transform 0.1s;
+}
+.lp-boton-secundario:hover { background: rgba(8, 51, 68, 0.8); }
+.lp-boton-secundario:active { transform: scale(0.97); }
+
+.lp-campo {
+  width: 100%;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(0, 210, 255, 0.4);
+  border-radius: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.8rem;
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+}
+.lp-campo::placeholder { color: #64748b; }
+.lp-campo:focus {
+  outline: none;
+  border-color: var(--lp-verde);
+  box-shadow: 0 0 0 1px var(--lp-verde), inset 0 0 12px rgba(0, 230, 118, 0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-haz { animation: none; display: none; }
+  .landing .animate-ping,
+  .landing .animate-pulse { animation: none; }
+}
