@@ -50,15 +50,19 @@ const colorConfianza = (c) => (c >= 0.8 ? 'text-primary' : c >= 0.5 ? 'text-on-s
  * Poné una pieza en cualquier casilla y mirá si la reconoce. Es video en vivo y se vota entre los últimos 5 cuadros para que un error suelto no cambie el resultado; no guarda nada.
  */
 export default function ProbadorPiezas() {
-  const [enVivo, setEnVivo] = useState(true);
+  const [probadorAbierto, setProbadorAbierto] = useState(false);
+  const [enVivo, setEnVivo] = useState(false);
   // Mientras hay una partida física, el backend sigue el tablero a cada cuadro de la cámara: el video de piezas (la red en las 64 casillas) se pausa para no
   // quitarle CPU, y el seguimiento a mano no se puede usar (es el mismo seguimiento).
   const [partidaFisicaActiva, setPartidaFisicaActiva] = useState(false);
-  const { calibradas } = useCamarasConfiguradas();
+  const reconocimientoActivo = probadorAbierto && enVivo && !partidaFisicaActiva;
+  const { calibradas } = useCamarasConfiguradas(probadorAbierto);
   const [modelos, setModelos] = useState(null);
   useEffect(() => {
+    if (!probadorAbierto) return undefined;
     estadoDeLosModelos().then(setModelos).catch(() => setModelos(null));
-  }, []);
+    return undefined;
+  }, [probadorAbierto]);
   const textoModelo = (m, nombre) => (m?.existe ? `${nombre} (recorte ${m.recorte})` : `${nombre}: sin entrenar`);
   const haySecundaria = calibradas.includes('secundaria');
   // Con qué cámara(s) se reconoce: `principal`, `secundaria` o `todas` (las dos, decidiendo entre ambas). Sin elegir, las dos si hay secundaria calibrada.
@@ -67,12 +71,16 @@ export default function ProbadorPiezas() {
   const dosCamaras = camaraElegida === 'todas';
   const [vistaPiezas, setVistaPiezas] = useState('ambas');
   const [unoPorSegundo, setUnoPorSegundo] = useState(true); // reconocer cada cuadro de la webcam recarga mucho la máquina: por defecto, 1 por segundo
-  const { url, datos, error: errorFlujo } = useFlujoVivo({ modo: 'piezas', camara: camaraElegida, vista: vistaPiezas, maxFps: unoPorSegundo ? 1 : 0, activo: enVivo && !partidaFisicaActiva });
+  const { url, datos, error: errorFlujo } = useFlujoVivo({ modo: 'piezas', camara: camaraElegida, vista: vistaPiezas, maxFps: unoPorSegundo ? 1 : 0, activo: reconocimientoActivo });
   const error = errorFlujo ? mensajeError({ message: errorFlujo, status: /entrenado|409/.test(errorFlujo) ? 409 : 0 }) : null;
   const historialRef = useRef([]);
   // ¿Se movió alguna de las cámaras en uso desde que se calibró? Con la grilla corrida el modelo ve recortes que no son casillas y reconoce cualquier cosa.
   const [camarasMovidas, setCamarasMovidas] = useState([]);
   useEffect(() => {
+    if (!probadorAbierto) {
+      setCamarasMovidas([]);
+      return undefined;
+    }
     let vigente = true;
     setCamarasMovidas([]);
     const enUso = camaraElegida === 'todas' ? ['principal', 'secundaria'] : [camaraElegida];
@@ -86,7 +94,13 @@ export default function ProbadorPiezas() {
     return () => {
       vigente = false;
     };
-  }, [camaraElegida]);
+  }, [camaraElegida, probadorAbierto]);
+  useEffect(() => {
+    if (partidaFisicaActiva) {
+      setEnVivo(false);
+      setProbadorAbierto(false);
+    }
+  }, [partidaFisicaActiva]);
   const casillas = useMemo(() => {
     if (!datos) return [];
     historialRef.current = [...historialRef.current, datos].slice(-CUADROS_VOTO);
@@ -103,8 +117,10 @@ export default function ProbadorPiezas() {
   const [incluirSecundaria, setIncluirSecundaria] = useState(true);
   const entrenando = candidato?.estado === 'en_curso';
   useEffect(() => {
+    if (!probadorAbierto) return undefined;
     estadoCandidatoPiezas().then(setCandidato).catch(() => setCandidato(null));
-  }, []);
+    return undefined;
+  }, [probadorAbierto]);
   useEffect(() => {
     if (!entrenando) return undefined;
     const intervalo = setInterval(() => {
@@ -148,7 +164,7 @@ export default function ProbadorPiezas() {
   }
   // Validaciones lógicas de la posición reconocida (se piden solo cuando cambia la posición, no en cada cuadro).
   const [problemas, setProblemas] = useState([]);
-  const piezasFen = ocupadas.length ? fenReconocido.split(' ')[0] : '';
+  const piezasFen = reconocimientoActivo && ocupadas.length ? fenReconocido.split(' ')[0] : '';
   useEffect(() => {
     if (!piezasFen) {
       setProblemas([]);
@@ -165,6 +181,31 @@ export default function ProbadorPiezas() {
 
   return (
     <div className="flex flex-col gap-space-md">
+      <PartidaFisica alCambiarActiva={setPartidaFisicaActiva} />
+      {partidaFisicaActiva ? (
+        <section className={CLASE_TARJETA} aria-live="polite">
+          <h3 className="m-0 font-body-md text-body-md text-on-surface font-medium">Seguimiento manual desactivado</h3>
+          <p className="m-0 font-body-sm text-body-sm text-on-surface-variant">
+            La partida física ya usa la cámara y el seguimiento por diferencias. Este modo volverá a estar disponible al detener la partida física.
+          </p>
+        </section>
+      ) : (
+        <SeguimientoPartida />
+      )}
+      <details
+        className={`${CLASE_TARJETA} group`}
+        open={probadorAbierto}
+        onToggle={(evento) => {
+          const abierto = evento.currentTarget.open;
+          setProbadorAbierto(abierto);
+          if (!abierto) setEnVivo(false);
+        }}
+      >
+        <summary className="cursor-pointer list-none flex flex-wrap items-center justify-between gap-space-xs font-body-md text-body-md text-on-surface font-medium">
+          <span>Pruebas y entrenamiento: piezas y casillas vacías <span className="font-normal text-on-surface-variant">(no se usa en partida física)</span></span>
+          <span className="font-body-sm text-body-sm text-on-surface-variant">{probadorAbierto ? 'Ocultar' : 'Abrir sin activar la cámara'}</span>
+        </summary>
+        <div className="mt-space-md flex flex-col gap-space-md">
       <p className="font-body-sm text-body-sm text-on-surface-variant">
         Poné una pieza en el tablero y mirá (en vivo) qué reconoce el modelo en cada casilla. El color del círculo indica la confianza:
         verde (80 % o más), ámbar (50–80 %) o rojo (menos). Requiere el tablero calibrado y un modelo entrenado. Qué casillas tienen
@@ -210,10 +251,10 @@ export default function ProbadorPiezas() {
         </p>
       )}
       <div className="flex flex-wrap gap-space-xs">
-        <button type="button" className={CLASE_BOTON} onClick={() => setEnVivo((v) => !v)} aria-pressed={enVivo} disabled={partidaFisicaActiva}>
+        <button type="button" className={CLASE_BOTON} onClick={() => setEnVivo((v) => !v)} aria-pressed={reconocimientoActivo} disabled={partidaFisicaActiva}>
           <span className="inline-flex items-center gap-1">
-            <span className="material-symbols-outlined text-[18px]">{enVivo ? 'pause' : 'play_arrow'}</span>
-            {enVivo ? 'Pausar' : 'Reanudar en vivo'}
+            <span className="material-symbols-outlined text-[18px]">{reconocimientoActivo ? 'pause' : 'play_arrow'}</span>
+            {reconocimientoActivo ? 'Detener reconocimiento' : 'Activar reconocimiento'}
           </span>
         </button>
         {partidaFisicaActiva && (
@@ -303,8 +344,6 @@ export default function ProbadorPiezas() {
             </div>
           )}
         </section>
-        <PartidaFisica alCambiarActiva={setPartidaFisicaActiva} />
-        <SeguimientoPartida bloqueado={partidaFisicaActiva} />
         <section className={`${CLASE_TARJETA} lg:col-span-2`} aria-labelledby="titulo-probador-entrenar">
           <h3 id="titulo-probador-entrenar" className="font-body-md text-body-md text-on-surface font-medium">
             Entrenar con mis correcciones
@@ -417,6 +456,8 @@ export default function ProbadorPiezas() {
           </ul>
         </section>
       </div>
+        </div>
+      </details>
     </div>
   );
 }

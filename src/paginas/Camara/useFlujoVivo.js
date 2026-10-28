@@ -49,7 +49,14 @@ export default function useFlujoVivo({ modo, casillas = [], auto = '', camara = 
   const claveCasillas = casillas.join(',');
 
   useEffect(() => {
-    if (!activo) return undefined;
+    if (!activo) {
+      if (urlRef.current) URL.revokeObjectURL(urlRef.current);
+      urlRef.current = null;
+      setUrl(null);
+      setDatos(null);
+      setError(null);
+      return undefined;
+    }
     let cancelado = false;
     let controlador = null;
     let temporizador = null;

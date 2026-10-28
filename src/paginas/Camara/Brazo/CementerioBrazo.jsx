@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { actualizarParametrosBrazo, obtenerParametrosBrazo, probarLugarBrazo } from '../../../api/backend';
+import { actualizarParametrosBrazo, obtenerParametrosBrazo, probarLugarBrazo, tableroCalibradoBrazo } from '../../../api/backend';
 import AjusteCementerioBrazo from './AjusteCementerioBrazo';
 import { CLASE_AVISO, CLASE_BOTON, CLASE_BOTON_PRIMARIO } from '../estilos';
 
@@ -13,8 +13,11 @@ const LUGARES = [
   ['cementerio_jugador_origen', null, 'Cementerio del JUGADOR, del lado contrario: primera casilla (solo si ordenás por piezas)', true],
   ['cementerio_jugador_paso', null, 'Cementerio del jugador: paso entre casillas de una fila (dx, dy mm)', false],
   ['cementerio_jugador_paso_fila', null, 'Cementerio del jugador: paso entre filas (dx, dy mm)', false],
-  ['reservas', 'dama_negra', 'Dama negra de reserva (la que usa Turing; no se usa si ordenás por piezas)', true],
-  ['reservas', 'dama_blanca', 'Dama blanca de reserva (solo si el brazo corona con blancas)', true],
+  ['reservas', 'dama_negra', 'Dama negra de reserva (base roja - reina)', true],
+  ['reservas', 'dama_blanca', 'Dama blanca de reserva (base roja - reina)', true],
+  ['reservas', 'torre_blanca', 'Torre blanca de reserva (base roja - torre)', true],
+  ['reservas', 'alfil_blanco', 'Alfil blanco de reserva (base roja - alfil)', true],
+  ['reservas', 'caballo_blanco', 'Caballo blanco de reserva (base roja - caballo)', true],
 ];
 const PRUEBAS = [
   ['cementerio:0', 'Primera casilla'],
@@ -23,7 +26,10 @@ const PRUEBAS = [
   ['cementerio_jugador:14', 'Jugador: dama 1 (para coronar)'],
   ['cementerio_jugador:15', 'Jugador: dama 2'],
   ['reserva:dama_negra', 'Dama negra'],
-  ['reserva:dama_blanca', 'Dama blanca'],
+  ['reserva:dama_blanca', 'Dama blanca (base roja: reina)'],
+  ['reserva:torre_blanca', 'Torre blanca (base roja: torre)'],
+  ['reserva:alfil_blanco', 'Alfil blanco (base roja: alfil)'],
+  ['reserva:caballo_blanco', 'Caballo blanco (base roja: caballo)'],
 ];
 
 /**
@@ -101,6 +107,39 @@ export default function CementerioBrazo({ pose, emulador, deshabilitado, estado 
       await aplicar(false); // primero lo que se ve en pantalla (solo en memoria)
       await probarLugarBrazo(id);
     }, `Probando ${id} sin pieza: mirá el brazo (o el emulador). Si no llega o choca, ajustá los valores.`);
+
+  const espejarAlJugador = async () => {
+    try {
+      const cal = await tableroCalibradoBrazo();
+      if (!cal?.casillas?.a1 || !cal?.casillas?.h1) {
+        setError('Primero calibra el tablero (se necesitan las esquinas a1 y h1 para espejar).');
+        return;
+      }
+      const a1 = cal.casillas.a1;
+      const h1 = cal.casillas.h1;
+      const ejeX = (a1[0] + h1[0]) / 2;
+      const orig = valores.cementerio_origen;
+      const paso = valores.cementerio_paso;
+      const pasoFila = valores.cementerio_paso_fila;
+      if (!Array.isArray(orig)) {
+        setError('Primero define la primera casilla del cementerio (cementerio_origen) en el lado de la columna h.');
+        return;
+      }
+      const origJugador = [Math.round((2 * ejeX - orig[0]) * 10) / 10, orig[1]];
+      const pasoJugador = Array.isArray(paso) ? [-paso[0], paso[1]] : [0, 30];
+      const pasoFilaJugador = Array.isArray(pasoFila) ? [-pasoFila[0], pasoFila[1]] : [-30, 0];
+
+      setValores((v) => ({
+        ...v,
+        cementerio_jugador_origen: origJugador,
+        cementerio_jugador_paso: pasoJugador,
+        cementerio_jugador_paso_fila: pasoFilaJugador,
+      }));
+      setMensaje(`Cementerio espejado al lado del jugador (columna a): origen en [${origJugador.join(', ')}] mm.`);
+    } catch (e) {
+      setError(e.message);
+    }
+  };
 
   if (!valores) return <p className="font-body-sm text-body-sm text-on-surface-variant m-0">{error ?? 'Cargando…'}</p>;
   return (
@@ -198,6 +237,15 @@ export default function CementerioBrazo({ pose, emulador, deshabilitado, estado 
           onClick={() => correr(() => aplicar(guardarEnDisco), guardarEnDisco && !emulador ? 'Aplicado y guardado en brazo.json.' : 'Aplicado al brazo.')}
         >
           Aplicar cementerio y reservas
+        </button>
+        <button
+          type="button"
+          className={CLASE_BOTON}
+          disabled={ocupado || !valores.cementerio_origen}
+          onClick={espejarAlJugador}
+          title="Copia y calcula automáticamente la posición del cementerio del jugador en la columna a reflejando lo configurado en la columna h"
+        >
+          Espejar cementerio al lado del jugador (columna a)
         </button>
       </div>
       <div className="flex flex-wrap items-center gap-space-xs">

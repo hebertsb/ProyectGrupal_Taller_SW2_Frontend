@@ -10,7 +10,7 @@ const SIN_DATOS = { configuradas: ['principal'], calibradas: [], fuentes: {}, ro
  * Qué cámaras están en uso (la principal y, solo si se la encendió, la secundaria) y cuáles tienen el tablero calibrado. Se actualiza cada
  * 5 s y apenas alguien avisa con `EVENTO_CAMARAS_CAMBIO` (el selector de cámaras o el asistente de calibración). No abre ninguna cámara.
  */
-export default function useCamarasConfiguradas() {
+export default function useCamarasConfiguradas(activo = true) {
   const [estado, setEstado] = useState(SIN_DATOS);
   const montadoRef = useRef(true);
 
@@ -24,6 +24,7 @@ export default function useCamarasConfiguradas() {
   }, []);
 
   useEffect(() => {
+    if (!activo) return undefined;
     montadoRef.current = true;
     recargar();
     const intervalo = setInterval(recargar, INTERVALO_MS);
@@ -33,7 +34,7 @@ export default function useCamarasConfiguradas() {
       clearInterval(intervalo);
       window.removeEventListener(EVENTO_CAMARAS_CAMBIO, recargar);
     };
-  }, [recargar]);
+  }, [recargar, activo]);
 
   return { ...estado, tieneSecundaria: estado.configuradas.includes('secundaria'), recargar };
 }

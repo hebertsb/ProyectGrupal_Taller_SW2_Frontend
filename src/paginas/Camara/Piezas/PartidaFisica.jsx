@@ -20,14 +20,14 @@ const INTERVALO_MS = 300; // el backend mira el tablero a los cuadros por segund
 const INTERVALO_SIN_PARTIDA_MS = 1500; // sin partida en marcha no hace falta mirar tan seguido
 const INTERVALO_OCULTA_MS = 3000; // con la pestaña oculta tampoco
 const INTERVALO_SIN_CONEXION_MS = 2000; // si el backend no contesta, no se lo martilla: seguir pidiendo cada 300 ms lo empeora cuando está ocupado
-const CADA_CUANTOS_CON_VISTA = 3; // las fotos de la comparación pesan (~80 KB): una de cada tres veces
+const CADA_CUANTOS_CON_VISTA = 4; // las fotos de la comparación pesan (~80 KB): solo diagnóstico, nunca intervienen en el reconocimiento
 const FPS_LENTA = 15; // por debajo de esto la cámara es el límite de qué tan rápido se reconoce una jugada
 
 const ETIQUETA = {
   esperando_humano: ['Tu turno: mové una pieza', 'text-on-surface'],
   turing_decide: ['Turing está pensando…', 'text-primary'],
   brazo_ejecuta: ['El brazo está moviendo una pieza', 'text-primary'],
-  verificando: ['Comprobando el tablero…', 'text-primary'],
+  verificando: ['Preparando la cámara para tu turno', 'text-primary'],
   esperando_robot_manual: ['Mové la pieza de Turing a mano', 'text-primary'],
   incidente: ['Incidente: la partida está detenida', 'text-error'],
   fin: ['Partida terminada', 'text-on-surface'],
@@ -44,7 +44,7 @@ function planilla(jugadas) {
 
 /**
  * Partida física: movés una pieza en el tablero real, la cámara lo detecta, Turing responde y el brazo (o vos, sin brazo) mueve su pieza. Si el brazo falla o el
- * tablero no coincide, la partida se detiene en un incidente hasta que lo resuelvas. Solo facilitador.
+ * brazo falla, la partida se detiene en un incidente hasta que lo resuelvas. Solo facilitador.
  *
  * @param {(activa: boolean) => void} [alCambiarActiva] avisa cuando empieza o termina la partida: mientras dura, el backend sigue el tablero a cada cuadro de la
  *   cámara y la pantalla que la contiene tiene que soltar todo lo que también use la cámara (el video de piezas, el seguimiento a mano).
@@ -58,8 +58,9 @@ export default function PartidaFisica({ alCambiarActiva }) {
   const [precauciones, setPrecauciones] = useState(false);
   const [nivel, setNivel] = useState(18);
   const [jugadaManual, setJugadaManual] = useState('');
-  const [verDecision, setVerDecision] = useState(true);
-  const verDecisionRef = useRef(true);
+  // El reconocimiento corre siempre en el backend. Las tres fotos son JPEGs de diagnóstico y pedirlas continuamente compite por CPU con la partida física.
+  const [verDecision, setVerDecision] = useState(false);
+  const verDecisionRef = useRef(false);
   const montadoRef = useRef(true);
   const temporizadorRef = useRef(null);
   const contadorRef = useRef(0);
@@ -71,7 +72,9 @@ export default function PartidaFisica({ alCambiarActiva }) {
       contadorRef.current += 1;
       const datos = await estadoPartidaFisica(visible && verDecisionRef.current && contadorRef.current % CADA_CUANTOS_CON_VISTA === 0);
       if (montadoRef.current) {
-        setEstado((anterior) => ({ ...datos, vista: datos.vista ?? anterior?.vista }));
+        // Al terminar el brazo se reinicia la foto base y durante dos cuadros `vista` todavía no tiene imágenes. Conservamos la última comparación válida en vez de
+        // borrar las tres imágenes y volver a dibujarlas un instante después.
+        setEstado((anterior) => ({ ...datos, vista: datos.vista?.disponible ? datos.vista : (anterior?.vista ?? datos.vista) }));
         setSinConexion(false);
       }
       if (!datos.activa) espera = INTERVALO_SIN_PARTIDA_MS;
@@ -137,8 +140,8 @@ export default function PartidaFisica({ alCambiarActiva }) {
         Partida física: tú, la cámara, Turing y el brazo
       </h3>
       <p className="font-body-sm text-body-sm text-on-surface-variant m-0">
-        Movés una pieza en el tablero real, la cámara lo detecta, Turing responde y el brazo mueve su pieza (captura, enroque y coronación incluidos).
-        Si algo falla, la partida se detiene en un incidente hasta que lo resuelvas.
+        Movés una pieza en el tablero real, la cámara detecta el cambio comparando fotos, Turing responde y el brazo mueve su pieza (captura, enroque y coronación incluidos).
+        No usa los modelos de piezas ni de casillas vacías. Si el brazo falla, la partida se detiene en un incidente hasta que lo resuelvas.
       </p>
 
       {!activa && (
@@ -202,12 +205,6 @@ export default function PartidaFisica({ alCambiarActiva }) {
               {estado.usa_brazo ? '' : ' · sin brazo'}
             </p>
             <p className="font-body-sm text-body-sm text-on-surface-variant m-0 break-words">{estado.mensaje}</p>
-            {estado.referencia_vacia === false && (
-              <p className={CLASE_AVISO} role="status">
-                Falta la foto del tablero vacío (se borra sola al recalibrar la cámara): sin ella no se puede comprobar que las piezas quedaron bien después de cada jugada del
-                brazo. Sacala en «Entrenamiento de piezas» con el botón «Casilla vacía», con el tablero sin piezas.
-              </p>
-            )}
             {estado.rendimiento?.fps_camara != null && (
               <p className="font-mono-micro text-mono-micro text-on-surface-variant m-0" aria-label="Rendimiento de la cámara">
                 Cámara: {estado.rendimiento.fps_camara} cuadros/s{estado.rendimiento.formato ? ` (${estado.rendimiento.formato})` : ''}
