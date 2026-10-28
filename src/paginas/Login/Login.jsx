@@ -106,7 +106,7 @@ export default function Login({ onLoginSuccess, apariencia }) {
   const respuestaGoogleRef = useRef(null);
   const [googleListo, setGoogleListo] = useState(false);
   useEffect(() => {
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '623113372628-h3f7gf1kkqdd016lr47jq7s496u7sjfb.apps.googleusercontent.com';
     if (!clientId) return undefined;
     const iniciar = () => {
       const contenedor = googleBtnRef.current;
