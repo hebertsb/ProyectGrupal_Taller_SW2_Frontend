@@ -52,13 +52,13 @@ export default function TableroSoloLectura({ fen, tamano = 'grande', className =
       <div
         className={`w-full aspect-square rounded-2xl shadow-[0_24px_50px_-12px_rgba(0,0,0,0.9),0_0_30px_rgba(0,0,0,0.7)] relative flex items-center justify-center ${variante.contenedor}`}
         style={{
-          background: 'linear-gradient(135deg, #422617 0%, #2c180e 25%, #4a2b1b 50%, #20110a 75%, #3d2215 100%)',
+          background: 'var(--tablero-marco)',
           boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.15), inset 0 -3px 6px rgba(0,0,0,0.8), 0 20px 40px -10px #000',
         }}
       >
         <div
           className={`w-full h-full rounded-lg relative flex items-center justify-center shadow-inner ${variante.interior}`}
-          style={{ background: 'linear-gradient(180deg, #1b0e08 0%, #2d180f 100%)' }}
+          style={{ background: 'var(--tablero-borde)' }}
         >
           <div className="w-full h-full grid grid-cols-8 grid-rows-8 rounded shadow-2xl overflow-hidden relative">
             {matriz &&
@@ -70,7 +70,7 @@ export default function TableroSoloLectura({ fen, tamano = 'grande', className =
                     <div
                       key={casilla}
                       aria-label={`Casilla ${casilla}${pieza ? ', pieza ' + pieza : ', vacía'}`}
-                      className={`relative flex items-center justify-center ${clara ? 'bg-[#b89772]' : 'bg-[#543423]'} ${resaltadas.includes(casilla) ? 'ring-[3px] ring-inset ring-amber-400' : ''}`}
+                      className={`relative flex items-center justify-center ${clara ? 'bg-tablero-clara' : 'bg-tablero-oscura'} ${resaltadas.includes(casilla) ? 'ring-[3px] ring-inset ring-amber-400' : ''}`}
                     >
                       {pieza && (
                         <div className={claseDePieza(pieza)}>
@@ -103,12 +103,12 @@ export default function TableroSoloLectura({ fen, tamano = 'grande', className =
           </div>
 
           <div
-            className={`absolute flex flex-col justify-around font-mono-micro text-[#e0cfba]/40 pointer-events-none font-bold select-none ${variante.etiqueta} ${variante.gutterFilas}`}
+            className={`absolute flex flex-col justify-around font-mono-micro text-tablero-etiquetas pointer-events-none font-bold select-none ${variante.etiqueta} ${variante.gutterFilas}`}
           >
             <span>8</span><span>7</span><span>6</span><span>5</span><span>4</span><span>3</span><span>2</span><span>1</span>
           </div>
           <div
-            className={`absolute flex justify-around font-mono-micro text-[#e0cfba]/40 pointer-events-none font-bold select-none ${variante.etiqueta} ${variante.gutterColumnas}`}
+            className={`absolute flex justify-around font-mono-micro text-tablero-etiquetas pointer-events-none font-bold select-none ${variante.etiqueta} ${variante.gutterColumnas}`}
           >
             <span>a</span><span>b</span><span>c</span><span>d</span><span>e</span><span>f</span><span>g</span><span>h</span>
           </div>

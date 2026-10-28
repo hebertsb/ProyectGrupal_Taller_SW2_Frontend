@@ -94,7 +94,7 @@ function MiniTableroPieza({ pieza, reducir }) {
               type="button"
               onClick={() => tocar([f, c])}
               aria-label={`Casilla fila ${8 - f}, columna ${'abcdefgh'[c]}${marcada ? ', marcada' : ''}`}
-              className={`relative flex items-center justify-center min-h-0 min-w-0 ${oscura ? 'bg-[#8b5e3c]' : 'bg-[#e8d5b0]'} ${
+              className={`relative flex items-center justify-center min-h-0 min-w-0 ${oscura ? 'bg-tablero-oscura' : 'bg-tablero-clara'} ${
                 marcada ? 'ring-2 ring-inset ring-primary-container' : ''
               }`}
             >
@@ -118,7 +118,7 @@ function MiniTableroPieza({ pieza, reducir }) {
       <p
         aria-live="polite"
         className={`font-body-sm text-body-sm text-center min-h-[2.5rem] ${
-          resultado === 'bien' ? 'text-primary' : resultado === 'mal' ? 'text-tertiary-container' : 'text-on-surface-variant'
+          resultado === 'bien' ? 'text-primary' : resultado === 'mal' ? 'text-tertiary' : 'text-on-surface-variant'
         }`}
       >
         {mensaje}
@@ -205,7 +205,7 @@ function PuzzleJaque({ onResuelto }) {
               type="button"
               onClick={() => tocar([f, c])}
               aria-label={`Casilla fila ${8 - f}, columna ${'abcdefgh'[c]}`}
-              className={`relative flex items-center justify-center min-h-0 min-w-0 ${oscura ? 'bg-[#8b5e3c]' : 'bg-[#e8d5b0]'} ${
+              className={`relative flex items-center justify-center min-h-0 min-w-0 ${oscura ? 'bg-tablero-oscura' : 'bg-tablero-clara'} ${
                 marcada ? 'ring-2 ring-inset ring-primary-container' : ''
               } ${esRey && resuelto ? 'ring-4 ring-inset ring-error bg-error/40' : ''}`}
             >

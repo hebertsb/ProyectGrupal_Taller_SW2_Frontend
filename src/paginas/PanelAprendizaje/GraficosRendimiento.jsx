@@ -41,7 +41,7 @@ export function DonaResultados({ ganadas, perdidas, tablas }) {
     <div className="flex flex-col items-center gap-3">
       <div className="relative w-44 h-44">
         <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90 overflow-visible" role="group" aria-label={`Resultados: ${ganadas} ganadas, ${perdidas} perdidas, ${tablas} tablas`}>
-          <circle cx="50" cy="50" r={radio} fill="none" className="stroke-white/10" strokeWidth="10" />
+          <circle cx="50" cy="50" r={radio} fill="none" className="stroke-on-surface/10" strokeWidth="10" />
           {arcos.map((arco, i) => {
             if (arco.valor === 0) return null;
             const elegida = activa === arco.clave;
@@ -104,7 +104,7 @@ export function DonaResultados({ ganadas, perdidas, tablas }) {
               onBlur={() => setPasando(null)}
               onClick={() => alternar(arco.clave)}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border backdrop-blur-md font-body-sm text-[12px] text-on-surface transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
-                activa === arco.clave ? 'bg-white/[0.14] border-white/30' : 'bg-white/[0.05] border-white/10'
+                activa === arco.clave ? 'bg-on-surface/[0.14] border-outline-variant/30' : 'bg-on-surface/[0.05] border-outline-variant/10'
               }`}
             >
               <span className={`w-2.5 h-2.5 rounded-full ${arco.punto}`} aria-hidden="true" />
@@ -148,7 +148,7 @@ export function RendimientoPorRival({ resultados }) {
               {fila.total === 0 ? 'sin partidas terminadas' : `${fila.total} ${fila.total === 1 ? 'partida' : 'partidas'} · ${Math.round((fila.ganadas / fila.total) * 100)}% de victorias`}
             </span>
           </div>
-          <div className="flex h-5 rounded-full overflow-hidden bg-white/10">
+          <div className="flex h-5 rounded-full overflow-hidden bg-on-surface/10">
             {fila.total > 0 &&
               ['ganadas', 'tablas', 'perdidas'].map((clave) => {
                 const segmento = SEGMENTOS.find((s) => s.clave === clave);
@@ -236,7 +236,7 @@ export function PrecisionPorFase({ fases }) {
               onBlur={() => setActiva(null)}
               className="flex flex-col items-center justify-end gap-1 h-full bg-transparent border-0 p-0 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-lg"
             >
-              <span className="relative flex items-end w-full flex-1 rounded-t-lg bg-white/[0.06]">
+              <span className="relative flex items-end w-full flex-1 rounded-t-lg bg-on-surface/[0.06]">
                 <span
                   className="absolute left-0 right-0 text-center font-mono-metric text-[11px] text-on-surface"
                   style={{ bottom: `calc(${alto}% + 4px)` }}

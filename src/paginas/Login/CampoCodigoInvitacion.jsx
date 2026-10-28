@@ -105,10 +105,10 @@ const CampoCodigoInvitacion = forwardRef(function CampoCodigoInvitacion({ value,
 
   const colorBorde =
     estado === 'valido'
-      ? 'border-emerald-400/70 shadow-[0_0_10px_rgba(52,211,153,0.35)]'
+      ? 'border-exito/70 shadow-[0_0_10px_rgba(52,211,153,0.35)]'
       : estado === 'invalido' || estado === 'bloqueado'
-        ? 'border-rose-400/70 shadow-[0_0_10px_rgba(251,113,133,0.3)]'
-        : 'border-[#00e5ff]/30 focus:border-[#00e5ff]';
+        ? 'border-error/70 shadow-[0_0_10px_rgba(251,113,133,0.3)]'
+        : 'border-primary/30 focus:border-primary';
 
   const mensaje = {
     incompleto: `Escribí los ${LONGITUD} caracteres: se verifica solo.`,
@@ -120,7 +120,7 @@ const CampoCodigoInvitacion = forwardRef(function CampoCodigoInvitacion({ value,
   }[estado];
 
   const colorMensaje =
-    estado === 'valido' ? 'text-emerald-300' : estado === 'invalido' || estado === 'bloqueado' ? 'text-rose-300' : 'text-slate-400';
+    estado === 'valido' ? 'text-exito' : estado === 'invalido' || estado === 'bloqueado' ? 'text-error' : 'text-on-surface-variant';
 
   return (
     <div className="flex flex-col gap-2">
@@ -133,7 +133,7 @@ const CampoCodigoInvitacion = forwardRef(function CampoCodigoInvitacion({ value,
       >
         {Array.from({ length: LONGITUD }, (_, indice) => (
           <Fragment key={indice}>
-            {indice === LONGITUD / 2 && <span aria-hidden="true" className="shrink-0 w-2 text-center text-slate-500 font-mono">-</span>}
+            {indice === LONGITUD / 2 && <span aria-hidden="true" className="shrink-0 w-2 text-center text-on-surface-variant font-mono">-</span>}
             <div className="min-w-0 flex-1 max-w-10">
             <input
               id={indice === 0 ? 'codigoInvitacion' : undefined}
@@ -153,7 +153,7 @@ const CampoCodigoInvitacion = forwardRef(function CampoCodigoInvitacion({ value,
               onKeyDown={(evento) => alTeclear(evento, indice)}
               onPaste={(evento) => alPegar(evento, indice)}
               onFocus={(evento) => evento.target.select()}
-              className={`w-full min-w-0 h-10 sm:h-11 text-center rounded-lg bg-white/[0.04] backdrop-blur-md border font-mono text-base sm:text-lg font-bold text-white uppercase caret-[#00e5ff] transition-all focus:outline-none focus:ring-1 focus:ring-[#00e5ff] ${colorBorde}`}
+              className={`w-full min-w-0 h-10 sm:h-11 text-center rounded-lg bg-on-surface/[0.04] backdrop-blur-md border font-mono text-base sm:text-lg font-bold text-on-surface uppercase caret-[#00e5ff] transition-all focus:outline-none focus:ring-1 focus:ring-primary ${colorBorde}`}
             />
             </div>
           </Fragment>
@@ -162,7 +162,7 @@ const CampoCodigoInvitacion = forwardRef(function CampoCodigoInvitacion({ value,
 
       <div role="status" aria-live="polite" className={`flex items-center justify-center gap-1.5 min-h-5 text-[11px] font-mono text-center ${colorMensaje}`}>
         {estado === 'verificando' && (
-          <span className="inline-block w-3 h-3 rounded-full border-2 border-[#00e5ff] border-t-transparent animate-spin motion-reduce:animate-none" aria-hidden="true" />
+          <span className="inline-block w-3 h-3 rounded-full border-2 border-primary border-t-transparent animate-spin motion-reduce:animate-none" aria-hidden="true" />
         )}
         {estado === 'valido' && (
           <motion.span

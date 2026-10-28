@@ -41,6 +41,8 @@ import { capturarEnlaceDeJuego, enlaceDeJuegoPendiente, olvidarEnlaceDeJuego } f
 import { capturarCursoDelEnlace, cursoPendiente, olvidarCursoPendiente } from './enlaceCurso';
 import { backendEnLinea, cambiarVista as cambiarVistaApi, obtenerDemostracionActiva, obtenerEstadoEntrenamiento, obtenerPerfil, pararBrazo, unirseACurso, obtenerMiSuscripcion, listarPagosSuscripciones, aceptarReto, rechazarReto, unirseASala, mandarSolicitudDeAmistad, presenciaSala } from './api/backend';
 import useEstadoBrazo from './useEstadoBrazo';
+import useApariencia from './useApariencia';
+import BotonTema from './componentes/BotonTema';
 import { ProveedorRazonamiento } from './contexto/ContextoRazonamiento';
 import { ProveedorEstadoModelo } from './contexto/ContextoEstadoModelo';
 
@@ -165,6 +167,8 @@ export default function App() {
       // el estado en memoria ya se actualizó.
     }
   };
+
+  const apariencia = useApariencia(usuario, manejarActualizarUsuario);
 
   // Relee el perfil del servidor y lo mezcla con el usuario guardado. El `usuario`
   // de localStorage se fija al loguear y nunca se actualizaba solo, por eso un
@@ -631,7 +635,7 @@ export default function App() {
   if (!usuario) {
     return (
       <ProveedorRazonamiento>
-        <Login onLoginSuccess={manejarLogin} />
+        <Login onLoginSuccess={manejarLogin} apariencia={apariencia} />
       </ProveedorRazonamiento>
     );
   }
@@ -853,7 +857,7 @@ export default function App() {
 
       <div className={`transition-all duration-300 ${isSidebarOpen ? 'lg:pl-64' : 'pl-0'}`}>
         <header className={`fixed top-0 right-0 h-16 bg-surface-container-low/70 backdrop-blur-xl z-40 shadow-[0_1px_8px_rgba(0,0,0,0.04)] transition-all duration-300 ${isSidebarOpen ? 'left-0 lg:left-64' : 'left-0'}`}>
-          <div className="h-16 w-full px-space-lg flex items-center justify-between">
+          <div className="h-16 w-full px-space-sm sm:px-space-lg flex items-center justify-between gap-space-xs">
             <div className="flex items-center gap-space-xl">
               <div className="flex items-center gap-space-xs">
                 <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="mr-2 text-on-surface-variant hover:text-primary transition-colors flex items-center justify-center">
@@ -911,7 +915,8 @@ export default function App() {
                 <button onClick={() => setPantallaActiva('perfil')} className={headerNavClasses('perfil')}>MI PERFIL</button>
               </nav>
             </div>
-            <div className="flex items-center gap-space-md">
+            <div className="flex items-center gap-space-xs sm:gap-space-md">
+              <BotonTema apariencia={apariencia} />
               <div className="hidden md:flex items-center gap-space-sm px-space-sm py-space-2xs rounded-lg bg-surface-container">
                 <div className="flex items-center gap-space-2xs">
                   <div className={`w-1.5 h-1.5 rounded-full ${backendConectado ? 'bg-primary shadow-[0_0_6px_rgba(0,229,255,0.8)]' : 'bg-error'}`}></div>
@@ -1146,6 +1151,7 @@ export default function App() {
           {pantallaActiva === 'perfil' && (
             <Perfil
               usuario={usuario}
+              apariencia={apariencia}
               alActualizarUsuario={manejarActualizarUsuario}
               alVerAlbum={esFacilitador ? null : () => irAPanelAprendizaje('logros')}
               alEliminarCuenta={manejarLogout}

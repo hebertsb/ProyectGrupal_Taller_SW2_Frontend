@@ -22,17 +22,17 @@ function resultadoLegible(resultado) {
 }
 
 function colorResultado(resultado) {
-  if (resultado === '1-0') return 'bg-emerald-950/70 text-emerald-300 border border-emerald-500/50';
-  if (resultado === '0-1') return 'bg-rose-950/70 text-rose-300 border border-rose-500/50';
-  if (resultado === '1/2-1/2') return 'bg-amber-950/70 text-amber-300 border border-amber-500/50';
-  return 'bg-cyan-950/70 text-cyan-300 border border-cyan-500/50';
+  if (resultado === '1-0') return 'bg-exito/10 text-exito border border-exito/50';
+  if (resultado === '0-1') return 'bg-error/10 text-error border border-error/50';
+  if (resultado === '1/2-1/2') return 'bg-aviso/10 text-aviso border border-aviso/50';
+  return 'bg-primary/10 text-primary border border-primary/50';
 }
 
 function barraResultadoColor(resultado) {
-  if (resultado === '1-0') return 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.6)]';
-  if (resultado === '0-1') return 'bg-rose-400 shadow-[0_0_10px_rgba(251,113,133,0.6)]';
-  if (resultado === '1/2-1/2') return 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.6)]';
-  return 'bg-cyan-400 shadow-[0_0_10px_rgba(0,229,255,0.6)]';
+  if (resultado === '1-0') return 'bg-exito shadow-[0_0_10px_rgba(52,211,153,0.6)]';
+  if (resultado === '0-1') return 'bg-error shadow-[0_0_10px_rgba(251,113,133,0.6)]';
+  if (resultado === '1/2-1/2') return 'bg-aviso shadow-[0_0_10px_rgba(251,191,36,0.6)]';
+  return 'bg-primary shadow-[0_0_10px_rgba(0,229,255,0.6)]';
 }
 
 function oponenteLegible(tipoOponente) {
@@ -51,8 +51,8 @@ function estadoLegible(estado) {
 }
 
 function colorEstado(estado) {
-  if (estado === 'terminada') return 'bg-emerald-950/70 text-emerald-300 border border-emerald-500/50';
-  return 'bg-slate-800/70 text-slate-300 border border-slate-500/40';
+  if (estado === 'terminada') return 'bg-exito/10 text-exito border border-exito/50';
+  return 'bg-surface-container/70 text-on-surface-variant border border-outline-variant/40';
 }
 
 function categoriaNivel(n) {
@@ -97,8 +97,8 @@ function TarjetaPartida({ partida, activa, alSeleccionar, esFacilitador, modoGri
       onClick={alSeleccionar}
       className={`cursor-pointer rounded-2xl p-5 sm:p-6 transition-all relative overflow-hidden group border min-h-[110px] ${
         activa
-          ? 'bg-[#1e2232] border-cyan-400 shadow-[0_0_24px_rgba(0,229,255,0.3)] ring-2 ring-cyan-400/60'
-          : 'bg-[#151722] hover:bg-[#1a1e2d] border-white/10 hover:border-cyan-400/50 shadow-md hover:shadow-xl'
+          ? 'bg-surface-container-high border-primary shadow-[0_0_24px_rgba(0,229,255,0.3)] ring-2 ring-primary/60'
+          : 'bg-surface-container-low hover:bg-surface-container-high border-outline-variant/10 hover:border-primary/50 shadow-md hover:shadow-xl'
       }`}
     >
       <div className="flex items-stretch gap-4">
@@ -108,7 +108,7 @@ function TarjetaPartida({ partida, activa, alSeleccionar, esFacilitador, modoGri
         <div className="flex-1 flex flex-col gap-3.5 min-w-0 justify-between">
           {/* Fila 1: ID de partida grande y Resultado destacado */}
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <span className={`font-mono text-base sm:text-lg font-bold tracking-tight ${activa ? 'text-cyan-300' : 'text-white group-hover:text-cyan-300 transition-colors'}`}>
+            <span className={`font-mono text-base sm:text-lg font-bold tracking-tight ${activa ? 'text-primary' : 'text-on-surface group-hover:text-primary transition-colors'}`}>
               #{partida.id.slice(0, 8)}
             </span>
             <div className="flex items-center gap-1.5 flex-wrap justify-end min-w-0">
@@ -126,21 +126,21 @@ function TarjetaPartida({ partida, activa, alSeleccionar, esFacilitador, modoGri
           {/* Fila 2: Oponente y Nivel más grandes y claros */}
           <div className="flex items-center justify-between gap-2.5 flex-wrap font-mono">
             <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl font-bold text-xs sm:text-sm ${
-              esTuring ? 'bg-cyan-500/15 text-[#00e5ff] border border-cyan-500/30' : 'bg-slate-700/60 text-slate-200 border border-slate-500/40'
+              esTuring ? 'bg-primary/15 text-primary border border-primary/30' : 'bg-surface-container/60 text-on-surface border border-outline-variant/40'
             }`}>
               <span className="material-symbols-outlined text-[18px]">{esTuring ? 'psychology' : 'smart_toy'}</span>
               <span>{oponenteLegible(partida.tipo_oponente)}</span>
             </span>
 
-            <span className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs sm:text-sm text-slate-200 font-medium">
+            <span className="px-3 py-1.5 rounded-xl bg-on-surface/5 border border-outline-variant/10 text-xs sm:text-sm text-on-surface font-medium">
               Nivel {partida.nivel} · <strong className="text-secondary font-bold">{categoriaNivel(partida.nivel)}</strong>
             </span>
           </div>
 
           {/* Fila 3: Fecha, Jugadas y Alumno con mayor tamaño de texto y badges */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-2.5 border-t border-white/10 font-mono text-xs sm:text-sm text-slate-400">
-            <span className="flex items-center gap-1.5 text-slate-300">
-              <span className="material-symbols-outlined text-[16px] text-slate-500">schedule</span>
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2.5 border-t border-outline-variant/10 font-mono text-xs sm:text-sm text-on-surface-variant">
+            <span className="flex items-center gap-1.5 text-on-surface-variant">
+              <span className="material-symbols-outlined text-[16px] text-on-surface-variant">schedule</span>
               {fechaLegible(partida.creada_en)}
             </span>
 
@@ -153,18 +153,18 @@ function TarjetaPartida({ partida, activa, alSeleccionar, esFacilitador, modoGri
               )}
               <span className={`font-bold px-3 py-1 rounded-lg ${
                 partida.cantidad_jugadas > 0
-                  ? 'bg-cyan-500/20 text-[#00e5ff] border border-cyan-500/40'
-                  : 'bg-white/5 text-slate-500'
+                  ? 'bg-primary/20 text-primary border border-primary/40'
+                  : 'bg-on-surface/5 text-on-surface-variant'
               }`}>
                 {partida.cantidad_jugadas} {partida.cantidad_jugadas === 1 ? 'jugada' : 'jugadas'}
               </span>
               {typeof partida.jugadas_jugador === 'number' && (
-                <span className="font-medium text-slate-400" title="Jugadas hechas por el jugador (sin contar las del rival)">
+                <span className="font-medium text-on-surface-variant" title="Jugadas hechas por el jugador (sin contar las del rival)">
                   (jugador: {partida.jugadas_jugador})
                 </span>
               )}
               {modoGrid && (
-                <span className="material-symbols-outlined text-[18px] text-cyan-400 group-hover:translate-x-1.5 transition-transform ml-1">
+                <span className="material-symbols-outlined text-[18px] text-primary group-hover:translate-x-1.5 transition-transform ml-1">
                   arrow_forward
                 </span>
               )}
@@ -306,7 +306,7 @@ export default function RegistroPartidas({
       )}
 
       {/* Franja superior: título, contador y conmutador de vista */}
-      <section className="bg-surface-container-lowest/80 backdrop-blur-md rounded-xl p-space-md flex flex-col lg:flex-row items-start lg:items-center justify-between gap-space-md shadow-sm border border-white/5">
+      <section className="bg-surface-container-lowest/80 backdrop-blur-md rounded-xl p-space-md flex flex-col lg:flex-row items-start lg:items-center justify-between gap-space-md shadow-sm border border-outline-variant/5">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-space-md w-full lg:w-auto">
           <div className="flex items-center gap-space-xs shrink-0">
             <span className="w-2.5 h-2.5 rounded-full bg-primary-container shadow-[0_0_10px_rgba(0,229,255,0.8)]"></span>
@@ -317,21 +317,21 @@ export default function RegistroPartidas({
           <div className="hidden sm:block h-3.5 w-px bg-surface-variant"></div>
           <div className="flex items-center gap-space-sm font-mono text-xs text-on-surface-variant">
             <span>
-              TOTAL: <strong className="text-white font-bold">{partidasDelUsuario.length}</strong> {esFacilitador ? 'EN SISTEMA' : 'JUGADAS POR VOS'}
+              TOTAL: <strong className="text-on-surface font-bold">{partidasDelUsuario.length}</strong> {esFacilitador ? 'EN SISTEMA' : 'JUGADAS POR VOS'}
             </span>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center justify-between lg:justify-end gap-space-sm w-full lg:w-auto">
           {/* Selector de modo de vista: Cuadrícula vs Inspector Dividido */}
-          <div className="inline-flex items-center bg-surface-container-low p-1 rounded-xl border border-white/5">
+          <div className="inline-flex items-center bg-surface-container-low p-1 rounded-xl border border-outline-variant/5">
             <button
               type="button"
               onClick={() => setModoVista('grid')}
               className={`px-3 py-1.5 rounded-lg text-xs font-mono flex items-center gap-1.5 transition-all ${
                 modoVista === 'grid'
-                  ? 'bg-primary text-black font-bold shadow-[0_0_10px_rgba(0,229,255,0.4)]'
-                  : 'text-on-surface-variant hover:text-white'
+                  ? 'bg-primary text-on-primary font-bold shadow-[0_0_10px_rgba(0,229,255,0.4)]'
+                  : 'text-on-surface-variant hover:text-on-surface'
               }`}
               title="Ver todas las partidas en cuadrícula amplia"
             >
@@ -348,8 +348,8 @@ export default function RegistroPartidas({
               }}
               className={`px-3 py-1.5 rounded-lg text-xs font-mono flex items-center gap-1.5 transition-all ${
                 modoVista === 'split'
-                  ? 'bg-primary text-black font-bold shadow-[0_0_10px_rgba(0,229,255,0.4)]'
-                  : 'text-on-surface-variant hover:text-white'
+                  ? 'bg-primary text-on-primary font-bold shadow-[0_0_10px_rgba(0,229,255,0.4)]'
+                  : 'text-on-surface-variant hover:text-on-surface'
               }`}
               title="Ver vista dividida con panel de inspección técnica"
             >
@@ -364,7 +364,7 @@ export default function RegistroPartidas({
             <input
               value={busqueda}
               onChange={(evento) => setBusqueda(evento.target.value)}
-              className="bg-surface-container-low text-on-surface placeholder:text-outline font-mono text-xs pl-8 pr-space-sm py-1.5 rounded-lg focus:outline-none focus:bg-surface-container transition-all w-48 sm:w-60 border border-white/5"
+              className="bg-surface-container-low text-on-surface placeholder:text-outline font-mono text-xs pl-8 pr-space-sm py-1.5 rounded-lg focus:outline-none focus:bg-surface-container transition-all w-48 sm:w-60 border border-outline-variant/5"
               placeholder="Buscar por ID o FEN..."
               type="text"
             />
@@ -373,7 +373,7 @@ export default function RegistroPartidas({
       </section>
 
       {/* Barra de pestañas de filtros con conteos */}
-      <div className="flex items-center gap-2 flex-wrap bg-surface-container-low p-2 rounded-xl border border-white/5">
+      <div className="flex items-center gap-2 flex-wrap bg-surface-container-low p-2 rounded-xl border border-outline-variant/5">
         {[
           { id: 'con_jugadas', label: 'Con Jugadas', count: conteos.con_jugadas },
           { id: 'todas', label: 'Todas', count: conteos.todas },
@@ -389,14 +389,14 @@ export default function RegistroPartidas({
             onClick={() => setFiltro(item.id)}
             className={`px-3 py-1.5 rounded-lg font-mono text-xs transition-all flex items-center gap-1.5 ${
               filtro === item.id
-                ? 'bg-primary text-black font-bold shadow-[0_0_10px_rgba(0,229,255,0.4)]'
-                : 'text-on-surface-variant hover:text-white hover:bg-surface-container/60'
+                ? 'bg-primary text-on-primary font-bold shadow-[0_0_10px_rgba(0,229,255,0.4)]'
+                : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container/60'
             }`}
           >
             {item.icon && <span className="material-symbols-outlined text-[15px]">{item.icon}</span>}
             <span>{item.label}</span>
             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-              filtro === item.id ? 'bg-black/25 text-black' : 'bg-surface-container-high text-on-surface-variant'
+              filtro === item.id ? 'bg-black/25 text-on-primary' : 'bg-surface-container-high text-on-surface-variant'
             }`}>
               {item.count}
             </span>
@@ -418,7 +418,7 @@ export default function RegistroPartidas({
       )}
 
       {!cargando && partidasFiltradas.length === 0 && (
-        <div className="rounded-xl p-space-xl bg-surface-container-lowest text-center flex flex-col items-center gap-space-sm border border-white/5 my-4">
+        <div className="rounded-xl p-space-xl bg-surface-container-lowest text-center flex flex-col items-center gap-space-sm border border-outline-variant/5 my-4">
           <span className="material-symbols-outlined text-[40px] text-outline">history_edu</span>
           <h3 className="font-headline-sm text-headline-sm text-on-surface font-semibold">
             No hay partidas que coincidan con este filtro
@@ -444,7 +444,7 @@ export default function RegistroPartidas({
             <span className="font-mono text-xs text-outline tracking-wider uppercase font-semibold">
               MOSTRANDO {partidasFiltradas.length} PARTIDAS EN CUADRÍCULA
             </span>
-            <span className="font-mono text-xs text-slate-400">
+            <span className="font-mono text-xs text-on-surface-variant">
               Hacé clic en cualquier tarjeta para abrir su inspector detallado
             </span>
           </div>
@@ -475,7 +475,7 @@ export default function RegistroPartidas({
               </span>
               <button
                 onClick={() => setModoVista('grid')}
-                className="font-mono text-xs sm:text-sm text-cyan-400 hover:text-cyan-300 flex items-center gap-1.5 font-semibold transition-colors"
+                className="font-mono text-xs sm:text-sm text-primary hover:text-primary flex items-center gap-1.5 font-semibold transition-colors"
                 type="button"
               >
                 <span className="material-symbols-outlined text-[18px]">grid_view</span>
@@ -512,15 +512,15 @@ export default function RegistroPartidas({
                 </p>
               </div>
             ) : (
-              <div className="bg-[#151722] rounded-2xl p-space-lg shadow-xl border border-white/10 flex flex-col gap-space-md animate-in slide-in-from-right-4 duration-300">
+              <div className="bg-surface-container-low rounded-2xl p-space-lg shadow-xl border border-outline-variant/10 flex flex-col gap-space-md animate-in slide-in-from-right-4 duration-300">
                 {/* Cabecera del Inspector */}
                 <div className="flex items-start justify-between pb-space-xs border-b border-outline-variant/20 flex-wrap gap-2">
                   <div>
-                    <div className="flex items-center gap-2 font-mono text-xs text-cyan-400 uppercase tracking-wider mb-1">
+                    <div className="flex items-center gap-2 font-mono text-xs text-primary uppercase tracking-wider mb-1">
                       <span className="material-symbols-outlined text-[16px]">troubleshoot</span>
                       <span>INSPECTOR DETALLADO DE PARTIDA</span>
                     </div>
-                    <h2 className="font-headline-lg text-headline-lg text-white font-bold tracking-tight">
+                    <h2 className="font-headline-lg text-headline-lg text-on-surface font-bold tracking-tight">
                       #{detalle.id.slice(0, 8)}
                     </h2>
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
@@ -533,14 +533,14 @@ export default function RegistroPartidas({
                         {resultadoLegible(detalle.resultado)}
                       </span>
                       <span className={`inline-flex items-center gap-1 font-mono text-xs px-2.5 py-0.5 rounded-full font-semibold ${
-                        detalle.tipo_oponente === 'modelo' ? 'bg-cyan-500/15 text-[#00e5ff] border border-cyan-500/30' : 'bg-slate-700/60 text-slate-200 border border-slate-500/40'
+                        detalle.tipo_oponente === 'modelo' ? 'bg-primary/15 text-primary border border-primary/30' : 'bg-surface-container/60 text-on-surface border border-outline-variant/40'
                       }`}>
                         <span className="material-symbols-outlined text-[14px]">
                           {detalle.tipo_oponente === 'modelo' ? 'psychology' : 'smart_toy'}
                         </span>
                         {oponenteLegible(detalle.tipo_oponente)}
                       </span>
-                      <span className="px-2.5 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant font-mono text-xs border border-white/5">
+                      <span className="px-2.5 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant font-mono text-xs border border-outline-variant/5">
                         Nivel {detalle.nivel} ({categoriaNivel(detalle.nivel)})
                       </span>
                       {esFacilitador && detalle.usuario_nombre && (
@@ -554,20 +554,20 @@ export default function RegistroPartidas({
 
                   <div className="text-right">
                     <span className="font-mono text-[11px] text-outline block">FECHA Y HORA</span>
-                    <span className="font-mono text-xs text-white flex items-center gap-1 justify-end mt-0.5">
-                      <span className="material-symbols-outlined text-[14px] text-slate-400">schedule</span>
+                    <span className="font-mono text-xs text-on-surface flex items-center gap-1 justify-end mt-0.5">
+                      <span className="material-symbols-outlined text-[14px] text-on-surface-variant">schedule</span>
                       {fechaLegible(detalle.creada_en)}
                     </span>
                   </div>
                 </div>
 
                 {/* FEN actual */}
-                <div className="bg-[#1b1e2a] rounded-xl p-space-sm flex flex-col gap-1 border border-white/5">
+                <div className="bg-surface-container rounded-xl p-space-sm flex flex-col gap-1 border border-outline-variant/5">
                   <span className="font-mono text-xs text-outline uppercase flex items-center gap-1">
                     <span className="material-symbols-outlined text-[14px]">grid_4x4</span>
                     Posición FEN Actual
                   </span>
-                  <span className="font-mono text-xs text-cyan-300 break-all select-all">
+                  <span className="font-mono text-xs text-primary break-all select-all">
                     {detalle.fen}
                   </span>
                 </div>
@@ -583,7 +583,7 @@ export default function RegistroPartidas({
                       {detalle.jugadas.length === 0 ? 'Sin jugadas' : `${Math.ceil(detalle.jugadas.length / 2)} turnos jugados`}
                     </span>
                   </div>
-                  <div className="flex flex-col gap-1.5 font-mono max-h-72 overflow-y-auto bg-[#1b1e2a] rounded-xl p-space-sm border border-white/5">
+                  <div className="flex flex-col gap-1.5 font-mono max-h-72 overflow-y-auto bg-surface-container rounded-xl p-space-sm border border-outline-variant/5">
                     {detalle.jugadas.length === 0 && (
                       <div className="py-6 text-center text-outline font-mono text-xs">
                         Esta partida aún no tiene jugadas registradas.
@@ -592,17 +592,17 @@ export default function RegistroPartidas({
                     {detalle.jugadas.map((san, indice) => (
                       <div
                         key={indice}
-                        className="flex items-center justify-between px-3 py-1.5 rounded-md hover:bg-white/5 text-slate-200 transition-colors"
+                        className="flex items-center justify-between px-3 py-1.5 rounded-md hover:bg-on-surface/5 text-on-surface transition-colors"
                       >
                         <div className="flex items-center gap-3">
-                          <span className="text-slate-500 w-10 font-mono text-xs">
+                          <span className="text-on-surface-variant w-10 font-mono text-xs">
                             {Math.floor(indice / 2) + 1}{indice % 2 === 0 ? '.' : '...'}
                           </span>
-                          <span className="font-bold text-white font-mono text-sm px-2 py-0.5 rounded bg-black/30">
+                          <span className="font-bold text-on-surface font-mono text-sm px-2 py-0.5 rounded bg-surface-container-high">
                             {san}
                           </span>
                         </div>
-                        <span className="text-xs text-slate-400 font-mono flex items-center gap-1.5">
+                        <span className="text-xs text-on-surface-variant font-mono flex items-center gap-1.5">
                           <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: indice % 2 === 0 ? '#ffffff' : '#64748b' }}></span>
                           {indice % 2 === 0 ? 'Blancas (Vos)' : (detalle.tipo_oponente === 'modelo' ? 'Turing IA' : 'Stockfish')}
                         </span>
@@ -624,7 +624,7 @@ export default function RegistroPartidas({
 
                   <button
                     onClick={() => alIrAAprendizaje?.(detalle.id)}
-                    className="px-space-sm py-space-xs rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-primary font-mono text-xs uppercase tracking-wider transition-all flex items-center gap-space-2xs border border-white/5"
+                    className="px-space-sm py-space-xs rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-primary font-mono text-xs uppercase tracking-wider transition-all flex items-center gap-space-2xs border border-outline-variant/5"
                     type="button"
                   >
                     <span className="material-symbols-outlined text-[16px] text-primary">troubleshoot</span>
@@ -644,7 +644,7 @@ export default function RegistroPartidas({
 
                   <button
                     onClick={alIrARazonamiento}
-                    className="px-space-sm py-space-xs rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-primary font-mono text-xs uppercase tracking-wider transition-all flex items-center gap-space-2xs border border-white/5"
+                    className="px-space-sm py-space-xs rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-primary font-mono text-xs uppercase tracking-wider transition-all flex items-center gap-space-2xs border border-outline-variant/5"
                     type="button"
                   >
                     <span className="material-symbols-outlined text-[16px] text-primary">psychology</span>
@@ -657,7 +657,7 @@ export default function RegistroPartidas({
         </div>
       )}
 
-      <footer className="bg-surface-container-lowest/80 backdrop-blur-sm rounded-xl px-space-md py-space-xs flex items-center justify-center font-mono text-xs text-outline mt-auto border border-white/5">
+      <footer className="bg-surface-container-lowest/80 backdrop-blur-sm rounded-xl px-space-md py-space-xs flex items-center justify-center font-mono text-xs text-outline mt-auto border border-outline-variant/5">
         <span>Registro sincronizado con el backend en memoria y filtrado por usuario autenticado.</span>
       </footer>
     </div>

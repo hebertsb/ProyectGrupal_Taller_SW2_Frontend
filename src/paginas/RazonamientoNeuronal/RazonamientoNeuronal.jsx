@@ -440,7 +440,7 @@ export default function RazonamientoNeuronal() {
   const partidasVaciasOcultas = partidasDelEstudiante.length - partidasConJugadas.length;
 
   return (
-    <div className="relative w-full min-h-[calc(100vh-4rem)] p-3 lg:p-4 flex flex-col gap-3 max-w-[1920px] mx-auto animate-in fade-in duration-500">
+    <div className="bg-surface relative w-full min-h-[calc(100vh-4rem)] p-3 lg:p-4 flex flex-col gap-3 max-w-[1920px] mx-auto animate-in fade-in duration-500">
       {/* Siempre visible y accesible sin importar el estado (viendo la propia partida
           en vivo desde Sala de Control, ya observando la de un estudiante, o explorando
           un FEN suelto) — es la única puerta de entrada para que el facilitador decida
@@ -626,7 +626,7 @@ export default function RazonamientoNeuronal() {
             <div className="flex flex-col justify-center px-3 py-1.5 rounded-lg bg-surface-container-lowest border border-outline-variant/20">
               <span className="font-mono-micro text-[9px] text-on-surface-variant uppercase">Confianza top-1</span>
               <div className="flex items-center justify-between">
-                <span className="font-mono-metric text-[13px] font-bold text-secondary-fixed">
+                <span className="font-mono-metric text-[13px] font-bold text-secondary">
                   {top1 ? `${(top1.probabilidad * 100).toFixed(1)}%` : '—'}
                 </span>
                 <span className="font-mono-micro text-[9px] text-outline">
@@ -636,7 +636,7 @@ export default function RazonamientoNeuronal() {
             </div>
             <div className="flex flex-col justify-center px-3 py-1.5 rounded-lg bg-surface-container-lowest border border-outline-variant/20">
               <span className="font-mono-micro text-[9px] text-on-surface-variant uppercase">Dispositivo</span>
-              <span className="font-mono-metric text-[13px] font-bold text-tertiary-container">{dispositivo}</span>
+              <span className="font-mono-metric text-[13px] font-bold text-tertiary">{dispositivo}</span>
             </div>
             <div className="flex items-center gap-1.5 justify-end col-span-2 sm:col-span-1 2xl:col-span-1">
               <button
@@ -783,32 +783,32 @@ export default function RazonamientoNeuronal() {
                     >
                       <defs>
                         <marker id="punta-turing" markerWidth="4" markerHeight="4" refX="2.6" refY="2" orient="auto">
-                          <path d="M0,0 L4,2 L0,4 z" fill="#76ff03" />
+                          <path d="M0,0 L4,2 L0,4 z" fill="var(--color-neon-lime)" />
                         </marker>
                         <marker id="punta-stockfish" markerWidth="4" markerHeight="4" refX="2.6" refY="2" orient="auto">
-                          <path d="M0,0 L4,2 L0,4 z" fill="#ff9100" />
+                          <path d="M0,0 L4,2 L0,4 z" fill="var(--color-neon-orange)" />
                         </marker>
                         <marker id="punta-real" markerWidth="4" markerHeight="4" refX="2.6" refY="2" orient="auto">
-                          <path d="M0,0 L4,2 L0,4 z" fill="#ffffff" />
+                          <path d="M0,0 L4,2 L0,4 z" fill="var(--color-tablero-flecha)" />
                         </marker>
                       </defs>
                       {flechaReal && (
                         <line
                           x1={flechaReal.x1} y1={flechaReal.y1} x2={flechaReal.x2} y2={flechaReal.y2}
-                          stroke="#ffffff" strokeWidth="0.14" strokeDasharray="0.3 0.2" strokeLinecap="round"
+                          stroke="var(--color-tablero-flecha)" strokeWidth="0.14" strokeDasharray="0.3 0.2" strokeLinecap="round"
                           opacity="0.95" markerEnd="url(#punta-real)"
                         />
                       )}
                       {flechaStockfish && (
                         <line
                           x1={flechaStockfish.x1} y1={flechaStockfish.y1} x2={flechaStockfish.x2} y2={flechaStockfish.y2}
-                          stroke="#ff9100" strokeWidth="0.16" strokeLinecap="round" opacity="0.85" markerEnd="url(#punta-stockfish)"
+                          stroke="var(--color-neon-orange)" strokeWidth="0.16" strokeLinecap="round" opacity="0.85" markerEnd="url(#punta-stockfish)"
                         />
                       )}
                       {flechaTuring && (
                         <line
                           x1={flechaTuring.x1} y1={flechaTuring.y1} x2={flechaTuring.x2} y2={flechaTuring.y2}
-                          stroke="#76ff03" strokeWidth="0.2" strokeLinecap="round" opacity="0.95" markerEnd="url(#punta-turing)"
+                          stroke="var(--color-neon-lime)" strokeWidth="0.2" strokeLinecap="round" opacity="0.95" markerEnd="url(#punta-turing)"
                         />
                       )}
                     </svg>
@@ -819,7 +819,7 @@ export default function RazonamientoNeuronal() {
               {(flechaTuring || flechaStockfish || flechaReal) && (
                 <ul className="flex flex-wrap justify-center gap-x-3 gap-y-1 font-mono-micro text-[9px] text-on-surface-variant uppercase" aria-label="Leyenda de las flechas del tablero">
                   {flechaReal && (
-                    <li className="flex items-center gap-1"><span className="w-3 border-t-2 border-dashed border-white" aria-hidden="true" />Jugada real</li>
+                    <li className="flex items-center gap-1"><span className="w-3 border-t-2 border-dashed border-outline-variant" aria-hidden="true" />Jugada real</li>
                   )}
                   {flechaTuring && (
                     <li className="flex items-center gap-1"><span className="w-3 border-t-2 border-neon-lime" aria-hidden="true" />Elige Turing</li>
@@ -1084,7 +1084,7 @@ export default function RazonamientoNeuronal() {
                         {probabilidadElegida !== null ? ` (${(probabilidadElegida * 100).toFixed(1)}%)` : ''}
                         {cmp && (
                           <>
-                            {' · '}Stockfish <span className="text-tertiary-container font-semibold">{cmp.jugada_motor}</span>{' '}
+                            {' · '}Stockfish <span className="text-tertiary font-semibold">{cmp.jugada_motor}</span>{' '}
                             {formatearCp(cmp.evaluacion_cp)}
                             {relacionResumen && (
                               <>
@@ -1147,7 +1147,7 @@ export default function RazonamientoNeuronal() {
                             <span className={`font-headline-sm text-[19px] font-bold ${c.elegida ? 'text-neon-cyan' : 'text-on-surface'}`}>
                               {c.jugada}
                             </span>
-                            <span className="font-mono-metric text-[12px] font-semibold text-secondary-fixed">
+                            <span className="font-mono-metric text-[12px] font-semibold text-secondary">
                               {(c.probabilidad * 100).toFixed(1)}%
                             </span>
                           </div>
@@ -1189,7 +1189,7 @@ export default function RazonamientoNeuronal() {
 
                           <div className="flex items-center justify-between pt-1.5 border-t border-outline-variant/20">
                             <span className="font-mono-micro text-[9px] text-outline uppercase">Stockfish tras esta jugada</span>
-                            <span className="font-mono-micro text-[10px] font-semibold text-tertiary-container">
+                            <span className="font-mono-micro text-[10px] font-semibold text-tertiary">
                               {formatearEvalCandidata(c.evaluacion_stockfish_cp)}
                             </span>
                           </div>

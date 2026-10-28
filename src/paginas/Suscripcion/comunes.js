@@ -3,13 +3,13 @@ import { fechaDesdeIso } from '../../formatoTiempo';
 /** Textos y colores del estado de una suscripción (`prueba`, `activa` o `vencida`). */
 export const ESTADOS = {
   prueba: { texto: 'Prueba gratis', clase: 'bg-tertiary-container text-tertiary', icono: 'hourglass_top' },
-  activa: { texto: 'Activa', clase: 'bg-primary-container text-primary', icono: 'check_circle' },
+  activa: { texto: 'Activa', clase: 'bg-primary-container text-on-primary-container', icono: 'check_circle' },
   vencida: { texto: 'Vencida', clase: 'bg-error-container text-error', icono: 'error' },
 };
 
 export const ESTADOS_PAGO = {
   pendiente: { texto: 'Esperando confirmación', clase: 'bg-tertiary-container text-tertiary' },
-  confirmado: { texto: 'Confirmado', clase: 'bg-primary-container text-primary' },
+  confirmado: { texto: 'Confirmado', clase: 'bg-primary-container text-on-primary-container' },
   rechazado: { texto: 'Rechazado', clase: 'bg-error-container text-error' },
 };
 

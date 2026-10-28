@@ -17,7 +17,7 @@ export default function RelojAjedrez({ nombre, icono, ms, activo, agotado = fals
           ? 'bg-error/20 border-error/60'
           : activo
             ? 'bg-primary/10 border-primary/50 shadow-[0_0_14px_rgba(0,229,255,0.18)]'
-            : 'bg-white/[0.04] border-white/10'
+            : 'bg-on-surface/[0.04] border-outline-variant/10'
       }`}
       aria-label={`${nombre}: ${agotado ? 'sin tiempo' : `${formatearReloj(ms)} restantes${activo ? ', es su turno' : ''}`}`}
     >
@@ -33,7 +33,7 @@ export default function RelojAjedrez({ nombre, icono, ms, activo, agotado = fals
             ? 'text-error bg-error/15'
             : activo
               ? 'text-primary bg-primary/10'
-              : 'text-on-surface-variant bg-white/[0.04]'
+              : 'text-on-surface-variant bg-on-surface/[0.04]'
         } ${activo && critico && !agotado ? 'motion-safe:animate-pulse' : ''}`}
       >
         {formatearReloj(ms)}

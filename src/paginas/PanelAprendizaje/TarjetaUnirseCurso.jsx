@@ -38,7 +38,7 @@ export default function TarjetaUnirseCurso({
     <button
       type="button"
       onClick={alIrAPerfil}
-      className="underline underline-offset-2 text-primary hover:text-primary-fixed focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded-sm"
+      className="underline underline-offset-2 text-primary hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded-sm"
     >
       Mi Perfil
     </button>

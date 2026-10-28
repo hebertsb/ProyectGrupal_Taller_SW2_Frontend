@@ -2,7 +2,7 @@ import { tonoVigenteCurso } from '../tonoTuring';
 
 const BASE_INSIGNIA =
   'inline-flex max-w-full items-center gap-1 px-space-xs py-space-2xs rounded-full font-mono-micro text-mono-micro font-medium self-start';
-const ESTILO_PROPIO = 'bg-primary-container text-primary';
+const ESTILO_PROPIO = 'bg-primary-container text-on-primary-container';
 const ESTILO_HEREDADO = 'bg-surface-container-high text-on-surface-variant';
 
 /**

@@ -7,6 +7,7 @@ import PasoDobleFactor from './PasoDobleFactor';
 import RecuperarPassword from './RecuperarPassword';
 import CampoCodigoInvitacion from './CampoCodigoInvitacion';
 import { guardarSesion } from '../../api/sesion';
+import BotonTema from '../../componentes/BotonTema';
 
 const DOMINIO_DE_ALUMNOS = 'alumnos.example.com';
 
@@ -16,7 +17,7 @@ function correoDeIngreso(texto) {
   return limpio.includes('@') ? limpio : `${limpio.toLowerCase()}@${DOMINIO_DE_ALUMNOS}`;
 }
 
-export default function Login({ onLoginSuccess }) {
+export default function Login({ onLoginSuccess, apariencia }) {
   const [modo, setModo] = useState('login'); // 'login' | 'registro'
   const [rolEsperado, setRolEsperado] = useState('jugador'); // 'jugador' | 'facilitador'
   const [nombre, setNombre] = useState('');
@@ -308,7 +309,7 @@ export default function Login({ onLoginSuccess }) {
   };
 
   return (
-    <div className="min-h-screen bg-[#0c0e14] text-slate-200 font-sans antialiased flex flex-col justify-between relative overflow-x-hidden select-none">
+    <div className="min-h-screen bg-surface-container-lowest text-on-surface font-sans antialiased flex flex-col justify-between relative overflow-x-hidden select-none">
       {token2fa && <PasoDobleFactor token={token2fa} alCompletar={completarSegundoPaso} alCancelar={() => setToken2fa(null)} />}
       {recuperandoPassword && <RecuperarPassword correoInicial={email} alCerrar={() => setRecuperandoPassword(false)} alCompletar={(correo) => {
         setRecuperandoPassword(false);
@@ -325,13 +326,13 @@ export default function Login({ onLoginSuccess }) {
           background-size: 38px 38px;
         }
         .neon-border-cyan {
-          box-shadow: 0 0 30px -4px rgba(0, 229, 255, 0.28), inset 0 0 20px -6px rgba(0, 229, 255, 0.16);
+          box-shadow: var(--sombra-acento);
         }
         .text-glow-cyan {
-          text-shadow: 0 0 14px rgba(0, 229, 255, 0.7);
+          text-shadow: var(--resplandor-acento);
         }
         .text-glow-emerald {
-          text-shadow: 0 0 12px rgba(16, 185, 129, 0.7);
+          text-shadow: var(--resplandor-acento);
         }
         @keyframes chessStepAnimation {
           0% { left: 6px; transform: translateY(0px) rotate(0deg); }
@@ -369,48 +370,49 @@ export default function Login({ onLoginSuccess }) {
         />
 
         {/* Overlay semitransparente degradado (#0c0e14 / #111319) */}
-        <div className="absolute inset-0 bg-gradient-to-b from-[#0c0e14]/85 via-[#111319]/75 to-[#0c0e14]/90 backdrop-blur-[1.5px]" />
-        <div className="absolute inset-0 bg-gradient-to-r from-[#0c0e14]/90 via-transparent to-[#0c0e14]/90" />
+        <div className="absolute inset-0 bg-gradient-to-b from-surface-container-lowest/85 via-surface/75 to-surface-container-lowest/90 backdrop-blur-[1.5px]" />
+        <div className="absolute inset-0 bg-gradient-to-r from-surface-container-lowest/90 via-transparent to-surface-container-lowest/90" />
 
         {/* Efecto de circuitos, cuadrícula y líneas de escaneo */}
         <div className="absolute inset-0 bg-tech-grid opacity-70" />
         <div className="absolute inset-0 scanlines opacity-40" />
 
         {/* Luces ambientales cibernéticas */}
-        <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-[720px] h-[480px] bg-[#00e5ff]/12 rounded-full blur-[140px]" />
-        <div className="absolute bottom-4 right-1/4 w-[500px] h-[340px] bg-[#10b981]/10 rounded-full blur-[160px]" />
+        <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-[720px] h-[480px] bg-primary-container/12 rounded-full blur-[140px]" />
+        <div className="absolute bottom-4 right-1/4 w-[500px] h-[340px] bg-exito/10 rounded-full blur-[160px]" />
       </div>
 
       {/* 2. BARRA DE TELEMETRÍA SUPERIOR */}
-      <header className="relative z-10 w-full px-5 sm:px-8 py-3.5 max-[860px]:py-2 flex items-center justify-between border-b border-[#00e5ff]/20 bg-[#0c0e14]/85 backdrop-blur-md font-mono text-xs" data-purpose="telemetry-bar">
+      <header className="relative z-10 w-full px-5 sm:px-8 py-3.5 max-[860px]:py-2 flex items-center justify-between border-b border-primary/20 bg-surface-container-lowest/85 backdrop-blur-md font-mono text-xs" data-purpose="telemetry-bar">
         <div className="flex items-center space-x-3 sm:space-x-5">
           <div className="flex items-center space-x-2">
             <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00e5ff] opacity-80" />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#00e5ff]" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary-container opacity-80" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-primary-container" />
             </span>
-            <span className="tracking-wider text-slate-300 font-semibold">
-              NODO KAIROS: <span className="text-[#00e5ff] text-glow-cyan">EN LÍNEA</span>
+            <span className="tracking-wider text-on-surface-variant font-semibold">
+              NODO KAIROS: <span className="text-primary text-glow-cyan">EN LÍNEA</span>
             </span>
           </div>
-          <span className="text-slate-700 hidden sm:inline">|</span>
-          <div className="hidden sm:flex items-center space-x-1.5 text-slate-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+          <span className="text-on-surface-variant hidden sm:inline">|</span>
+          <div className="hidden sm:flex items-center space-x-1.5 text-on-surface-variant">
+            <span className="w-1.5 h-1.5 rounded-full bg-exito" />
             <span>
-              CINEMÁTICA: <span className="text-emerald-400 font-medium">CALIBRADA</span>
+              CINEMÁTICA: <span className="text-exito font-medium">CALIBRADA</span>
             </span>
           </div>
         </div>
 
         <div className="flex items-center space-x-3 sm:space-x-4">
-          <div className="hidden md:flex items-center space-x-1.5 text-slate-400">
-            <svg className="w-3.5 h-3.5 text-[#00e5ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <BotonTema apariencia={apariencia} />
+          <div className="hidden md:flex items-center space-x-1.5 text-on-surface-variant">
+            <svg className="w-3.5 h-3.5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
             </svg>
-            <span className="tracking-wider text-slate-300 text-[11px]">E2E TLS 1.3</span>
+            <span className="tracking-wider text-on-surface-variant text-[11px]">E2E TLS 1.3</span>
           </div>
-          <div className="flex items-center space-x-1 px-2.5 py-1 rounded bg-[#00e5ff]/10 border border-[#00e5ff]/30 text-[11px] text-[#00e5ff] font-semibold">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#00e5ff] animate-pulse" />
+          <div className="flex items-center space-x-1 px-2.5 py-1 rounded bg-primary-container/10 border border-primary/30 text-[11px] text-primary font-semibold">
+            <span className="w-1.5 h-1.5 rounded-full bg-primary-container animate-pulse" />
             <span>LATENCIA: 1.2ms</span>
           </div>
         </div>
@@ -419,17 +421,17 @@ export default function Login({ onLoginSuccess }) {
       {/* 3. CARD CENTRAL GLASSMÓRFICA DE AUTENTICACIÓN */}
       <main className="relative z-10 flex-1 flex items-center justify-center px-4 py-6 sm:px-6 max-[860px]:py-2">
         <div className="w-full max-w-[440px] mx-auto">
-          <section className="tarjeta-login relative bg-[#111319]/90 backdrop-blur-2xl rounded-2xl border border-[#00e5ff]/30 p-6 sm:p-7 neon-border-cyan shadow-2xl transition-all duration-300">
+          <section className="tarjeta-login relative bg-surface/90 backdrop-blur-2xl rounded-2xl border border-primary/30 p-6 sm:p-7 neon-border-cyan shadow-2xl transition-all duration-300">
             {/* Esquinas Cibernéticas Decorativas */}
-            <div className="absolute -top-1 -left-1 w-3.5 h-3.5 border-t-2 border-l-2 border-[#00e5ff]" />
-            <div className="absolute -top-1 -right-1 w-3.5 h-3.5 border-t-2 border-r-2 border-[#00e5ff]" />
-            <div className="absolute -bottom-1 -left-1 w-3.5 h-3.5 border-b-2 border-l-2 border-[#00e5ff]" />
-            <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 border-b-2 border-r-2 border-[#00e5ff]" />
+            <div className="absolute -top-1 -left-1 w-3.5 h-3.5 border-t-2 border-l-2 border-primary" />
+            <div className="absolute -top-1 -right-1 w-3.5 h-3.5 border-t-2 border-r-2 border-primary" />
+            <div className="absolute -bottom-1 -left-1 w-3.5 h-3.5 border-b-2 border-l-2 border-primary" />
+            <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 border-b-2 border-r-2 border-primary" />
 
             {/* LOGOTIPO E IDENTIDAD OFICIAL: ChessIA // KAIROS CORE */}
             <div className="text-center mb-5 max-[860px]:mb-3" data-purpose="brand-logo-identity">
               <div className="flex justify-center mb-4 max-[860px]:hidden">
-                <div className="inline-flex p-1.5 rounded-2xl bg-[#0c0e14] border border-[#00e5ff]/30 shadow-[0_0_20px_rgba(0,229,255,0.45)] overflow-hidden">
+                <div className="inline-flex p-1.5 rounded-2xl bg-surface-container-lowest border border-primary/30 shadow-[0_0_20px_rgba(0,229,255,0.45)] overflow-hidden">
                   <img
                     alt="ChessIA Logo"
                     className="h-20 w-auto rounded-xl object-contain"
@@ -443,20 +445,20 @@ export default function Login({ onLoginSuccess }) {
                 </div>
               </div>
 
-              <h1 className="font-display font-bold text-2xl sm:text-[26px] tracking-tight text-white flex items-center justify-center space-x-1.5">
+              <h1 className="font-display font-bold text-2xl sm:text-[26px] tracking-tight text-on-surface flex items-center justify-center space-x-1.5">
                 <span>ChessIA</span>
-                <span className="text-slate-500 font-light">//</span>
-                <span className="text-[#00e5ff] text-glow-cyan">KAIROS</span>
-                <span className="text-emerald-400 font-semibold text-glow-emerald">CORE</span>
+                <span className="text-on-surface-variant font-light">//</span>
+                <span className="text-primary text-glow-cyan">KAIROS</span>
+                <span className="text-exito font-semibold text-glow-emerald">CORE</span>
               </h1>
-              <p className="mt-1 text-[10.5px] font-mono tracking-widest text-[#00e5ff]/80 uppercase">
+              <p className="mt-1 text-[10.5px] font-mono tracking-widest text-primary/80 uppercase">
                 SISTEMA AUTÓNOMO DE AJEDREZ ROBÓTICO
               </p>
             </div>
 
             {/* SELECTOR DE ROL (JUGADOR vs FACILITADOR / ÁRBITRO) */}
             <div className="mb-4">
-              <div className="grid grid-cols-2 gap-1.5 p-1 bg-[#090b10] border border-white/10 rounded-xl">
+              <div className="grid grid-cols-2 gap-1.5 p-1 bg-surface-container-lowest border border-outline-variant/10 rounded-xl">
                 {/* Jugador */}
                 <button
                   type="button"
@@ -467,8 +469,8 @@ export default function Login({ onLoginSuccess }) {
                   }}
                   className={`relative flex items-center justify-center py-2.5 px-3 rounded-lg text-xs font-semibold tracking-wide transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed ${
                     rolEsperado === 'jugador'
-                      ? 'bg-[#00e5ff] text-black shadow-[0_0_16px_rgba(0,229,255,0.45)]'
-                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                      ? 'bg-primary-container text-on-primary shadow-[0_0_16px_rgba(0,229,255,0.45)]'
+                      : 'text-on-surface-variant hover:text-on-surface hover:bg-on-surface/5'
                   }`}
                 >
                   <span className="material-symbols-outlined text-[17px] mr-1.5 shrink-0">
@@ -486,8 +488,8 @@ export default function Login({ onLoginSuccess }) {
                   }}
                   className={`relative flex items-center justify-center py-2.5 px-3 rounded-lg text-xs font-semibold tracking-wide transition-all duration-200 ${
                     rolEsperado === 'facilitador'
-                      ? 'bg-[#00e5ff] text-black shadow-[0_0_16px_rgba(0,229,255,0.45)]'
-                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                      ? 'bg-primary-container text-on-primary shadow-[0_0_16px_rgba(0,229,255,0.45)]'
+                      : 'text-on-surface-variant hover:text-on-surface hover:bg-on-surface/5'
                   }`}
                 >
                   <span className="material-symbols-outlined text-[17px] mr-1.5 shrink-0">
@@ -500,16 +502,16 @@ export default function Login({ onLoginSuccess }) {
 
             {/* CURSO: llegaste por el enlace o el QR de un curso */}
             {hayCursoPendiente && (
-              <div role="status" className="mb-4 p-3 rounded-xl border bg-cyan-950/40 border-[#00e5ff]/40 text-slate-200 text-xs leading-snug flex items-start gap-2">
-                <span className="material-symbols-outlined text-[18px] shrink-0 text-[#00e5ff]" aria-hidden="true">groups</span>
+              <div role="status" className="mb-4 p-3 rounded-xl border bg-primary/10 border-primary/40 text-on-surface text-xs leading-snug flex items-start gap-2">
+                <span className="material-symbols-outlined text-[18px] shrink-0 text-primary" aria-hidden="true">groups</span>
                 <span>Te invitaron a un <strong>curso de ajedrez</strong>. Creá tu cuenta de jugador o iniciá sesión y entrás al curso directamente.</span>
               </div>
             )}
 
             {/* PARTIDA O AMISTAD: llegaste por el enlace de un amigo */}
             {enlaceDeJuego && (
-              <div role="status" className="mb-4 p-3 rounded-xl border bg-cyan-950/40 border-[#00e5ff]/40 text-slate-200 text-xs leading-snug flex items-start gap-2">
-                <span className="material-symbols-outlined text-[18px] shrink-0 text-[#00e5ff]" aria-hidden="true">swords</span>
+              <div role="status" className="mb-4 p-3 rounded-xl border bg-primary/10 border-primary/40 text-on-surface text-xs leading-snug flex items-start gap-2">
+                <span className="material-symbols-outlined text-[18px] shrink-0 text-primary" aria-hidden="true">swords</span>
                 <span>
                   {enlaceDeJuego.tipo === 'sala'
                     ? <>Te invitaron a <strong>jugar una partida de ajedrez</strong>. Creá tu cuenta de jugador o iniciá sesión y entrás directo a la partida.</>
@@ -523,10 +525,10 @@ export default function Login({ onLoginSuccess }) {
               <div
                 role="status"
                 className={`mb-4 p-3 rounded-xl border text-xs leading-snug flex items-start gap-2 ${
-                  invitacion.valido ? 'bg-cyan-950/40 border-[#00e5ff]/40 text-slate-200' : 'bg-rose-950/60 border-rose-500/40 text-rose-300'
+                  invitacion.valido ? 'bg-primary/10 border-primary/40 text-on-surface' : 'bg-error/10 border-error/40 text-error'
                 }`}
               >
-                <span className="material-symbols-outlined text-[18px] shrink-0 text-[#00e5ff]" aria-hidden="true">
+                <span className="material-symbols-outlined text-[18px] shrink-0 text-primary" aria-hidden="true">
                   {invitacion.valido ? 'mark_email_read' : 'link_off'}
                 </span>
                 <span>
@@ -547,13 +549,13 @@ export default function Login({ onLoginSuccess }) {
 
             {/* NOTIFICACIÓN O ERROR */}
             {error && (
-              <div className="mb-4 p-3 rounded-xl bg-rose-950/70 border border-rose-500/50 text-rose-300 font-mono text-xs flex items-center gap-2">
-                <span className="material-symbols-outlined text-[18px] shrink-0 text-rose-400">error</span>
+              <div className="mb-4 p-3 rounded-xl bg-error/10 border border-error/50 text-error font-mono text-xs flex items-center gap-2">
+                <span className="material-symbols-outlined text-[18px] shrink-0 text-error">error</span>
                 <span>{error}</span>
               </div>
             )}
             {notificacion && (
-              <div className="mb-4 p-3 rounded-xl bg-cyan-950/70 border border-[#00e5ff]/50 text-[#00e5ff] font-mono text-xs flex items-center gap-2">
+              <div className="mb-4 p-3 rounded-xl bg-primary/10 border border-primary/50 text-primary font-mono text-xs flex items-center gap-2">
                 <span className="material-symbols-outlined text-[18px] shrink-0">info</span>
                 <span>{notificacion}</span>
               </div>
@@ -567,7 +569,7 @@ export default function Login({ onLoginSuccess }) {
                 type="button"
                 onClick={iniciarGoogleSignIn}
                 disabled={cargando}
-                className="w-full flex items-center justify-center py-2.5 px-4 rounded-xl font-medium text-xs sm:text-sm text-slate-200 bg-[#151922] hover:bg-[#1c2230] border border-white/10 hover:border-[#00e5ff]/40 active:scale-[0.99] transition duration-200 shadow-sm group disabled:opacity-50"
+                className="w-full flex items-center justify-center py-2.5 px-4 rounded-xl font-medium text-xs sm:text-sm text-on-surface bg-surface-container-low hover:bg-surface-container-high border border-outline-variant/10 hover:border-primary/40 active:scale-[0.99] transition duration-200 shadow-sm group disabled:opacity-50"
               >
                 {/* SVG Oficial de Google */}
                 <svg className="w-4 h-4 mr-2.5 shrink-0 transition-transform group-hover:scale-110" viewBox="0 0 24 24">
@@ -581,9 +583,9 @@ export default function Login({ onLoginSuccess }) {
               )}
             </div>
 
-            <p className="-mt-2 mb-3 text-center text-[10px] leading-snug text-slate-500">
+            <p className="-mt-2 mb-3 text-center text-[10px] leading-snug text-on-surface-variant">
               Al continuar con Google aceptás los{' '}
-              <a href="/#politica" target="_blank" rel="noopener" className="text-slate-400 underline hover:text-[#00e5ff]">
+              <a href="/#politica" target="_blank" rel="noopener" className="text-on-surface-variant underline hover:text-primary">
                 términos y la política de privacidad
               </a>
               .
@@ -591,16 +593,16 @@ export default function Login({ onLoginSuccess }) {
 
             {/* SEPARADOR CRIPTOGRÁFICO */}
             <div className="relative flex py-2 items-center mb-4">
-              <div className="flex-grow border-t border-slate-800" />
-              <span className="flex-shrink mx-3 text-[10px] font-mono tracking-wider text-slate-500 uppercase">
+              <div className="flex-grow border-t border-outline-variant" />
+              <span className="flex-shrink mx-3 text-[10px] font-mono tracking-wider text-on-surface-variant uppercase">
                 O INGRESA CON TUS CREDENCIALES
               </span>
-              <div className="flex-grow border-t border-slate-800" />
+              <div className="flex-grow border-t border-outline-variant" />
             </div>
 
             {/* SELECTOR ENTRE INICIAR SESIÓN Y CREAR CUENTA */}
             <div className="flex items-center justify-between mb-3 text-xs">
-              <span className="font-mono text-slate-400">
+              <span className="font-mono text-on-surface-variant">
                 {modo === 'login' ? '¿No tienes cuenta?' : '¿Ya estás registrado?'}
               </span>
               <button
@@ -609,7 +611,7 @@ export default function Login({ onLoginSuccess }) {
                   setModo(modo === 'login' ? 'registro' : 'login');
                   setError(null);
                 }}
-                className="text-[#00e5ff] hover:underline font-mono font-semibold"
+                className="text-primary hover:underline font-mono font-semibold"
               >
                 {modo === 'login' ? 'Crear cuenta nueva' : 'Iniciar sesión'}
               </button>
@@ -620,11 +622,11 @@ export default function Login({ onLoginSuccess }) {
               {/* Campo Nombre (solo en registro) */}
               {modo === 'registro' && (
                 <div>
-                  <label className="block text-[11px] font-mono tracking-wide text-slate-300 mb-1">
+                  <label className="block text-[11px] font-mono tracking-wide text-on-surface-variant mb-1">
                     NOMBRE COMPLETO
                   </label>
                   <div className="relative rounded-lg shadow-sm">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-on-surface-variant">
                       <span className="material-symbols-outlined text-[18px]">badge</span>
                     </div>
                     <input
@@ -633,7 +635,7 @@ export default function Login({ onLoginSuccess }) {
                       onChange={(e) => setNombre(e.target.value)}
                       required
                       placeholder="Ej. Roberto Fischer"
-                      className="block w-full pl-9 pr-3 py-2 bg-[#0a0d14] border border-white/10 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#00e5ff] focus:border-[#00e5ff] font-mono transition duration-150"
+                      className="block w-full pl-9 pr-3 py-2 bg-surface-container-lowest border border-outline-variant/10 rounded-lg text-sm text-on-surface placeholder-on-surface-variant focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary font-mono transition duration-150"
                     />
                   </div>
                 </div>
@@ -641,11 +643,11 @@ export default function Login({ onLoginSuccess }) {
 
               {/* Correo electrónico */}
               <div>
-                <label htmlFor="campoCorreo" className="block text-[11px] font-mono tracking-wide text-slate-300 mb-1">
+                <label htmlFor="campoCorreo" className="block text-[11px] font-mono tracking-wide text-on-surface-variant mb-1">
                   {modo === 'login' ? 'CORREO O USUARIO' : 'CORREO ELECTRÓNICO'}
                 </label>
                 <div className="relative rounded-lg shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-on-surface-variant">
                     <span className="material-symbols-outlined text-[18px]">person</span>
                   </div>
                   <input
@@ -660,7 +662,7 @@ export default function Login({ onLoginSuccess }) {
                     onChange={(e) => setEmail(e.target.value)}
                     required
                     placeholder={modo === 'login' ? 'tu.correo@gmail.com o tu usuario' : 'tu.correo@gmail.com'}
-                    className="block w-full pl-9 pr-3 py-2 bg-[#0a0d14] border border-white/10 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#00e5ff] focus:border-[#00e5ff] font-mono transition duration-150"
+                    className="block w-full pl-9 pr-3 py-2 bg-surface-container-lowest border border-outline-variant/10 rounded-lg text-sm text-on-surface placeholder-on-surface-variant focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary font-mono transition duration-150"
                   />
                 </div>
               </div>
@@ -668,21 +670,21 @@ export default function Login({ onLoginSuccess }) {
               {/* Contraseña */}
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="block text-[11px] font-mono tracking-wide text-slate-300">
+                  <label className="block text-[11px] font-mono tracking-wide text-on-surface-variant">
                     CONTRASEÑA
                   </label>
                   {modo === 'login' && (
                     <button
                       type="button"
                       onClick={() => setRecuperandoPassword(true)}
-                      className="text-[11px] text-[#00e5ff]/80 hover:text-[#00e5ff] transition"
+                      className="text-[11px] text-primary/80 hover:text-primary transition"
                     >
                       ¿Olvidaste tu contraseña?
                     </button>
                   )}
                 </div>
                 <div className="relative rounded-lg shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-on-surface-variant">
                     <span className="material-symbols-outlined text-[18px]">lock</span>
                   </div>
                   <input
@@ -694,12 +696,12 @@ export default function Login({ onLoginSuccess }) {
                     pattern={modo === 'registro' ? '(?=.*[A-Za-zÁÉÍÓÚáéíóúÑñ])(?=.*[0-9]).{8,}' : undefined}
                     title={modo === 'registro' ? 'Al menos 8 caracteres, con letras y números' : undefined}
                     placeholder="••••••••••••"
-                    className="block w-full pl-9 pr-10 py-2 bg-[#0a0d14] border border-white/10 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#00e5ff] focus:border-[#00e5ff] font-mono tracking-wider transition duration-150"
+                    className="block w-full pl-9 pr-10 py-2 bg-surface-container-lowest border border-outline-variant/10 rounded-lg text-sm text-on-surface placeholder-on-surface-variant focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary font-mono tracking-wider transition duration-150"
                   />
                   <button
                     type="button"
                     onClick={() => setMostrarPassword(!mostrarPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-500 hover:text-[#00e5ff] transition"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-on-surface-variant hover:text-primary transition"
                     title={mostrarPassword ? 'Ocultar clave' : 'Mostrar clave'}
                   >
                     <span className="material-symbols-outlined text-[18px]">
@@ -708,7 +710,7 @@ export default function Login({ onLoginSuccess }) {
                   </button>
                 </div>
                 {modo === 'registro' && (
-                  <p className="mt-1 mb-0 text-[10px] leading-snug text-slate-500">Mínimo 8 caracteres, con letras y números.</p>
+                  <p className="mt-1 mb-0 text-[10px] leading-snug text-on-surface-variant">Mínimo 8 caracteres, con letras y números.</p>
                 )}
               </div>
 
@@ -716,7 +718,7 @@ export default function Login({ onLoginSuccess }) {
               {modo === 'registro' && rolEsperado === 'jugador' && (
                 <div className="space-y-2.5">
                   <div>
-                    <label htmlFor="campoEdad" className="block text-[11px] font-mono tracking-wide text-slate-300 mb-1">
+                    <label htmlFor="campoEdad" className="block text-[11px] font-mono tracking-wide text-on-surface-variant mb-1">
                       TU EDAD
                     </label>
                     <input
@@ -729,22 +731,22 @@ export default function Login({ onLoginSuccess }) {
                       onChange={(e) => setEdad(e.target.value)}
                       required
                       placeholder="Ej. 12"
-                      className="block w-full px-3 py-2 bg-[#0a0d14] border border-white/10 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#00e5ff] focus:border-[#00e5ff] font-mono transition duration-150"
+                      className="block w-full px-3 py-2 bg-surface-container-lowest border border-outline-variant/10 rounded-lg text-sm text-on-surface placeholder-on-surface-variant focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary font-mono transition duration-150"
                     />
-                    <p className="mt-1 mb-0 text-[10px] leading-snug text-slate-500">
+                    <p className="mt-1 mb-0 text-[10px] leading-snug text-on-surface-variant">
                       Con ella cuidamos tu cuenta: si sos menor de 18 años, jugás con otras personas cuando tu familia o tu colegio lo autorizan.
                     </p>
                   </div>
                   {esMenorDeclarado && (
-                    <div className="p-2.5 rounded-lg bg-cyan-950/30 border border-[#00e5ff]/30 space-y-2">
-                      <p className="m-0 text-[11px] leading-snug text-slate-300">
-                        <span className="font-mono text-[#00e5ff]">SOS MENOR DE EDAD.</span> Podés jugar contra Turing y Stockfish desde ya. Para jugar con compañeros y
+                    <div className="p-2.5 rounded-lg bg-primary/10 border border-primary/30 space-y-2">
+                      <p className="m-0 text-[11px] leading-snug text-on-surface-variant">
+                        <span className="font-mono text-primary">SOS MENOR DE EDAD.</span> Podés jugar contra Turing y Stockfish desde ya. Para jugar con compañeros y
                         amigos hace falta la autorización de tu madre, padre o tutor{' '}
-                        <span className="text-slate-400">(si tu docente o tu colegio ya la tiene, no necesitás cargarla acá)</span>.
+                        <span className="text-on-surface-variant">(si tu docente o tu colegio ya la tiene, no necesitás cargarla acá)</span>.
                       </p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div>
-                          <label htmlFor="campoTutorNombre" className="block text-[10px] font-mono tracking-wide text-slate-400 mb-1">
+                          <label htmlFor="campoTutorNombre" className="block text-[10px] font-mono tracking-wide text-on-surface-variant mb-1">
                             NOMBRE DE TU MADRE, PADRE O TUTOR
                           </label>
                           <input
@@ -754,11 +756,11 @@ export default function Login({ onLoginSuccess }) {
                             maxLength={100}
                             value={tutorNombre}
                             onChange={(e) => setTutorNombre(e.target.value)}
-                            className="block w-full px-3 py-2 bg-[#0a0d14] border border-white/10 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#00e5ff] focus:border-[#00e5ff] transition duration-150"
+                            className="block w-full px-3 py-2 bg-surface-container-lowest border border-outline-variant/10 rounded-lg text-sm text-on-surface placeholder-on-surface-variant focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition duration-150"
                           />
                         </div>
                         <div>
-                          <label htmlFor="campoTutorTelefono" className="block text-[10px] font-mono tracking-wide text-slate-400 mb-1">
+                          <label htmlFor="campoTutorTelefono" className="block text-[10px] font-mono tracking-wide text-on-surface-variant mb-1">
                             SU TELÉFONO (WHATSAPP)
                           </label>
                           <input
@@ -770,14 +772,14 @@ export default function Login({ onLoginSuccess }) {
                             value={tutorTelefono}
                             onChange={(e) => setTutorTelefono(e.target.value)}
                             placeholder="Ej. 7xxxxxxx"
-                            className="block w-full px-3 py-2 bg-[#0a0d14] border border-white/10 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#00e5ff] focus:border-[#00e5ff] font-mono transition duration-150"
+                            className="block w-full px-3 py-2 bg-surface-container-lowest border border-outline-variant/10 rounded-lg text-sm text-on-surface placeholder-on-surface-variant focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary font-mono transition duration-150"
                           />
                         </div>
                       </div>
                       <div>
-                        <label htmlFor="campoTutorEmail" className="block text-[10px] font-mono tracking-wide text-slate-400 mb-1">SU CORREO (OPCIONAL)</label>
+                        <label htmlFor="campoTutorEmail" className="block text-[10px] font-mono tracking-wide text-on-surface-variant mb-1">SU CORREO (OPCIONAL)</label>
                         <input id="campoTutorEmail" type="email" autoComplete="off" maxLength={254} value={tutorEmail} onChange={(e) => setTutorEmail(e.target.value)}
-                          className="block w-full px-3 py-2 bg-[#0a0d14] border border-white/10 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#00e5ff] focus:border-[#00e5ff] transition duration-150" />
+                          className="block w-full px-3 py-2 bg-surface-container-lowest border border-outline-variant/10 rounded-lg text-sm text-on-surface placeholder-on-surface-variant focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition duration-150" />
                       </div>
                       <div className="flex items-start gap-2">
                         <input
@@ -785,9 +787,9 @@ export default function Login({ onLoginSuccess }) {
                           type="checkbox"
                           checked={autorizaTutor}
                           onChange={(e) => setAutorizaTutor(e.target.checked)}
-                          className="mt-0.5 h-4 w-4 shrink-0 text-[#00e5ff] focus:ring-[#00e5ff] bg-[#090d15] border-white/20 rounded cursor-pointer"
+                          className="mt-0.5 h-4 w-4 shrink-0 text-primary focus:ring-primary bg-surface-container-lowest border-outline-variant/20 rounded cursor-pointer"
                         />
-                        <label htmlFor="autorizaTutor" className="block text-[11px] leading-snug text-slate-300 cursor-pointer">
+                        <label htmlFor="autorizaTutor" className="block text-[11px] leading-snug text-on-surface-variant cursor-pointer">
                           Mi madre, padre o tutor sabe que uso la plataforma y me autorizó a jugar con otras personas. Su docente o la plataforma podrán
                           contactarlo si hace falta.
                         </label>
@@ -799,13 +801,13 @@ export default function Login({ onLoginSuccess }) {
 
               {/* Clave de Seguridad de Facilitador (cuando aplica) */}
               {rolEsperado === 'facilitador' && (modo === 'registro' || codigoRequerido) && (
-                <div className="p-2.5 rounded-lg bg-cyan-950/30 border border-[#00e5ff]/30">
+                <div className="p-2.5 rounded-lg bg-primary/10 border border-primary/30">
                   <div className="flex items-center justify-between gap-2 mb-1">
-                    <span className="flex items-center gap-1 text-[10px] font-mono tracking-wide text-[#00e5ff]">
+                    <span className="flex items-center gap-1 text-[10px] font-mono tracking-wide text-primary">
                       <span className="material-symbols-outlined text-[14px]" aria-hidden="true">key</span>
                       CÓDIGO DE INVITACIÓN DE FACILITADOR
                     </span>
-                    <span className="text-[9px] text-slate-400 font-mono text-right">Te lo da un facilitador</span>
+                    <span className="text-[9px] text-on-surface-variant font-mono text-right">Te lo da un facilitador</span>
                   </div>
                   <CampoCodigoInvitacion
                     ref={codigoRef}
@@ -813,7 +815,7 @@ export default function Login({ onLoginSuccess }) {
                     onChange={setClaveFacilitador}
                     onEstado={setEstadoCodigo}
                   />
-                  <p className="mt-1.5 mb-0 text-[10px] leading-snug text-slate-400">
+                  <p className="mt-1.5 mb-0 text-[10px] leading-snug text-on-surface-variant">
                     Sirve una sola vez y vence a los pocos minutos. Es solo para crear una cuenta nueva de facilitador,
                     con correo o con Google.
                   </p>
@@ -829,11 +831,11 @@ export default function Login({ onLoginSuccess }) {
                     checked={aceptaTerminos}
                     onChange={(e) => setAceptaTerminos(e.target.checked)}
                     required
-                    className="mt-0.5 h-4 w-4 shrink-0 text-[#00e5ff] focus:ring-[#00e5ff] bg-[#090d15] border-white/20 rounded cursor-pointer"
+                    className="mt-0.5 h-4 w-4 shrink-0 text-primary focus:ring-primary bg-surface-container-lowest border-outline-variant/20 rounded cursor-pointer"
                   />
-                  <label htmlFor="aceptaTerminos" className="block text-xs leading-snug text-slate-400 cursor-pointer">
+                  <label htmlFor="aceptaTerminos" className="block text-xs leading-snug text-on-surface-variant cursor-pointer">
                     Leí y acepto los{' '}
-                    <a href="/#politica" target="_blank" rel="noopener" className="text-[#00e5ff] underline">
+                    <a href="/#politica" target="_blank" rel="noopener" className="text-primary underline">
                       términos y la política de privacidad
                     </a>
                     . Si soy menor de 18 años, cuento con la autorización de mi madre, padre o tutor.
@@ -848,10 +850,10 @@ export default function Login({ onLoginSuccess }) {
                   type="checkbox"
                   checked={recordar}
                   onChange={(e) => setRecordar(e.target.checked)}
-                  className="h-4 w-4 text-[#00e5ff] focus:ring-[#00e5ff] bg-[#090d15] border-white/20 rounded cursor-pointer"
+                  className="h-4 w-4 text-primary focus:ring-primary bg-surface-container-lowest border-outline-variant/20 rounded cursor-pointer"
                 />
-                <label htmlFor="recordarEquipo" className="ml-2 block text-xs text-slate-400 select-none cursor-pointer">
-                  Recordar en este equipo <span className="text-slate-500">(no en computadoras compartidas)</span>
+                <label htmlFor="recordarEquipo" className="ml-2 block text-xs text-on-surface-variant select-none cursor-pointer">
+                  Recordar en este equipo <span className="text-on-surface-variant">(no en computadoras compartidas)</span>
                 </label>
               </div>
 
@@ -861,10 +863,10 @@ export default function Login({ onLoginSuccess }) {
                   type="submit"
                   disabled={cargando || faltaCodigoVerificado}
                   title={faltaCodigoVerificado ? 'Primero escribí un código de invitación válido' : undefined}
-                  className={`relative w-full overflow-hidden group py-3 px-4 rounded-xl text-black font-semibold text-xs uppercase tracking-widest transition-all duration-200 shadow-[0_0_20px_rgba(0,229,255,0.45)] hover:shadow-[0_0_28px_rgba(0,229,255,0.7)] active:scale-[0.99] flex items-center justify-center cursor-pointer ${
+                  className={`relative w-full overflow-hidden group py-3 px-4 rounded-xl text-on-primary font-semibold text-xs uppercase tracking-widest transition-all duration-200 shadow-[0_0_20px_rgba(0,229,255,0.45)] hover:shadow-[0_0_28px_rgba(0,229,255,0.7)] active:scale-[0.99] flex items-center justify-center cursor-pointer ${
                     loginExitoso
-                      ? 'bg-emerald-400 shadow-[0_0_24px_rgba(16,185,129,0.7)]'
-                      : 'bg-gradient-to-r from-[#00daf3] via-[#00e5ff] to-[#38f2ff] hover:from-[#00e5ff] hover:to-[#7df6ff]'
+                      ? 'bg-exito shadow-[0_0_24px_rgba(16,185,129,0.7)]'
+                      : 'bg-gradient-to-r from-primary via-primary to-primary hover:from-primary hover:to-primary'
                   } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                   <span className="flex items-center space-x-2">
@@ -893,26 +895,26 @@ export default function Login({ onLoginSuccess }) {
 
             {/* PISTA HORIZONTAL DE AJEDREZ a1 -> e1 (DURANTE LA CARGA) */}
             {cargando && (
-              <div className="mt-4 p-3.5 rounded-xl bg-[#090c13] border border-[#00e5ff]/40 shadow-inner">
+              <div className="mt-4 p-3.5 rounded-xl bg-surface-container-lowest border border-primary/40 shadow-inner">
                 <div className="flex items-center justify-between mb-2 text-[11px] font-mono">
-                  <span className="text-[#00e5ff] flex items-center space-x-2">
-                    <span className="inline-block w-2 h-2 rounded-full bg-[#00e5ff] animate-ping" />
+                  <span className="text-primary flex items-center space-x-2">
+                    <span className="inline-block w-2 h-2 rounded-full bg-primary-container animate-ping" />
                     <span className="animate-pulse">{mensajeEstado}</span>
                   </span>
                 </div>
 
-                <div className="relative w-full h-10 bg-[#0e131d] rounded-lg border border-white/10 flex items-center px-1 overflow-hidden">
+                <div className="relative w-full h-10 bg-surface-container rounded-lg border border-outline-variant/10 flex items-center px-1 overflow-hidden">
                   <div className="absolute inset-0 grid grid-cols-5 h-full pointer-events-none">
-                    <div className="flex items-center justify-center border-r border-white/5 bg-cyan-950/20 font-mono text-[9px] text-slate-500">a1</div>
-                    <div className="flex items-center justify-center border-r border-white/5 bg-transparent font-mono text-[9px] text-slate-500">b1</div>
-                    <div className="flex items-center justify-center border-r border-white/5 bg-cyan-950/20 font-mono text-[9px] text-slate-500">c1</div>
-                    <div className="flex items-center justify-center border-r border-white/5 bg-transparent font-mono text-[9px] text-slate-500">d1</div>
-                    <div className="flex items-center justify-center bg-cyan-950/20 font-mono text-[9px] text-slate-500">e1</div>
+                    <div className="flex items-center justify-center border-r border-outline-variant/5 bg-primary/10 font-mono text-[9px] text-on-surface-variant">a1</div>
+                    <div className="flex items-center justify-center border-r border-outline-variant/5 bg-transparent font-mono text-[9px] text-on-surface-variant">b1</div>
+                    <div className="flex items-center justify-center border-r border-outline-variant/5 bg-primary/10 font-mono text-[9px] text-on-surface-variant">c1</div>
+                    <div className="flex items-center justify-center border-r border-outline-variant/5 bg-transparent font-mono text-[9px] text-on-surface-variant">d1</div>
+                    <div className="flex items-center justify-center bg-primary/10 font-mono text-[9px] text-on-surface-variant">e1</div>
                   </div>
 
                   {/* Caballo de ajedrez avanzando por la pista */}
                   <div
-                    className="z-10 animate-chess-step text-[#00e5ff] drop-shadow-[0_0_10px_#00e5ff] flex items-center"
+                    className="z-10 animate-chess-step text-primary drop-shadow-[0_0_10px_#00e5ff] flex items-center"
                     id="chessWalkerPiece"
                   >
                     <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
@@ -922,7 +924,7 @@ export default function Login({ onLoginSuccess }) {
 
                   {/* Barra de progreso */}
                   <div
-                    className="absolute bottom-0 left-0 h-[2px] bg-[#00e5ff] shadow-[0_0_8px_#00e5ff] transition-all duration-500"
+                    className="absolute bottom-0 left-0 h-[2px] bg-primary-container shadow-[0_0_8px_#00e5ff] transition-all duration-500"
                     style={{ width: `${progresoTrack}%` }}
                   />
                 </div>
@@ -933,36 +935,36 @@ export default function Login({ onLoginSuccess }) {
                 nunca en el build publicado, donde esos usuarios de prueba no existen */}
             {import.meta.env.DEV && (
             <details className="mt-5 p-2.5 rounded-xl bg-surface-container-lowest/80 border border-outline-variant/30" open={pantallaAncha}>
-              <summary className="font-mono-micro text-[10px] text-slate-400 text-center mb-1.5 uppercase tracking-wider cursor-pointer list-none">
+              <summary className="font-mono-micro text-[10px] text-on-surface-variant text-center mb-1.5 uppercase tracking-wider cursor-pointer list-none">
                 Credenciales de prueba rápida (clic para rellenar):
               </summary>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 font-mono text-[10px]">
                 <button
                   type="button"
                   onClick={() => rellenarPrueba('suarezburgoshebert@gmail.com', 'admin123', 'facilitador')}
-                  className="p-1.5 rounded bg-surface-container-high hover:bg-[#00e5ff]/20 border border-outline-variant/20 hover:border-[#00e5ff]/50 transition-all text-left flex flex-col"
+                  className="p-1.5 rounded bg-surface-container-high hover:bg-primary-container/20 border border-outline-variant/20 hover:border-primary/50 transition-all text-left flex flex-col"
                 >
-                  <span className="text-[#00e5ff] font-bold">🛡️ Facilitador Hebert</span>
-                  <span className="text-slate-300 truncate" title="suarezburgoshebert@gmail.com">suarezburgoshebert@gmail.com</span>
-                  <span className="text-slate-500">clave: admin123</span>
+                  <span className="text-primary font-bold">🛡️ Facilitador Hebert</span>
+                  <span className="text-on-surface-variant truncate" title="suarezburgoshebert@gmail.com">suarezburgoshebert@gmail.com</span>
+                  <span className="text-on-surface-variant">clave: admin123</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => rellenarPrueba('facilitador@test.com', 'admin123', 'facilitador')}
-                  className="p-1.5 rounded bg-surface-container-high hover:bg-[#00e5ff]/20 border border-outline-variant/20 hover:border-[#00e5ff]/50 transition-all text-left flex flex-col"
+                  className="p-1.5 rounded bg-surface-container-high hover:bg-primary-container/20 border border-outline-variant/20 hover:border-primary/50 transition-all text-left flex flex-col"
                 >
-                  <span className="text-[#00e5ff] font-bold">🛡️ Facilitador Demo</span>
-                  <span className="text-slate-300 truncate">facilitador@test.com</span>
-                  <span className="text-slate-500">clave: admin123</span>
+                  <span className="text-primary font-bold">🛡️ Facilitador Demo</span>
+                  <span className="text-on-surface-variant truncate">facilitador@test.com</span>
+                  <span className="text-on-surface-variant">clave: admin123</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => rellenarPrueba('jugador@test.com', 'test123456', 'jugador')}
-                  className="p-1.5 rounded bg-surface-container-high hover:bg-[#00e5ff]/20 border border-outline-variant/20 hover:border-[#00e5ff]/50 transition-all text-left flex flex-col"
+                  className="p-1.5 rounded bg-surface-container-high hover:bg-primary-container/20 border border-outline-variant/20 hover:border-primary/50 transition-all text-left flex flex-col"
                 >
-                  <span className="text-emerald-400 font-bold">👤 Jugador Test</span>
-                  <span className="text-slate-300 truncate">jugador@test.com</span>
-                  <span className="text-slate-500">clave: test123456</span>
+                  <span className="text-exito font-bold">👤 Jugador Test</span>
+                  <span className="text-on-surface-variant truncate">jugador@test.com</span>
+                  <span className="text-on-surface-variant">clave: test123456</span>
                 </button>
               </div>
             </details>
@@ -971,7 +973,7 @@ export default function Login({ onLoginSuccess }) {
 
           {/* PIE DE SEGURIDAD CRIPTOGRÁFICA */}
           <div className="mt-3 text-center">
-            <p className="text-[10px] text-slate-500 font-mono tracking-wider">
+            <p className="text-[10px] text-on-surface-variant font-mono tracking-wider">
               ACCESO SEGURO • TERMINAL CRIPTOGRÁFICA KAIROS CORE v4.2
             </p>
           </div>
@@ -979,21 +981,21 @@ export default function Login({ onLoginSuccess }) {
       </main>
 
       {/* 4. BARRA DE TELEMETRÍA PERIMETRAL INFERIOR */}
-      <footer className="max-sm:hidden max-[860px]:hidden relative z-10 w-full px-5 sm:px-8 py-2.5 border-t border-[#00e5ff]/20 bg-[#0c0e14]/90 backdrop-blur-md flex flex-col sm:flex-row items-center justify-between text-[11px] font-mono text-slate-400">
+      <footer className="max-sm:hidden max-[860px]:hidden relative z-10 w-full px-5 sm:px-8 py-2.5 border-t border-primary/20 bg-surface-container-lowest/90 backdrop-blur-md flex flex-col sm:flex-row items-center justify-between text-[11px] font-mono text-on-surface-variant">
         <div className="flex items-center space-x-3 mb-1.5 sm:mb-0">
           <span>
-            MOTOR CHESS IA: <span className="text-slate-200">STOCKFISH NEURAL HYBRID</span>
+            MOTOR CHESS IA: <span className="text-on-surface">STOCKFISH NEURAL HYBRID</span>
           </span>
-          <span className="text-slate-700 hidden sm:inline">•</span>
+          <span className="text-on-surface-variant hidden sm:inline">•</span>
           <span className="hidden sm:inline">
-            ACTUADOR: <span className="text-slate-200">6-DOF ROBOTIC ARM</span>
+            ACTUADOR: <span className="text-on-surface">6-DOF ROBOTIC ARM</span>
           </span>
         </div>
         <div className="flex items-center space-x-3">
-          <span className="inline-flex items-center px-2 py-0.5 rounded bg-cyan-950/50 text-[#00e5ff] border border-[#00e5ff]/30 text-[10px] tracking-wide">
+          <span className="inline-flex items-center px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/30 text-[10px] tracking-wide">
             ESTADO: LISTO PARA EMPAREJAMIENTO
           </span>
-          <span className="text-slate-500">© 2025 KAIROS AI LABS</span>
+          <span className="text-on-surface-variant">© 2025 KAIROS AI LABS</span>
         </div>
       </footer>
     </div>

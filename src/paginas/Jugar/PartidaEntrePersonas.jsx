@@ -97,7 +97,7 @@ function BarraJugador({ jugador, etiquetaColor, ms, activo, sinTiempo, esYo, con
         <span
           aria-label={sinTiempo ? 'sin tiempo' : `${formatearReloj(ms)} restantes`}
           className={`shrink-0 font-mono-metric text-[22px] leading-none tabular-nums px-2.5 py-1 rounded-lg ${
-            sinTiempo || (activo && critico) ? 'text-error bg-error/15' : activo ? 'text-primary bg-primary/10' : 'text-on-surface-variant bg-white/[0.04]'
+            sinTiempo || (activo && critico) ? 'text-error bg-error/15' : activo ? 'text-primary bg-primary/10' : 'text-on-surface-variant bg-on-surface/[0.04]'
           } ${activo && critico && !sinTiempo ? 'motion-safe:animate-pulse' : ''}`}
         >
           {formatearReloj(ms)}

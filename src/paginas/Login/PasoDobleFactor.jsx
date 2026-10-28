@@ -35,18 +35,18 @@ export default function PasoDobleFactor({ token, alCompletar, alCancelar }) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="titulo-paso-2"
-        className="w-full max-w-sm max-h-[90dvh] overflow-y-auto rounded-2xl bg-[#0e131d] border border-[#00e5ff]/30 shadow-2xl p-5 flex flex-col gap-4 select-text"
+        className="w-full max-w-sm max-h-[90dvh] overflow-y-auto rounded-2xl bg-surface-container border border-primary/30 shadow-2xl p-5 flex flex-col gap-4 select-text"
       >
         <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-[28px] text-[#00e5ff]" aria-hidden="true">phonelink_lock</span>
-          <h2 id="titulo-paso-2" className="m-0 text-base font-semibold text-white">Verificación en dos pasos</h2>
+          <span className="material-symbols-outlined text-[28px] text-primary" aria-hidden="true">phonelink_lock</span>
+          <h2 id="titulo-paso-2" className="m-0 text-base font-semibold text-on-surface">Verificación en dos pasos</h2>
         </div>
-        <p className="m-0 text-sm text-slate-300 leading-snug">
+        <p className="m-0 text-sm text-on-surface-variant leading-snug">
           Abrí tu app de códigos (Google Authenticator o la que uses) y escribí el código de 6 dígitos de <strong>ChessIA</strong>. Si perdiste el
           celular, usá uno de tus códigos de respaldo.
         </p>
         <div className="flex flex-col gap-1">
-          <label htmlFor="codigo-paso-2" className="text-[11px] font-mono uppercase tracking-wider text-slate-400">Código</label>
+          <label htmlFor="codigo-paso-2" className="text-[11px] font-mono uppercase tracking-wider text-on-surface-variant">Código</label>
           <input
             id="codigo-paso-2"
             ref={campoRef}
@@ -58,25 +58,25 @@ export default function PasoDobleFactor({ token, alCompletar, alCancelar }) {
             placeholder="123456"
             required
             disabled={verificando}
-            className="w-full px-3 py-2.5 bg-[#0a0d14] border border-white/10 rounded-lg text-lg text-white font-mono tracking-[0.3em] text-center focus:outline-none focus:ring-1 focus:ring-[#00e5ff] focus:border-[#00e5ff]"
+            className="w-full px-3 py-2.5 bg-surface-container-lowest border border-outline-variant/10 rounded-lg text-lg text-on-surface font-mono tracking-[0.3em] text-center focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
           />
         </div>
         {error && (
-          <div role="alert" className="p-2.5 rounded-lg bg-red-950/60 border border-red-500/40 text-red-300 text-xs break-words">{error}</div>
+          <div role="alert" className="p-2.5 rounded-lg bg-error/10 border border-error/40 text-error text-xs break-words">{error}</div>
         )}
         <div className="flex flex-col-reverse sm:flex-row gap-2">
           <button
             type="button"
             onClick={alCancelar}
             disabled={verificando}
-            className="flex-1 min-h-11 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 text-sm disabled:opacity-50"
+            className="flex-1 min-h-11 rounded-xl bg-on-surface/5 hover:bg-on-surface/10 border border-outline-variant/10 text-on-surface text-sm disabled:opacity-50"
           >
             Volver
           </button>
           <button
             type="submit"
             disabled={verificando || codigo.trim().length < 6}
-            className="flex-1 min-h-11 rounded-xl bg-gradient-to-r from-[#00daf3] via-[#00e5ff] to-[#38f2ff] text-black text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 min-h-11 rounded-xl bg-gradient-to-r from-primary via-primary to-primary text-on-primary text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {verificando ? 'Verificando…' : 'Verificar'}
           </button>

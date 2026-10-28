@@ -119,7 +119,7 @@ function TarjetaVideoPieza({ pieza, urlPropio, urlGeneral, esPrincipal, estado, 
       : 'Sin video';
   const iconoEstado = urlPropio ? 'check_circle' : urlGeneralVisible ? 'public' : 'videocam_off';
   const claseEstado = urlPropio
-    ? 'bg-primary-container text-primary'
+    ? 'bg-primary-container text-on-primary-container'
     : urlGeneralVisible
       ? 'bg-surface-container-high text-on-surface'
       : 'bg-surface-container-lowest text-outline border border-outline-variant/40';

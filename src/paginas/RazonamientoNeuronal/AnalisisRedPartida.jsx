@@ -192,7 +192,7 @@ export default function AnalisisRedPartida({
                       </span>
                       <span
                         className={`px-1.5 py-0.5 rounded font-mono-micro text-[10px] font-semibold ${
-                          jugada.coincide ? 'bg-neon-lime/15 text-neon-lime' : 'bg-tertiary-container/15 text-tertiary-container'
+                          jugada.coincide ? 'bg-neon-lime/15 text-neon-lime' : 'bg-tertiary/10 text-tertiary'
                         }`}
                       >
                         {jugada.coincide ? 'Coincide' : 'Distinta'}

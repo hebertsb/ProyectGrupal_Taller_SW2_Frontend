@@ -150,11 +150,11 @@ function AnilloProgreso({ porcentaje, reducir }) {
       <svg viewBox="0 0 88 88" className="w-full h-full -rotate-90" aria-hidden="true">
         <defs>
           <linearGradient id="gradiente-anillo-camino" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#ffb778" />
-            <stop offset="1" stopColor="#00e5ff" />
+            <stop offset="0" stopColor="var(--color-tertiary)" />
+            <stop offset="1" stopColor="var(--color-primary)" />
           </linearGradient>
         </defs>
-        <circle cx="44" cy="44" r={RADIO_ANILLO} fill="none" stroke="#33343b" strokeWidth="8" />
+        <circle cx="44" cy="44" r={RADIO_ANILLO} fill="none" stroke="var(--color-outline-variant)" strokeWidth="8" />
         <circle
           cx="44"
           cy="44"
@@ -250,7 +250,7 @@ function Nodo({ estado, pieza, icono, reducir, indice = 0 }) {
 function TrazoConector({ d, estadoOrigen, estadoDestino, indice, reducir }) {
   const hecho = estadoOrigen === 'completado' && estadoDestino === 'completado';
   const activo = estadoOrigen === 'completado' && estadoDestino === 'en_curso';
-  const color = hecho ? '#ffb778' : activo ? '#00e5ff' : '#56656a';
+  const color = hecho ? 'var(--color-tertiary)' : activo ? 'var(--color-primary)' : 'var(--color-outline)';
 
   // La línea se revela de arriba hacia abajo con un recorte, así se ve que avanza sin tocar el patrón de dash.
   const idRecorte = useId();
@@ -285,7 +285,7 @@ function TrazoConector({ d, estadoOrigen, estadoDestino, indice, reducir }) {
         <motion.path
           d={d}
           fill="none"
-          stroke="#fff4e6"
+          stroke="var(--color-primary)"
           strokeWidth={2}
           strokeLinecap="round"
           strokeDasharray="4 60"
@@ -492,8 +492,8 @@ export default function CaminoAprendizaje({
           <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin motion-reduce:animate-none" />
           <span className="font-mono-micro text-mono-micro">Armando tu camino…</span>
         </div>
-        <div className="h-32 rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-md animate-pulse motion-reduce:animate-none" />
-        <div className="h-24 rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-md animate-pulse motion-reduce:animate-none" />
+        <div className="h-32 rounded-3xl border border-outline-variant/10 bg-on-surface/[0.04] backdrop-blur-md animate-pulse motion-reduce:animate-none" />
+        <div className="h-24 rounded-2xl border border-outline-variant/10 bg-on-surface/[0.04] backdrop-blur-md animate-pulse motion-reduce:animate-none" />
       </div>
     );
   }
@@ -515,7 +515,7 @@ export default function CaminoAprendizaje({
         className="relative overflow-hidden rounded-3xl p-space-md border border-outline-variant/30"
         style={{
           background:
-            'radial-gradient(circle at 15% 0%, rgba(0,229,255,0.18), transparent 55%), radial-gradient(circle at 100% 100%, rgba(255,183,120,0.16), transparent 50%), #191b22',
+            'radial-gradient(circle at 15% 0%, color-mix(in srgb, var(--color-primary) 12%, transparent), transparent 55%), radial-gradient(circle at 100% 100%, color-mix(in srgb, var(--color-tertiary) 12%, transparent), transparent 50%), var(--color-surface-container-low)',
         }}
       >
         <div className="flex flex-wrap items-center gap-space-md">
@@ -526,7 +526,7 @@ export default function CaminoAprendizaje({
               <span className="px-space-sm py-[2px] rounded-full bg-primary/15 text-primary font-mono-micro text-mono-micro uppercase tracking-wider font-semibold">
                 Nivel {rango ?? 'sin medir'}
               </span>
-              <span className="flex items-center gap-1 px-space-sm py-[2px] rounded-full bg-tertiary-container/15 text-tertiary-container font-mono-micro text-mono-micro">
+              <span className="flex items-center gap-1 px-space-sm py-[2px] rounded-full bg-tertiary/10 text-tertiary font-mono-micro text-mono-micro">
                 <motion.span
                   className="material-symbols-outlined text-[16px]"
                   animate={reducir || racha === 0 ? undefined : { scale: [1, 1.2, 1] }}

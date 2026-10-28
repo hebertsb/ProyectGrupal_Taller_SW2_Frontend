@@ -9,7 +9,7 @@ import ModalCuentas, { ModalClaveNueva } from './ModalCuentas';
 function Chip({ children, tono = 'neutro', titulo }) {
   const clases = {
     neutro: 'bg-surface-container-high text-on-surface-variant',
-    bien: 'bg-primary-container text-primary',
+    bien: 'bg-primary-container text-on-primary-container',
     atencion: 'bg-tertiary/10 text-tertiary border border-tertiary/40',
   };
   return (

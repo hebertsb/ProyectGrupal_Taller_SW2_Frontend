@@ -9,12 +9,12 @@ import PanelInvitaciones from './PanelInvitaciones';
 function roleBadge(rol) {
   return rol === 'facilitador'
     ? 'bg-tertiary-container text-tertiary font-medium'
-    : 'bg-secondary-container text-secondary font-medium';
+    : 'bg-secondary-container text-on-secondary-container font-medium';
 }
 
 function estadoBadge(activo) {
   return activo
-    ? { texto: 'ACTIVO', clase: 'bg-primary-container text-primary font-medium' }
+    ? { texto: 'ACTIVO', clase: 'bg-primary-container text-on-primary-container font-medium' }
     : { texto: 'INACTIVO', clase: 'bg-error-container text-error font-medium' };
 }
 

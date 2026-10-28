@@ -7,6 +7,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { fenAMatriz, nombreCasilla } from '../ajedrez';
+import { colorDelTema, observarApariencia } from '../apariencia';
 
 // Constantes métricas del mundo 3D
 const TAM_CASILLA = 0.50;
@@ -506,6 +507,23 @@ export default function SimuladorBrazoTablero3D({
     gridHelper.position.y = 0.0;
     scene.add(gridHelper);
 
+    const dejarDeObservarTema = observarApariencia(() => {
+      scene.background.set(colorDelTema('surface-container-lowest'));
+      scene.fog.color.copy(scene.background);
+      sueloMat.color.set(colorDelTema('surface-container'));
+      for (const casilla of casillasMapRef.current?.values() || []) {
+        casilla.material.color.set(colorDelTema(casilla.userData.esClara ? 'tablero-clara' : 'tablero-oscura'));
+      }
+      const coloresGrilla = gridHelper.geometry.getAttribute('color');
+      const principal = new THREE.Color(colorDelTema('primary'));
+      const secundario = new THREE.Color(colorDelTema('outline-variant'));
+      for (let i = 0; i < coloresGrilla.count; i++) {
+        const color = i % 4 < 2 ? principal : secundario;
+        coloresGrilla.setXYZ(i, color.r, color.g, color.b);
+      }
+      coloresGrilla.needsUpdate = true;
+    });
+
     // 2. Construcción del Tablero 3D
     const grupoTablero = new THREE.Group();
     scene.add(grupoTablero);
@@ -541,12 +559,12 @@ export default function SimuladorBrazoTablero3D({
     const casillaGeo = new THREE.BoxGeometry(TAM_CASILLA * 0.97, 0.035, TAM_CASILLA * 0.97);
 
     const matCasillaClara = new THREE.MeshStandardMaterial({
-      color: 0xe2d9c8, // Mármol / Arce claro
+      color: colorDelTema('tablero-clara'),
       roughness: 0.2,
       metalness: 0.15,
     });
     const matCasillaOscura = new THREE.MeshStandardMaterial({
-      color: 0x3d2b1f, // Nogal oscuro
+      color: colorDelTema('tablero-oscura'),
       roughness: 0.3,
       metalness: 0.2,
     });
@@ -1072,6 +1090,7 @@ export default function SimuladorBrazoTablero3D({
 
     return () => {
       cancelAnimationFrame(animFrameRef.current);
+      dejarDeObservarTema();
       resizeObserver.disconnect();
       controls.dispose();
       renderer.dispose();
@@ -1453,49 +1472,49 @@ export default function SimuladorBrazoTablero3D({
   };
 
   return (
-    <div className={`relative w-full h-full min-h-[500px] rounded-2xl overflow-hidden bg-[#0a0d14] border border-[#00e5ff]/30 shadow-2xl flex flex-col ${className}`}>
+    <div className={`relative w-full h-full min-h-[500px] rounded-2xl overflow-hidden bg-surface-container-lowest border border-primary/30 shadow-2xl flex flex-col ${className}`}>
       {/* 1. BARRA SUPERIOR DE TELEMETRÍA Y CONTROLES DEL ROBOT */}
-      <div className="relative z-10 w-full px-4 py-2.5 bg-[#0c0e14]/90 backdrop-blur-md border-b border-[#00e5ff]/20 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+      <div className="relative z-10 w-full px-4 py-2.5 bg-surface-container-lowest/90 backdrop-blur-md border-b border-primary/20 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00e5ff] opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#00e5ff]"></span>
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-primary"></span>
             </span>
-            <span className="text-slate-200 font-bold tracking-wider">
-              DOBOT CR5AS <span className="text-[#00e5ff]">6-DOF</span>
+            <span className="text-on-surface-variant font-bold tracking-wider">
+              DOBOT CR5AS <span className="text-primary">6-DOF</span>
             </span>
           </div>
-          <span className="text-slate-600 hidden sm:inline">|</span>
-          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-black/50 border border-white/10 text-[11px]">
-            <span className="text-slate-400">ESTADO:</span>
-            <span className={`font-semibold ${telemetria.pinzaActiva ? 'text-amber-400 animate-pulse' : 'text-emerald-400'}`}>
+          <span className="text-on-surface-variant hidden sm:inline">|</span>
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface-container-lowest/90 border border-outline-variant/10 text-[11px]">
+            <span className="text-on-surface-variant">ESTADO:</span>
+            <span className={`font-semibold ${telemetria.pinzaActiva ? 'text-aviso animate-pulse' : 'text-exito'}`}>
               {telemetria.estadoRobot}
             </span>
           </div>
-          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-black/50 border border-cyan-500/20 text-[11px]">
-            <span className="text-slate-400">SET:</span>
-            <span className="text-[#00e5ff] font-semibold flex items-center gap-1">
-              <span className={`inline-block w-1.5 h-1.5 rounded-full ${modelosCargados ? 'bg-[#00e5ff]' : 'bg-amber-400 animate-ping'}`}></span>
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface-container-lowest/90 border border-primary/20 text-[11px]">
+            <span className="text-on-surface-variant">SET:</span>
+            <span className="text-primary font-semibold flex items-center gap-1">
+              <span className={`inline-block w-1.5 h-1.5 rounded-full ${modelosCargados ? 'bg-primary' : 'bg-aviso animate-ping'}`}></span>
               {modelosCargados ? 'STAUNTON 3D REAL' : 'CARGANDO 3D...'}
             </span>
           </div>
-          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-black/50 border border-cyan-500/20 text-[11px]">
-            <span className="text-slate-400">DOBOT:</span>
-            <span className="text-[#00e5ff] font-semibold flex items-center gap-1">
-              <span className={`inline-block w-1.5 h-1.5 rounded-full ${robotCargado ? 'bg-emerald-400' : 'bg-amber-400 animate-ping'}`}></span>
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface-container-lowest/90 border border-primary/20 text-[11px]">
+            <span className="text-on-surface-variant">DOBOT:</span>
+            <span className="text-primary font-semibold flex items-center gap-1">
+              <span className={`inline-block w-1.5 h-1.5 rounded-full ${robotCargado ? 'bg-exito' : 'bg-aviso animate-ping'}`}></span>
               {robotCargado ? 'CR5AS LISTO' : 'CARGANDO CAD...'}
             </span>
           </div>
         </div>
 
         {/* SELECTOR DE MODELO DEL BRAZO (Exclusivo Dobot CR5AS) */}
-        <div className="flex items-center gap-1 bg-surface-container-lowest p-0.5 rounded-lg border border-cyan-500/30 text-[10px]">
+        <div className="flex items-center gap-1 bg-surface-container-lowest p-0.5 rounded-lg border border-primary/30 text-[10px]">
           <button
             type="button"
             onClick={() => setModeloRobot('oficial')}
             className={`px-2 py-1 rounded transition-all flex items-center gap-1 ${
-              modeloRobot === 'oficial' ? 'bg-[#00e5ff] text-black font-bold shadow-sm' : 'text-slate-400 hover:text-white'
+              modeloRobot === 'oficial' ? 'bg-primary text-on-primary font-bold shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
             }`}
             title="Gemelo digital oficial Dobot CR5AS articulado con pinza PGE-50-26 y cinemática 6-DOF"
           >
@@ -1505,7 +1524,7 @@ export default function SimuladorBrazoTablero3D({
             type="button"
             onClick={() => setModeloRobot('escaneo')}
             className={`px-2 py-1 rounded transition-all flex items-center gap-1 ${
-              modeloRobot === 'escaneo' ? 'bg-[#00e5ff] text-black font-bold shadow-sm' : 'text-slate-400 hover:text-white'
+              modeloRobot === 'escaneo' ? 'bg-primary text-on-primary font-bold shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
             }`}
             title="Modelo 3D escaneado con cámara real de la universidad (FICCT)"
           >
@@ -1514,12 +1533,12 @@ export default function SimuladorBrazoTablero3D({
         </div>
 
         {/* SELECTOR DE PRESETS DE CÁMARA */}
-        <div className="flex items-center gap-1 bg-surface-container-lowest p-0.5 rounded-lg border border-white/10 text-[10px]">
+        <div className="flex items-center gap-1 bg-surface-container-lowest p-0.5 rounded-lg border border-outline-variant/10 text-[10px]">
           <button
             type="button"
             onClick={() => cambiarPresetCamara('isometrica')}
             className={`px-2 py-1 rounded transition-all ${
-              vistaCamara === 'isometrica' ? 'bg-[#00e5ff] text-black font-bold' : 'text-slate-400 hover:text-white'
+              vistaCamara === 'isometrica' ? 'bg-primary text-on-primary font-bold' : 'text-on-surface-variant hover:text-on-surface'
             }`}
           >
             Isométrica
@@ -1528,7 +1547,7 @@ export default function SimuladorBrazoTablero3D({
             type="button"
             onClick={() => cambiarPresetCamara('brazo')}
             className={`px-2 py-1 rounded transition-all ${
-              vistaCamara === 'brazo' ? 'bg-[#00e5ff] text-black font-bold' : 'text-slate-400 hover:text-white'
+              vistaCamara === 'brazo' ? 'bg-primary text-on-primary font-bold' : 'text-on-surface-variant hover:text-on-surface'
             }`}
           >
             Vista Robot
@@ -1537,7 +1556,7 @@ export default function SimuladorBrazoTablero3D({
             type="button"
             onClick={() => cambiarPresetCamara('cenital')}
             className={`px-2 py-1 rounded transition-all ${
-              vistaCamara === 'cenital' ? 'bg-[#00e5ff] text-black font-bold' : 'text-slate-400 hover:text-white'
+              vistaCamara === 'cenital' ? 'bg-primary text-on-primary font-bold' : 'text-on-surface-variant hover:text-on-surface'
             }`}
           >
             Cenital
@@ -1546,7 +1565,7 @@ export default function SimuladorBrazoTablero3D({
             type="button"
             onClick={() => cambiarPresetCamara('blancas')}
             className={`px-2 py-1 rounded transition-all ${
-              vistaCamara === 'blancas' ? 'bg-[#00e5ff] text-black font-bold' : 'text-slate-400 hover:text-white'
+              vistaCamara === 'blancas' ? 'bg-primary text-on-primary font-bold' : 'text-on-surface-variant hover:text-on-surface'
             }`}
           >
             Blancas
@@ -1555,7 +1574,7 @@ export default function SimuladorBrazoTablero3D({
             type="button"
             onClick={() => cambiarPresetCamara('negras')}
             className={`px-2 py-1 rounded transition-all ${
-              vistaCamara === 'negras' ? 'bg-[#00e5ff] text-black font-bold' : 'text-slate-400 hover:text-white'
+              vistaCamara === 'negras' ? 'bg-primary text-on-primary font-bold' : 'text-on-surface-variant hover:text-on-surface'
             }`}
           >
             Negras
@@ -1564,15 +1583,15 @@ export default function SimuladorBrazoTablero3D({
       </div>
 
       {/* 1b. BARRA DE PRUEBAS DE JUGADA Y CINEMÁTICA EN VIVO */}
-      <div className="relative z-10 w-full px-4 py-1.5 bg-[#080a10]/95 border-b border-[#00e5ff]/20 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+      <div className="relative z-10 w-full px-4 py-1.5 bg-surface-container-lowest/95 border-b border-primary/20 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[#00e5ff] font-semibold flex items-center gap-1 text-[11px] mr-1">
+          <span className="text-primary font-semibold flex items-center gap-1 text-[11px] mr-1">
             <span>🕹️</span> PROBAR AGARRE:
           </span>
           <button
             type="button"
             onClick={() => dispararJugadaPrueba('e7e5')}
-            className="px-2.5 py-1 rounded bg-slate-800 hover:bg-[#00e5ff] hover:text-black border border-[#00e5ff]/30 text-slate-200 text-[11px] font-semibold transition-all shadow-sm active:scale-95"
+            className="px-2.5 py-1 rounded bg-surface-container-high hover:bg-primary hover:text-on-primary border border-primary/30 text-on-surface-variant text-[11px] font-semibold transition-all shadow-sm active:scale-95"
             title="Probar agarre y traslado de peón de e7 a e5"
           >
             ▶ Peón e7→e5
@@ -1580,7 +1599,7 @@ export default function SimuladorBrazoTablero3D({
           <button
             type="button"
             onClick={() => dispararJugadaPrueba('g8f6')}
-            className="px-2.5 py-1 rounded bg-slate-800 hover:bg-[#00e5ff] hover:text-black border border-[#00e5ff]/30 text-slate-200 text-[11px] font-semibold transition-all shadow-sm active:scale-95"
+            className="px-2.5 py-1 rounded bg-surface-container-high hover:bg-primary hover:text-on-primary border border-primary/30 text-on-surface-variant text-[11px] font-semibold transition-all shadow-sm active:scale-95"
             title="Probar agarre y salto de caballo de g8 a f6"
           >
             ▶ Caballo g8→f6
@@ -1588,7 +1607,7 @@ export default function SimuladorBrazoTablero3D({
           <button
             type="button"
             onClick={() => dispararJugadaPrueba('d7d5')}
-            className="px-2.5 py-1 rounded bg-slate-800 hover:bg-[#00e5ff] hover:text-black border border-[#00e5ff]/30 text-slate-200 text-[11px] font-semibold transition-all shadow-sm active:scale-95"
+            className="px-2.5 py-1 rounded bg-surface-container-high hover:bg-primary hover:text-on-primary border border-primary/30 text-on-surface-variant text-[11px] font-semibold transition-all shadow-sm active:scale-95"
             title="Probar agarre de peón dama de d7 a d5"
           >
             ▶ Peón d7→d5
@@ -1596,7 +1615,7 @@ export default function SimuladorBrazoTablero3D({
           <button
             type="button"
             onClick={() => dispararJugadaPrueba('b8c6')}
-            className="px-2.5 py-1 rounded bg-slate-800 hover:bg-[#00e5ff] hover:text-black border border-[#00e5ff]/30 text-slate-200 text-[11px] font-semibold transition-all shadow-sm active:scale-95"
+            className="px-2.5 py-1 rounded bg-surface-container-high hover:bg-primary hover:text-on-primary border border-primary/30 text-on-surface-variant text-[11px] font-semibold transition-all shadow-sm active:scale-95"
             title="Probar agarre de caballo de b8 a c6"
           >
             ▶ Caballo b8→c6
@@ -1611,19 +1630,19 @@ export default function SimuladorBrazoTablero3D({
             onChange={(e) => setInputUci(e.target.value.toLowerCase())}
             placeholder="ej. e7e5"
             maxLength={4}
-            className="w-16 px-2 py-0.5 rounded bg-black/60 border border-white/20 text-center font-mono text-[11px] text-[#00e5ff] focus:outline-none focus:border-[#00e5ff]"
+            className="w-16 px-2 py-0.5 rounded bg-surface-container-lowest/90 border border-outline-variant/20 text-center font-mono text-[11px] text-primary focus:outline-none focus:border-primary"
           />
           <button
             type="submit"
             disabled={inputUci.length < 4}
-            className="px-2.5 py-1 rounded bg-[#00e5ff]/20 hover:bg-[#00e5ff] hover:text-black border border-[#00e5ff]/40 text-[#00e5ff] text-[11px] font-bold transition-all disabled:opacity-40 active:scale-95"
+            className="px-2.5 py-1 rounded bg-primary/20 hover:bg-primary hover:text-on-primary border border-primary/40 text-primary text-[11px] font-bold transition-all disabled:opacity-40 active:scale-95"
           >
             Mover
           </button>
           <button
             type="button"
             onClick={reiniciarPosicionPiezas}
-            className="px-2.5 py-1 rounded bg-red-950/40 hover:bg-red-600 hover:text-white border border-red-500/30 text-red-200 text-[11px] font-semibold transition-all ml-1 shadow-sm active:scale-95"
+            className="px-2.5 py-1 rounded bg-error/10 hover:bg-error hover:text-on-surface border border-error/30 text-error text-[11px] font-semibold transition-all ml-1 shadow-sm active:scale-95"
             title="Reiniciar piezas y robot a posición inicial"
           >
             ↺ Reset
@@ -1637,19 +1656,19 @@ export default function SimuladorBrazoTablero3D({
 
         {/* HUD FLOTANTE: COORDENADAS EFECTOR Y JUNTAS */}
         <div className="absolute bottom-3 left-3 z-10 pointer-events-none flex flex-col gap-1.5 font-mono text-[10px]">
-          <div className="px-3 py-2 rounded-lg bg-black/80 backdrop-blur-md border border-[#00e5ff]/30 text-slate-300 shadow-xl flex flex-col gap-1">
-            <div className="flex items-center justify-between gap-4 text-[#00e5ff] font-bold border-b border-white/10 pb-1">
+          <div className="px-3 py-2 rounded-lg bg-surface-container-lowest/90 backdrop-blur-md border border-primary/30 text-on-surface-variant shadow-xl flex flex-col gap-1">
+            <div className="flex items-center justify-between gap-4 text-primary font-bold border-b border-outline-variant/10 pb-1">
               <span>EFECTOR XYZ (mm)</span>
-              <span className={telemetria.pinzaActiva ? 'text-amber-400' : 'text-slate-400'}>
+              <span className={telemetria.pinzaActiva ? 'text-aviso' : 'text-on-surface-variant'}>
                 PINZA PGE-50: {telemetria.pinzaActiva ? 'AGARRE (ON)' : 'ABIERTA (OFF)'}
               </span>
             </div>
-            <div className="grid grid-cols-3 gap-2 text-slate-300 font-semibold">
+            <div className="grid grid-cols-3 gap-2 text-on-surface-variant font-semibold">
               <span>X: {telemetria.efectorXYZ.x} mm</span>
               <span>Y: {telemetria.efectorXYZ.y} mm</span>
               <span>Z: {telemetria.efectorXYZ.z} mm</span>
             </div>
-            <div className="text-[9px] text-slate-400 pt-1 border-t border-white/5 grid grid-cols-6 gap-1">
+            <div className="text-[9px] text-on-surface-variant pt-1 border-t border-outline-variant/5 grid grid-cols-6 gap-1">
               <span>J1: {telemetria.juntasGrados.j1}°</span>
               <span>J2: {telemetria.juntasGrados.j2}°</span>
               <span>J3: {telemetria.juntasGrados.j3}°</span>
@@ -1661,8 +1680,8 @@ export default function SimuladorBrazoTablero3D({
         </div>
 
         {/* INDICADOR DE INTERACCIÓN 3D */}
-        <div className="absolute bottom-3 right-3 z-10 pointer-events-none text-[10px] font-mono text-slate-400 opacity-70 flex items-center gap-1.5 bg-black/60 px-2.5 py-1 rounded-full border border-white/10">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#00e5ff] animate-ping" />
+        <div className="absolute bottom-3 right-3 z-10 pointer-events-none text-[10px] font-mono text-on-surface-variant opacity-70 flex items-center gap-1.5 bg-surface-container-lowest/90 px-2.5 py-1 rounded-full border border-outline-variant/10">
+          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-ping" />
           <span>Rotación 360° • Zoom • Órbita Libre</span>
         </div>
       </div>

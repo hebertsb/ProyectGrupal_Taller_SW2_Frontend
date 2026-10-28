@@ -75,16 +75,16 @@
 
 /* Bloqueada: gris oscuro, sin el color del nivel (el estado no depende solo del color: también lleva candado). */
 .figurita.figurita--bloqueada[data-nivel-medalla] {
-  --fig-rim-1: #7a8290;
-  --fig-rim-2: #565d6a;
-  --fig-rim-3: #373c47;
-  --fig-campo-1: #2a2e37;
-  --fig-campo-2: #171a20;
-  --fig-pieza-1: #727a88;
-  --fig-pieza-2: #565d6a;
-  --fig-trazo: #0e1014;
-  --fig-corte: #171a20;
-  --fig-contorno: #0b0c10;
+  --fig-rim-1: var(--color-outline);
+  --fig-rim-2: var(--color-on-surface-variant);
+  --fig-rim-3: var(--color-outline-variant);
+  --fig-campo-1: var(--color-surface-container-high);
+  --fig-campo-2: var(--color-surface-container-highest);
+  --fig-pieza-1: var(--color-outline);
+  --fig-pieza-2: var(--color-on-surface-variant);
+  --fig-trazo: var(--color-outline-variant);
+  --fig-corte: var(--color-on-surface-variant);
+  --fig-contorno: var(--color-outline);
   --fig-brillo: transparent;
 }
 
@@ -92,7 +92,7 @@
 
 .figurita {
   --fig-tam: 96px;
-  --fig-pista: rgba(150, 160, 175, 0.3);
+  --fig-pista: var(--color-outline-variant);
   --fig-avance: var(--color-primary-fixed-dim, #00daf3);
   position: relative;
   display: inline-flex;

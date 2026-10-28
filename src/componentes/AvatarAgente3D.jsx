@@ -3,6 +3,8 @@ import AvatarMetaPerson3D from './AvatarMetaPerson3D';
 import CerebroNeuronal from '../paginas/RazonamientoNeuronal/CerebroNeuronal';
 import { useRazonamiento } from '../contexto/ContextoRazonamiento';
 import { useEstadoModelo } from '../contexto/ContextoEstadoModelo';
+import useTemaActual from '../useTemaActual';
+import { colorDelTema } from '../apariencia';
 
 /**
  * Motor de Facetas Emocionales Autónomo: calcula el estado psicológico y la expresión
@@ -279,6 +281,7 @@ export default function AvatarAgente3D({
   const [errorCarga, setErrorCarga] = useState(null);
   const [vista, setVista] = useState('avatar'); // 'avatar' | 'cerebro'
   const resetCameraRef = useRef(null);
+  const tema = useTemaActual();
 
   const { ultimaInferencia, estaAnalizando } = useRazonamiento() ?? {};
   // Versión real del checkpoint activo (la comparte toda la app, no se vuelve a pedir acá).
@@ -289,7 +292,7 @@ export default function AvatarAgente3D({
   // sin ningún panel manual: las expresiones salen solas cuando pasa algo real
   // (jaque, ventaja, mate, fin de partida, etc.), nunca por un botón de prueba.
   const facetaActual = useMemo(() => {
-    return calcularFacetaEmocional({
+    const faceta = calcularFacetaEmocional({
       pensando,
       evaluacionCp,
       mateEn,
@@ -299,7 +302,9 @@ export default function AvatarAgente3D({
       ultimoMovimiento,
       versionModelo,
     });
-  }, [pensando, evaluacionCp, mateEn, terminada, resultado, cantidadJugadas, ultimoMovimiento, versionModelo]);
+    const token = { '#10b981': 'exito', '#f43f5e': 'error', '#f59e0b': 'aviso', '#f97316': 'tertiary', '#fb923c': 'tertiary', '#00e5ff': 'primary' }[faceta.color] || 'secondary';
+    return { ...faceta, color: colorDelTema(token) };
+  }, [pensando, evaluacionCp, mateEn, terminada, resultado, cantidadJugadas, ultimoMovimiento, versionModelo, tema]);
 
   // Datos reales de la última inferencia del modelo (mismo Context que Razonamiento
   // Neuronal) — alimentan la miniatura del cerebro cuando `vista === 'cerebro'`.
@@ -331,7 +336,7 @@ export default function AvatarAgente3D({
               style={{ backgroundColor: facetaActual.color }}
             />
           </span>
-          <span className="font-mono-micro text-[11px] font-bold text-slate-200 uppercase tracking-wide truncate">
+          <span className="font-mono-micro text-[11px] font-bold text-on-surface-variant uppercase tracking-wide truncate">
             {vista === 'avatar' ? 'Avatar 3D' : 'Cerebro (en vivo)'}
           </span>
         </div>
@@ -345,7 +350,7 @@ export default function AvatarAgente3D({
             aria-label="Ver el avatar del agente"
             aria-pressed={vista === 'avatar'}
             className={`p-1 max-sm:min-h-10 max-sm:min-w-10 rounded flex items-center justify-center transition-all ${
-              vista === 'avatar' ? 'bg-[#00e5ff] text-black' : 'text-slate-400 hover:text-white hover:bg-white/5'
+              vista === 'avatar' ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:text-on-surface hover:bg-on-surface/5'
             }`}
           >
             <span className="material-symbols-outlined text-[14px]">face</span>
@@ -357,21 +362,21 @@ export default function AvatarAgente3D({
             aria-label="Ver el cerebro de partículas en vivo"
             aria-pressed={vista === 'cerebro'}
             className={`p-1 max-sm:min-h-10 max-sm:min-w-10 rounded flex items-center justify-center transition-all ${
-              vista === 'cerebro' ? 'bg-[#00e5ff] text-black' : 'text-slate-400 hover:text-white hover:bg-white/5'
+              vista === 'cerebro' ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:text-on-surface hover:bg-on-surface/5'
             }`}
           >
             <span className="material-symbols-outlined text-[14px]">neurology</span>
           </button>
         </div>
 
-        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950/60 text-[#00e5ff] border border-[#00e5ff]/30 font-semibold shrink-0">
+        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/30 font-semibold shrink-0">
           {tipoOponente === 'modelo' ? `IA${sufijoVersionModelo}` : 'STOCKFISH'}
           {nivel != null ? ` · NIVEL ${nivel}` : tipoOponente === 'modelo' ? ' AUTÓNOMA' : ' 16'}
         </span>
       </div>
 
       {/* ÁREA DE VISUALIZACIÓN THREE.JS VIEWPORT (ENCUADRE DE LA CINTURA PARA ARRIBA) */}
-      <div className="relative w-full h-[290px] rounded-lg overflow-hidden bg-gradient-to-b from-[#0a0d14] to-[#111319] border border-white/10 flex items-center justify-center group">
+      <div className="relative w-full h-[290px] rounded-lg overflow-hidden bg-gradient-to-b from-surface-container-lowest to-surface border border-outline-variant/10 flex items-center justify-center group">
         {vista === 'avatar' ? (
           <AvatarMetaPerson3D
             pensando={pensando}
@@ -394,16 +399,16 @@ export default function AvatarAgente3D({
 
         {/* SPINNER DE CARGA DEL MODELO GLTF (solo vista avatar) */}
         {vista === 'avatar' && cargandoModelo && !errorCarga && (
-          <div className="absolute inset-0 bg-[#0c0e14]/90 backdrop-blur-sm flex flex-col items-center justify-center gap-2 z-20">
-            <div className="w-8 h-8 border-2 border-[#00e5ff]/20 border-t-[#00e5ff] rounded-full animate-spin" />
-            <span className="font-mono text-[11px] text-[#00e5ff] tracking-wider animate-pulse">
+          <div className="absolute inset-0 bg-surface-container-lowest/90 backdrop-blur-sm flex flex-col items-center justify-center gap-2 z-20">
+            <div className="w-8 h-8 border-2 border-primary/20 border-t-[#00e5ff] rounded-full animate-spin" />
+            <span className="font-mono text-[11px] text-primary tracking-wider animate-pulse">
               CARGANDO MODELO 3D ({progresoCarga}%)...
             </span>
           </div>
         )}
 
         {vista === 'avatar' && errorCarga && (
-          <div className="absolute inset-0 bg-[#0c0e14]/90 backdrop-blur-sm flex flex-col items-center justify-center gap-2 z-20 px-4 text-center">
+          <div className="absolute inset-0 bg-surface-container-lowest/90 backdrop-blur-sm flex flex-col items-center justify-center gap-2 z-20 px-4 text-center">
             <span className="material-symbols-outlined text-error text-[24px]">error</span>
             <span className="font-mono text-[11px] text-error">{errorCarga}</span>
           </div>
@@ -414,7 +419,7 @@ export default function AvatarAgente3D({
             {/* BADGE DE FACETA EMOCIONAL EN TIEMPO REAL (100% AUTÓNOMO) */}
             <div className="absolute top-2 left-2 z-10 pointer-events-none">
               <div
-                className="px-2.5 py-1 rounded-full bg-[#0c0e14]/85 border backdrop-blur-md flex items-center gap-1.5 text-[10px] font-mono shadow-lg transition-all duration-300"
+                className="px-2.5 py-1 rounded-full bg-surface-container-lowest/85 border backdrop-blur-md flex items-center gap-1.5 text-[10px] font-mono shadow-lg transition-all duration-300"
                 style={{ borderColor: `${facetaActual.color}88` }}
               >
                 <span className="text-[12px]">{facetaActual.icono}</span>
@@ -428,7 +433,7 @@ export default function AvatarAgente3D({
             <button
               type="button"
               onClick={() => resetCameraRef.current?.()}
-              className="absolute bottom-2 right-2 p-1.5 max-sm:min-h-10 rounded bg-black/60 hover:bg-[#00e5ff]/20 border border-white/10 hover:border-[#00e5ff]/40 text-slate-300 hover:text-[#00e5ff] text-[10px] font-mono transition-all z-10 flex items-center gap-1"
+              className="absolute bottom-2 right-2 p-1.5 max-sm:min-h-10 rounded bg-surface-container-lowest/90 hover:bg-primary/20 border border-outline-variant/10 hover:border-primary/40 text-on-surface-variant hover:text-primary text-[10px] font-mono transition-all z-10 flex items-center gap-1"
               title="Centrar encuadre frontal de la cintura para arriba"
             >
               <span className="material-symbols-outlined text-[13px]">center_focus_strong</span>
@@ -436,8 +441,8 @@ export default function AvatarAgente3D({
             </button>
 
             {/* INDICADOR DE INTERACCIÓN 3D REAL */}
-            <div className="absolute bottom-2 left-2 text-[9px] font-mono text-slate-400 pointer-events-none opacity-60 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#00e5ff] animate-ping" />
+            <div className="absolute bottom-2 left-2 text-[9px] font-mono text-on-surface-variant pointer-events-none opacity-60 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-ping" />
               <span>Rotación 360° Libre</span>
             </div>
           </>
@@ -445,7 +450,7 @@ export default function AvatarAgente3D({
           /* MINI INDICADOR DE ESTADO — analizando vs. jugada ya decidida (datos reales) */
           <div className="absolute top-2 left-2 z-10 pointer-events-none">
             <div
-              className={`px-2.5 py-1 rounded-full bg-[#0c0e14]/85 border backdrop-blur-md flex items-center gap-1.5 text-[10px] font-mono shadow-lg transition-all duration-300 ${
+              className={`px-2.5 py-1 rounded-full bg-surface-container-lowest/85 border backdrop-blur-md flex items-center gap-1.5 text-[10px] font-mono shadow-lg transition-all duration-300 ${
                 estaAnalizando ? 'border-on-surface-variant/60' : 'border-neon-lime/60'
               }`}
             >
@@ -466,20 +471,20 @@ export default function AvatarAgente3D({
 
       {/* BARRA DE TELEMETRÍA AUTÓNOMA (CERO BOTONES MANUALES) */}
       <div className="flex flex-col gap-1.5 font-mono text-[10px]">
-        <div className="p-2 rounded-lg bg-surface-container-lowest border border-white/5 flex items-center justify-between">
+        <div className="p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/5 flex items-center justify-between">
           <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-slate-300 font-semibold tracking-wide">SISTEMA AUTÓNOMO</span>
+            <span className="w-2 h-2 rounded-full bg-exito animate-pulse" />
+            <span className="text-on-surface-variant font-semibold tracking-wide">SISTEMA AUTÓNOMO</span>
           </div>
-          <span className="text-slate-400 text-[9px]">
+          <span className="text-on-surface-variant text-[9px]">
             {pensando ? 'ANALIZANDO JUGADA...' : 'ESPERANDO MOVIMIENTO'}
           </span>
         </div>
 
         {/* DESCRIPCIÓN DE LA ESTRATEGIA Y GESTO */}
         {facetaActual.descripcion && (
-          <div className="px-2 py-1 rounded bg-[#00e5ff]/5 border border-[#00e5ff]/15 flex items-center justify-between text-[9px] text-slate-300">
-            <span className="text-slate-400 truncate">{facetaActual.descripcion}</span>
+          <div className="px-2 py-1 rounded bg-primary/5 border border-primary/15 flex items-center justify-between text-[9px] text-on-surface-variant">
+            <span className="text-on-surface-variant truncate">{facetaActual.descripcion}</span>
             <span className="text-[10px] ml-2 shrink-0">{facetaActual.icono}</span>
           </div>
         )}

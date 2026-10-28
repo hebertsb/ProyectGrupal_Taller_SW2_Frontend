@@ -1706,7 +1706,7 @@ export default function SalaControl({
                 title={!partidaId ? 'Iniciá una partida primero' : 'Alterna el Gemelo Digital 3D (Dobot CR5AS) en pantalla'}
                 className={`w-full py-2.5 rounded-lg transition-all font-mono-label text-mono-label flex items-center justify-center gap-2 disabled:opacity-50 ${
                   vistaTablero === '3d'
-                    ? 'bg-[#00e5ff] text-black font-bold shadow-[0_0_15px_rgba(0,229,255,0.45)]'
+                    ? 'bg-primary-container text-on-primary font-bold shadow-[0_0_15px_rgba(0,229,255,0.45)]'
                     : 'bg-surface-container-high hover:bg-surface-bright text-on-surface'
                 }`}
               >
@@ -1768,14 +1768,14 @@ export default function SalaControl({
           {/* SELECTOR DE VISTA: TABLERO 2D vs GEMELO DIGITAL 3D DOBOT CR5AS */}
           {(esFacilitador || permiteSimulacion3D) ? (
             <div className="w-full max-w-[660px] flex items-center justify-between mb-3 px-1">
-              <div className="inline-flex p-1 rounded-xl bg-surface-container-low border border-white/10 font-mono text-xs shadow-lg">
+              <div className="inline-flex p-1 rounded-xl bg-surface-container-low border border-outline-variant/10 font-mono text-xs shadow-lg">
                 <button
                   type="button"
                   onClick={() => setVistaTablero('2d')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
                     vistaTablero === '2d'
-                      ? 'bg-[#00e5ff] text-black font-bold shadow-[0_0_12px_rgba(0,229,255,0.4)]'
-                      : 'text-slate-400 hover:text-white'
+                      ? 'bg-primary-container text-on-primary font-bold shadow-[0_0_12px_rgba(0,229,255,0.4)]'
+                      : 'text-on-surface-variant hover:text-on-surface'
                   }`}
                 >
                   <span className="material-symbols-outlined text-[15px]">grid_view</span>
@@ -1786,8 +1786,8 @@ export default function SalaControl({
                   onClick={() => setVistaTablero('3d')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
                     vistaTablero === '3d'
-                      ? 'bg-[#00e5ff] text-black font-bold shadow-[0_0_12px_rgba(0,229,255,0.4)]'
-                      : 'text-slate-400 hover:text-white'
+                      ? 'bg-primary-container text-on-primary font-bold shadow-[0_0_12px_rgba(0,229,255,0.4)]'
+                      : 'text-on-surface-variant hover:text-on-surface'
                   }`}
                 >
                   <span className="material-symbols-outlined text-[15px]">precision_manufacturing</span>
@@ -1796,8 +1796,8 @@ export default function SalaControl({
               </div>
 
               {vistaTablero === '3d' && (
-                <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-cyan-950/60 border border-[#00e5ff]/30 text-[11px] font-mono text-[#00e5ff]">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#00e5ff] animate-ping" />
+                <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-primary/10 border border-primary/30 text-[11px] font-mono text-primary">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary-container animate-ping" />
                   <span>CINEMÁTICA 6-DOF EN VIVO</span>
                 </span>
               )}
@@ -1861,13 +1861,13 @@ export default function SalaControl({
               <div
                 className="w-full aspect-square p-5 sm:p-7 rounded-2xl shadow-[0_24px_50px_-12px_rgba(0,0,0,0.9),0_0_30px_rgba(0,0,0,0.7)] relative flex items-center justify-center"
                 style={{
-                  background: 'linear-gradient(135deg, #422617 0%, #2c180e 25%, #4a2b1b 50%, #20110a 75%, #3d2215 100%)',
+                  background: 'var(--tablero-marco)',
                   boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.15), inset 0 -3px 6px rgba(0,0,0,0.8), 0 20px 40px -10px #000',
                 }}
               >
                 <div
                   className="w-full h-full rounded-lg p-2.5 sm:p-3 relative flex items-center justify-center shadow-inner"
-                  style={{ background: 'linear-gradient(180deg, #1b0e08 0%, #2d180f 100%)' }}
+                  style={{ background: 'var(--tablero-borde)' }}
                 >
                   <div className="w-full h-full grid grid-cols-8 grid-rows-8 rounded shadow-2xl overflow-hidden relative">
                     {matrizTablero &&
@@ -1887,10 +1887,10 @@ export default function SalaControl({
                               {...arrastre.propsDeCasilla(casilla, pieza)}
                               disabled={viendoPartidaAjena || demostracionDeOtraPartida}
                               aria-label={`Casilla ${casilla}${pieza ? ', pieza ' + pieza : ', vacía'}${esDestinoValido ? ', jugada válida' : ''}${viendoPartidaAjena ? ', solo lectura' : ''}${demostracionDeOtraPartida ? ', no disponible mientras se transmite otra partida' : ''}`}
-                              className={`relative flex items-center justify-center ${clara ? 'bg-[#b89772]' : 'bg-[#543423]'} ${seleccionada ? 'ring-2 ring-inset ring-primary' : ''} ${viendoPartidaAjena || demostracionDeOtraPartida ? 'cursor-default' : ''}`}
+                              className={`relative flex items-center justify-center ${clara ? 'bg-tablero-clara' : 'bg-tablero-oscura'} ${seleccionada ? 'ring-2 ring-inset ring-primary' : ''} ${viendoPartidaAjena || demostracionDeOtraPartida ? 'cursor-default' : ''}`}
                             >
                               {(origenesAnticipados.has(casilla) || destinosAnticipados.has(casilla)) && (
-                                <span aria-hidden="true" className={`pointer-events-none absolute inset-0 ${destinosAnticipados.has(casilla) ? 'bg-orange-500/50' : 'bg-orange-400/35'}`} />
+                                <span aria-hidden="true" className={`pointer-events-none absolute inset-0 ${destinosAnticipados.has(casilla) ? 'bg-tertiary/50' : 'bg-tertiary/35'}`} />
                               )}
                               {pieza && (
                                 <div className={`${claseDePieza(pieza)} ${casilla === arrastre.origenArrastrado ? 'opacity-30' : ''}`}>
@@ -1917,10 +1917,10 @@ export default function SalaControl({
                       )}
                   </div>
 
-                  <div className="absolute left-1 top-2 bottom-2 flex flex-col justify-around font-mono-micro text-[9px] text-[#e0cfba]/40 pointer-events-none font-bold select-none">
+                  <div className="absolute left-1 top-2 bottom-2 flex flex-col justify-around font-mono-micro text-[9px] text-tablero-etiquetas pointer-events-none font-bold select-none">
                     <span>8</span><span>7</span><span>6</span><span>5</span><span>4</span><span>3</span><span>2</span><span>1</span>
                   </div>
-                  <div className="absolute bottom-0.5 left-4 right-4 flex justify-around font-mono-micro text-[9px] text-[#e0cfba]/40 pointer-events-none font-bold select-none">
+                  <div className="absolute bottom-0.5 left-4 right-4 flex justify-around font-mono-micro text-[9px] text-tablero-etiquetas pointer-events-none font-bold select-none">
                     <span>a</span><span>b</span><span>c</span><span>d</span><span>e</span><span>f</span><span>g</span><span>h</span>
                   </div>
                 </div>

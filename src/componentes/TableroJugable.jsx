@@ -96,11 +96,11 @@ export default function TableroJugable({
       <div
         className="w-full aspect-square rounded-2xl shadow-[0_24px_50px_-12px_rgba(0,0,0,0.9),0_0_30px_rgba(0,0,0,0.7)] relative flex items-center justify-center p-4 sm:p-7"
         style={{
-          background: 'linear-gradient(135deg, #422617 0%, #2c180e 25%, #4a2b1b 50%, #20110a 75%, #3d2215 100%)',
+          background: 'var(--tablero-marco)',
           boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.15), inset 0 -3px 6px rgba(0,0,0,0.8), 0 20px 40px -10px #000',
         }}
       >
-        <div className="w-full h-full rounded-lg relative flex items-center justify-center shadow-inner p-1.5 sm:p-3" style={{ background: 'linear-gradient(180deg, #1b0e08 0%, #2d180f 100%)' }}>
+        <div className="w-full h-full rounded-lg relative flex items-center justify-center shadow-inner p-1.5 sm:p-3" style={{ background: 'var(--tablero-borde)' }}>
           <div className="w-full h-full grid grid-cols-8 grid-rows-8 rounded shadow-2xl overflow-hidden relative">
             {matriz &&
               filas.map((indiceFila) =>
@@ -118,7 +118,7 @@ export default function TableroJugable({
                       onClick={() => arrastre.alClic(casilla, clicInterno)}
                       disabled={sinRespuesta}
                       aria-label={`Casilla ${casilla}${pieza ? ', pieza ' + pieza : ', vacía'}${esDestino ? ', jugada válida' : ''}`}
-                      className={`relative flex items-center justify-center p-0 border-0 ${clara ? 'bg-[#b89772]' : 'bg-[#543423]'} ${casilla === casillaElegida ? 'ring-2 ring-inset ring-primary' : ''} ${sinRespuesta ? 'cursor-default' : 'cursor-pointer'}`}
+                      className={`relative flex items-center justify-center p-0 border-0 ${clara ? 'bg-tablero-clara' : 'bg-tablero-oscura'} ${casilla === casillaElegida ? 'ring-2 ring-inset ring-primary' : ''} ${sinRespuesta ? 'cursor-default' : 'cursor-pointer'}`}
                       {...arrastre.propsDeCasilla(casilla, pieza)}
                     >
                       {esUltima && <span aria-hidden="true" className="pointer-events-none absolute inset-0 bg-yellow-300/40" />}
@@ -144,12 +144,12 @@ export default function TableroJugable({
               )}
           </div>
 
-          <div className="absolute left-0.5 sm:left-1 top-1.5 sm:top-3 bottom-1.5 sm:bottom-3 flex flex-col justify-around font-mono-micro text-[8px] sm:text-[9px] text-[#e0cfba]/40 pointer-events-none font-bold select-none">
+          <div className="absolute left-0.5 sm:left-1 top-1.5 sm:top-3 bottom-1.5 sm:bottom-3 flex flex-col justify-around font-mono-micro text-[8px] sm:text-[9px] text-tablero-etiquetas pointer-events-none font-bold select-none">
             {etiquetasFilas.map((etiqueta) => (
               <span key={etiqueta}>{etiqueta}</span>
             ))}
           </div>
-          <div className="absolute bottom-0 sm:bottom-0.5 left-3 sm:left-4 right-3 sm:right-4 flex justify-around font-mono-micro text-[8px] sm:text-[9px] text-[#e0cfba]/40 pointer-events-none font-bold select-none">
+          <div className="absolute bottom-0 sm:bottom-0.5 left-3 sm:left-4 right-3 sm:right-4 flex justify-around font-mono-micro text-[8px] sm:text-[9px] text-tablero-etiquetas pointer-events-none font-bold select-none">
             {etiquetasColumnas.map((etiqueta) => (
               <span key={etiqueta}>{etiqueta}</span>
             ))}

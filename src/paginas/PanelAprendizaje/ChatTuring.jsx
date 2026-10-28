@@ -43,21 +43,21 @@ function renderizarLineaConMarkdown(linea) {
   return partes.map((parte, i) => {
     if (parte.startsWith('**') && parte.endsWith('**') && parte.length >= 4) {
       return (
-        <strong key={i} className="font-bold text-white tracking-wide">
+        <strong key={i} className="font-bold text-on-surface tracking-wide">
           {parte.slice(2, -2)}
         </strong>
       );
     }
     if (parte.startsWith('*') && parte.endsWith('*') && parte.length >= 2) {
       return (
-        <em key={i} className="italic text-cyan-200">
+        <em key={i} className="italic text-primary">
           {parte.slice(1, -1)}
         </em>
       );
     }
     if (parte.startsWith('`') && parte.endsWith('`') && parte.length >= 2) {
       return (
-        <code key={i} className="px-1.5 py-0.5 rounded bg-black/40 text-cyan-300 font-mono text-xs border border-white/5">
+        <code key={i} className="px-1.5 py-0.5 rounded bg-surface-container-high text-primary font-mono text-xs border border-outline-variant/30">
           {parte.slice(1, -1)}
         </code>
       );

@@ -85,7 +85,7 @@ export default function SelectorPromocion({ esBlanca, alElegir, alCancelar }) {
               className="min-h-[88px] min-w-0 flex flex-col items-center justify-center gap-1 p-1.5 rounded-xl bg-surface-container-high hover:bg-surface-bright border border-outline-variant/40 transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             >
               {/* Fondo de casilla clara: las piezas negras se ven igual que las blancas sobre el fondo oscuro del diálogo. */}
-              <span className="w-12 h-12 sm:w-14 sm:h-14 rounded-lg bg-[#b89772] flex items-center justify-center shrink-0">
+              <span className="w-12 h-12 sm:w-14 sm:h-14 rounded-lg bg-tablero-clara flex items-center justify-center shrink-0">
                 <img
                   src={rutaImagenPieza(esBlanca ? opcion.letra.toUpperCase() : opcion.letra)}
                   alt=""

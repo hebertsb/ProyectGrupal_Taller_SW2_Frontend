@@ -69,7 +69,7 @@ function BarrasDeErrores({ errores }) {
             key={error.tipo}
             tabIndex={0}
             title={`${error.cantidad} jugadas: ${porcentaje}% de tus errores analizados`}
-            className="group flex flex-col gap-1 px-3 py-2 rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-md transition-colors hover:bg-white/[0.09] focus-visible:bg-white/[0.09] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+            className="group flex flex-col gap-1 px-3 py-2 rounded-xl border border-outline-variant/10 bg-on-surface/[0.04] backdrop-blur-md transition-colors hover:bg-on-surface/[0.09] focus-visible:bg-on-surface/[0.09] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
           >
             <span className="flex items-center justify-between gap-3">
               <span className="font-body-sm text-body-sm text-on-surface min-w-0">
@@ -81,7 +81,7 @@ function BarrasDeErrores({ errores }) {
                 {error.cantidad} <span className="text-[10px] text-on-surface-variant">({porcentaje}%)</span>
               </span>
             </span>
-            <span className="block h-1.5 rounded-full bg-white/10 overflow-hidden" aria-hidden="true">
+            <span className="block h-1.5 rounded-full bg-on-surface/10 overflow-hidden" aria-hidden="true">
               <motion.span
                 className={`block h-full rounded-full ${COLOR[error.tipo] ?? 'bg-primary'}`}
                 initial={reducir ? false : { width: 0 }}

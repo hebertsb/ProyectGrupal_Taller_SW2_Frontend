@@ -16,7 +16,7 @@ const DURACIONES_DE_INSTITUCION = [
 ];
 
 const ESTILO_ESTADO = {
-  vigente: { texto: 'VIGENTE', clase: 'bg-primary-container text-primary' },
+  vigente: { texto: 'VIGENTE', clase: 'bg-primary-container text-on-primary-container' },
   usado: { texto: 'USADO', clase: 'bg-surface-bright text-on-surface-variant' },
   vencido: { texto: 'VENCIDO', clase: 'bg-error-container text-error' },
 };

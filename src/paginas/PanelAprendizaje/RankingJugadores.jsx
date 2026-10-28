@@ -32,7 +32,7 @@ const MEDALLAS = {
     nombre: 'bronce',
     icono: 'military_tech',
     circulo: 'bg-on-tertiary-container text-tertiary',
-    esquina: 'text-tertiary-container',
+    esquina: 'text-tertiary',
   },
 };
 

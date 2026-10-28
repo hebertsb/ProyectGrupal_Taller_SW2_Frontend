@@ -131,7 +131,7 @@ export default function Aula({ usuario, alIrAPartida, alIrAPerfil }) {
                           <span className="font-body-sm text-body-sm font-medium text-on-surface break-words min-w-0">{tarea.titulo}</span>
                           <span
                             className={`shrink-0 font-mono-micro text-mono-micro uppercase px-space-xs py-space-2xs rounded-full ${
-                              tarea.cumplida ? 'bg-primary-container text-primary' : tarea.vencida ? 'bg-error-container text-error' : 'bg-surface-bright text-on-surface-variant'
+                              tarea.cumplida ? 'bg-primary-container text-on-primary-container' : tarea.vencida ? 'bg-error-container text-error' : 'bg-surface-bright text-on-surface-variant'
                             }`}
                           >
                             {tarea.cumplida ? 'Cumplida' : tarea.vencida ? 'Vencida' : `${tarea.dias_restantes} d`}

@@ -150,7 +150,7 @@ export default function MiInstitucion() {
                         </span>
                       </div>
                       {a.rango_estimado && (
-                        <span className="shrink-0 font-mono-micro text-mono-micro uppercase px-space-xs py-space-2xs rounded-full bg-secondary-container text-secondary">
+                        <span className="shrink-0 font-mono-micro text-mono-micro uppercase px-space-xs py-space-2xs rounded-full bg-secondary-container text-on-secondary-container">
                           {a.rango_estimado}
                         </span>
                       )}

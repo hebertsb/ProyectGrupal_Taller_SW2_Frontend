@@ -280,7 +280,7 @@ function ListaEstudiantes({ cursoId, alActualizarCantidad }) {
                   <div className="flex flex-wrap items-center gap-space-xs">
                     <span
                       className={`font-mono-micro text-mono-micro tracking-wide uppercase px-space-xs py-space-2xs rounded-full font-medium ${
-                        estudiante.activo ? 'bg-primary-container text-primary' : 'bg-error-container text-error'
+                        estudiante.activo ? 'bg-primary-container text-on-primary-container' : 'bg-error-container text-error'
                       }`}
                     >
                       {estudiante.activo ? 'ACTIVO' : 'INACTIVO'}
@@ -575,7 +575,7 @@ function TarjetaCurso({
           <h3 className="m-0 font-headline-sm text-headline-sm text-on-surface min-w-0 break-words">{curso.nombre}</h3>
           <span
             className={`flex items-center gap-1 font-mono-micro text-mono-micro tracking-wide uppercase px-space-xs py-space-2xs rounded-full font-medium shrink-0 ${
-              abierto ? 'bg-primary-container text-primary' : 'bg-error-container text-error'
+              abierto ? 'bg-primary-container text-on-primary-container' : 'bg-error-container text-error'
             }`}
           >
             <span className="material-symbols-outlined text-[14px]" aria-hidden="true">

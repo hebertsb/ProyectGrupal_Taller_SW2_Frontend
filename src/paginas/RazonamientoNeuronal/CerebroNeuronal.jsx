@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { colorDelTema, observarApariencia } from '../../apariencia';
 import { SimplexNoise } from 'three/addons/math/SimplexNoise.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { crearMaterialParticulasBrillantes } from '../../componentes/materialParticulasBrillantes';
@@ -358,7 +359,17 @@ export default function CerebroNeuronal({
         tamObjetivo[OFFSET_NUCLEO + i] = 1.3;
       }
     }
-    recalcularObjetivoDatos();
+    const dejarDeObservarTema = observarApariencia(() => {
+      COLOR_SALIENCIA.set(colorDelTema('neon-cyan'));
+      COLOR_ATENCION.set(colorDelTema('neon-purple'));
+      COLOR_MOTORA.set(colorDelTema('neon-lime'));
+      COLOR_STOCKFISH.set(colorDelTema('neon-orange'));
+      COLOR_ANALIZANDO.set(colorDelTema('on-surface-variant'));
+      COLOR_NUCLEO.set(colorDelTema('outline'));
+      material.blending = document.documentElement.dataset.tema === 'noche' ? THREE.AdditiveBlending : THREE.NormalBlending;
+      material.needsUpdate = true;
+      recalcularObjetivoDatos();
+    });
 
     const sim = { ultimoAnalizando: propsRef.current.analizando };
 
@@ -472,6 +483,7 @@ export default function CerebroNeuronal({
 
     return () => {
       cancelAnimationFrame(idAnimacion);
+      dejarDeObservarTema();
       resizeObserver.disconnect();
       controls.dispose();
       geometria.dispose();

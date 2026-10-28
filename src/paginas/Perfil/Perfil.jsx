@@ -7,6 +7,7 @@ import TarjetaDobleFactor from './TarjetaDobleFactor';
 import TarjetaMiElo from './TarjetaMiElo';
 import TarjetaMiFamilia from './TarjetaMiFamilia';
 import TarjetaMiProgreso from './TarjetaMiProgreso';
+import TarjetaApariencia from './TarjetaApariencia';
 import TarjetaMisMedallas from './TarjetaMisMedallas';
 
 const EDAD_MIN = 0;
@@ -32,7 +33,7 @@ function mensajeError(err, mensajePorDefecto) {
   return err?.message || mensajePorDefecto;
 }
 
-export default function Perfil({ usuario, alActualizarUsuario, alVerAlbum, alEliminarCuenta }) {
+export default function Perfil({ usuario, alActualizarUsuario, alVerAlbum, alEliminarCuenta, apariencia }) {
   const [nombre, setNombre] = useState(usuario?.nombre ?? '');
   const [edad, setEdad] = useState(usuario?.edad != null ? String(usuario.edad) : '');
   const [descripcion, setDescripcion] = useState(usuario?.descripcion ?? '');
@@ -382,6 +383,8 @@ export default function Perfil({ usuario, alActualizarUsuario, alVerAlbum, alEli
             </div>
           </div>
         )}
+
+        <TarjetaApariencia apariencia={apariencia} />
 
         {/* Medallas del jugador — resumen del álbum de figuritas y acceso a él (ver TarjetaMisMedallas.jsx). */}
         {!esFacilitador && <TarjetaMisMedallas alVerAlbum={alVerAlbum} />}

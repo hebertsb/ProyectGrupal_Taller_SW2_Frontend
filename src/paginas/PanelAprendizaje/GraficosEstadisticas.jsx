@@ -21,7 +21,7 @@ function finDeSemana(iso) {
 export function TarjetaVidrio({ className = '', resplandor = 'bg-primary/20', children }) {
   return (
     <div
-      className={`relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.08)] ${className}`}
+      className={`relative overflow-hidden rounded-2xl border border-outline-variant/10 bg-on-surface/[0.04] backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.08)] ${className}`}
     >
       <span aria-hidden="true" className={`pointer-events-none absolute -top-12 -right-12 w-40 h-40 rounded-full blur-3xl ${resplandor}`} />
       <div className="relative">{children}</div>
@@ -105,7 +105,7 @@ export function GraficoSemanal({ semanas: todasLasSemanas }) {
             className={`px-2.5 py-1 rounded-full border font-mono-micro text-[10px] uppercase tracking-wider transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
               rango === semanasDelRango
                 ? 'bg-primary/20 border-primary/50 text-primary'
-                : 'bg-white/[0.04] border-white/10 text-on-surface-variant hover:bg-white/[0.09]'
+                : 'bg-on-surface/[0.04] border-outline-variant/10 text-on-surface-variant hover:bg-on-surface/[0.09]'
             }`}
           >
             {semanasDelRango} semanas
@@ -137,7 +137,7 @@ export function GraficoSemanal({ semanas: todasLasSemanas }) {
           </defs>
           <g className="text-primary">
             {[0, 50, 100].map((nivel) => (
-              <line key={nivel} x1={izq} x2={ancho - der} y1={yDe(nivel)} y2={yDe(nivel)} className="stroke-white/10" strokeDasharray="3 5" />
+              <line key={nivel} x1={izq} x2={ancho - der} y1={yDe(nivel)} y2={yDe(nivel)} className="stroke-on-surface/10" strokeDasharray="3 5" />
             ))}
 
             {/* Franja de la semana activa */}
@@ -147,7 +147,7 @@ export function GraficoSemanal({ semanas: todasLasSemanas }) {
               width={anchoColumna - 6}
               height={altoUtil + 6}
               rx={10}
-              className="fill-white/[0.07] stroke-white/15"
+              className="fill-on-surface/[0.07] stroke-on-surface/15"
               style={{ transition: reducir ? 'none' : 'x 200ms ease' }}
             />
 
@@ -258,7 +258,7 @@ export function GraficoSemanal({ semanas: todasLasSemanas }) {
       <div
         role="status"
         aria-live="polite"
-        className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 rounded-xl border border-white/10 bg-white/[0.05] backdrop-blur-md font-body-sm text-[12px] text-on-surface"
+        className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 rounded-xl border border-outline-variant/10 bg-on-surface/[0.05] backdrop-blur-md font-body-sm text-[12px] text-on-surface"
       >
         <strong className="font-mono-micro text-[11px] uppercase tracking-wider text-primary">
           Semana del {diaMes(detalle.semana_inicio)} al {finDeSemana(detalle.semana_inicio)}

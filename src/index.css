@@ -1,62 +1,70 @@
 @import "tailwindcss";
 
 @theme {
-  --color-on-primary-container: #00626e;
-  --color-background: #111319;
-  --color-surface-container-high: #282a30;
-  --color-surface-bright: #373940;
-  --color-tertiary-fixed-dim: #ffb778;
-  --color-tertiary-container: #ffc594;
-  --color-secondary-fixed-dim: #cdbdff;
-  --color-on-secondary: #370096;
+  --color-on-primary-container: #ffffff;
+  --color-background: #f4f8fa;
+  --color-surface-container-high: #e7eef2;
+  --color-surface-bright: #ffffff;
+  --color-tertiary-fixed-dim: #7c4300;
+  --color-tertiary-container: #ffdcc1;
+  --color-secondary-fixed-dim: #644194;
+  --color-on-secondary: #ffffff;
   --color-secondary-fixed: #e8deff;
-  --color-surface-container-lowest: #0c0e14;
-  --color-primary: #c3f5ff;
+  --color-surface-container-lowest: #ffffff;
+  --color-primary: #006575;
   --color-on-tertiary-fixed-variant: #6c3a00;
-  --color-on-error: #690005;
-  --color-primary-fixed-dim: #00daf3;
-  --color-surface-container: #1e1f26;
-  --color-secondary-container: #5203d5;
-  --color-inverse-primary: #006875;
-  --color-tertiary: #ffe9d9;
-  --color-surface-dim: #111319;
-  --color-inverse-surface: #e2e2eb;
-  --color-on-tertiary: #4c2700;
-  --color-on-error-container: #ffdad6;
-  --color-on-primary-fixed-variant: #004f58;
-  --color-surface-container-highest: #33343b;
-  --color-secondary: #cdbdff;
-  --color-on-background: #e2e2eb;
-  --color-error: #ffb4ab;
-  --color-surface-tint: #00daf3;
-  --color-on-surface: #e2e2eb;
+  --color-on-error: #ffffff;
+  --color-primary-fixed-dim: #006575;
+  --color-surface-container: #edf3f6;
+  --color-secondary-container: #e8deff;
+  --color-inverse-primary: #8aeaff;
+  --color-tertiary: #844900;
+  --color-surface-dim: #dbe5ea;
+  --color-inverse-surface: #29353c;
+  --color-on-tertiary: #ffffff;
+  --color-on-error-container: #410002;
+  --color-on-primary-fixed-variant: #ffffff;
+  --color-surface-container-highest: #dde7ed;
+  --color-secondary: #644194;
+  --color-on-background: #172d36;
+  --color-error: #b3261e;
+  --color-surface-tint: #006575;
+  --color-on-surface: #172d36;
   --color-on-tertiary-fixed: #2e1500;
-  --color-on-primary: #00363d;
-  --color-on-surface-variant: #bac9cc;
-  --color-on-primary-fixed: #001f24;
-  --color-on-secondary-fixed-variant: #4f00d0;
-  --color-primary-fixed: #9cf0ff;
-  --color-surface-variant: #33343b;
-  --color-primary-container: #00e5ff;
-  --color-error-container: #93000a;
-  --color-inverse-on-surface: #2e3037;
-  --color-surface-container-low: #191b22;
-  --color-on-secondary-container: #c0acff;
+  --color-on-primary: #ffffff;
+  --color-on-surface-variant: #435d68;
+  --color-on-primary-fixed: #ffffff;
+  --color-on-secondary-fixed-variant: #4f00a8;
+  --color-primary-fixed: #005262;
+  --color-surface-variant: #dde7ed;
+  --color-primary-container: #006575;
+  --color-error-container: #ffdad6;
+  --color-inverse-on-surface: #eaf2f7;
+  --color-surface-container-low: #f5f9fb;
+  --color-on-secondary-container: #32115c;
   --color-on-secondary-fixed: #20005f;
-  --color-outline: #849396;
+  --color-outline: #4f6772;
   --color-tertiary-fixed: #ffdcc1;
-  --color-surface: #111319;
-  --color-outline-variant: #3b494c;
-  --color-on-tertiary-container: #864a00;
+  --color-surface: #f8fbfd;
+  --color-outline-variant: #b9cbd3;
+  --color-on-tertiary-container: #512900;
 
-  /* Acentos "neón" — solo para la consola de Razonamiento Neuronal (estética
-     tipo laboratorio holográfico, ver frontend/vista razonamiento neuronal/code.html).
-     No reemplazan la paleta M3 de arriba, que sigue siendo la del resto de la app. */
-  --color-neon-cyan: #00e5ff;
-  --color-neon-blue: #0070f3;
-  --color-neon-purple: #7c4dff;
-  --color-neon-orange: #ff9100;
-  --color-neon-lime: #76ff03;
+  /* Acentos de gráficos y estados: profundos en día y luminosos en noche. */
+  --color-exito: #176c40;
+  --color-on-exito: #ffffff;
+  --color-aviso: #825300;
+  --color-on-aviso: #ffffff;
+  --color-informacion: #006575;
+  --color-tablero-clara: #d8c3a5;
+  --color-tablero-oscura: #926d49;
+  --color-tablero-etiquetas: #3b2110;
+  --color-tablero-flecha: #004f58;
+
+  --color-neon-cyan: #006575;
+  --color-neon-blue: #1d4ed8;
+  --color-neon-purple: #6741aa;
+  --color-neon-orange: #944c00;
+  --color-neon-lime: #326d00;
 
   --spacing-space-md: 1rem;
   --spacing-space-sm: 0.75rem;
@@ -130,6 +138,92 @@
   --text-mono-micro--letter-spacing: 0.08em;
   --text-mono-micro--font-weight: 500;
 }
+
+
+/* Todos los paneles siguen la misma apariencia, incluidos los gráficos y las vistas técnicas. */
+:root[data-tema="noche"] {
+  --color-on-primary-container: #00626e;
+  --color-background: #111319;
+  --color-surface-container-high: #282a30;
+  --color-surface-bright: #373940;
+  --color-tertiary-fixed-dim: #ffb778;
+  --color-tertiary-container: #ffc594;
+  --color-secondary-fixed-dim: #cdbdff;
+  --color-on-secondary: #370096;
+  --color-secondary-fixed: #e8deff;
+  --color-surface-container-lowest: #0c0e14;
+  --color-primary: #c3f5ff;
+  --color-on-tertiary-fixed-variant: #6c3a00;
+  --color-on-error: #690005;
+  --color-primary-fixed-dim: #00daf3;
+  --color-surface-container: #1e1f26;
+  --color-secondary-container: #5203d5;
+  --color-inverse-primary: #006875;
+  --color-tertiary: #ffe9d9;
+  --color-surface-dim: #111319;
+  --color-inverse-surface: #e2e2eb;
+  --color-on-tertiary: #4c2700;
+  --color-on-error-container: #ffdad6;
+  --color-on-primary-fixed-variant: #004f58;
+  --color-surface-container-highest: #33343b;
+  --color-secondary: #cdbdff;
+  --color-on-background: #e2e2eb;
+  --color-error: #ffb4ab;
+  --color-surface-tint: #00daf3;
+  --color-on-surface: #e2e2eb;
+  --color-on-tertiary-fixed: #2e1500;
+  --color-on-primary: #00363d;
+  --color-on-surface-variant: #bac9cc;
+  --color-on-primary-fixed: #001f24;
+  --color-on-secondary-fixed-variant: #4f00d0;
+  --color-primary-fixed: #9cf0ff;
+  --color-surface-variant: #33343b;
+  --color-primary-container: #00e5ff;
+  --color-error-container: #93000a;
+  --color-inverse-on-surface: #2e3037;
+  --color-surface-container-low: #191b22;
+  --color-on-secondary-container: #c0acff;
+  --color-on-secondary-fixed: #20005f;
+  --color-outline: #9aa9ac;
+  --color-tertiary-fixed: #ffdcc1;
+  --color-surface: #111319;
+  --color-outline-variant: #3b494c;
+  --color-on-tertiary-container: #864a00;
+  --color-exito: #75dda3;
+  --color-on-exito: #00391c;
+  --color-aviso: #ffcb77;
+  --color-on-aviso: #422b00;
+  --color-informacion: #86d9ec;
+  --color-tablero-clara: #b89772;
+  --color-tablero-oscura: #543423;
+  --color-tablero-etiquetas: #e0cfba;
+  --color-tablero-flecha: #ffffff;
+  --color-neon-cyan: #00e5ff;
+  --color-neon-blue: #78b2ff;
+  --color-neon-purple: #b9a1ff;
+  --color-neon-orange: #ff9100;
+  --color-neon-lime: #76ff03;
+  --sombra-acento: 0 0 30px -4px rgb(0 229 255 / 0.28), inset 0 0 20px -6px rgb(0 229 255 / 0.16);
+  --resplandor-acento: 0 0 14px rgb(0 229 255 / 0.7);
+  --tablero-marco: linear-gradient(135deg, #422617 0%, #2c180e 25%, #4a2b1b 50%, #20110a 75%, #3d2215 100%);
+  --tablero-borde: linear-gradient(180deg, #1b0e08 0%, #2d180f 100%);
+}
+
+:root {
+  color-scheme: light;
+  --sombra-acento: 0 12px 35px -12px rgb(0 72 85 / 0.22);
+  --resplandor-acento: none;
+  --tablero-marco: linear-gradient(135deg, #dbc5a5, #ba9770 40%, #dec7a4 70%, #c5a680);
+  --tablero-borde: linear-gradient(180deg, #c9ac85, #b9966b);
+}
+
+:root[data-tema="noche"] { color-scheme: dark; }
+
+html, body, #root { min-height: 100%; }
+body { margin: 0; background: var(--color-background); color: var(--color-on-background); }
+
+/* En día, las decoraciones luminosas del login dejan paso a una sombra suave. */
+:root[data-tema="dia"] .scanlines { opacity: 0.05; }
 
 /* Giro tipo "moneda" al cambiar de pieza — banner "Aprendé cada pieza"
    (PanelAprendizaje.jsx). Se retriggerea a mano sacando/reponiendo esta

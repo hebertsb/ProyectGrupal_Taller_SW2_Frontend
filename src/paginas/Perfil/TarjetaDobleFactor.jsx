@@ -123,7 +123,7 @@ export default function TarjetaDobleFactor({ usuario, alActualizarUsuario }) {
         </div>
         <span
           className={`shrink-0 font-mono-micro text-mono-micro uppercase px-space-xs py-space-2xs rounded-full ${
-            activo ? 'bg-primary-container text-primary' : 'bg-surface-container-high text-on-surface-variant'
+            activo ? 'bg-primary-container text-on-primary-container' : 'bg-surface-container-high text-on-surface-variant'
           }`}
         >
           {activo ? 'Activada' : 'Desactivada'}
