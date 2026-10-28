@@ -30,7 +30,7 @@ function barraResultadoColor(resultado) {
   if (resultado === '1-0') return 'bg-exito shadow-[0_0_10px_rgba(52,211,153,0.6)]';
   if (resultado === '0-1') return 'bg-error shadow-[0_0_10px_rgba(251,113,133,0.6)]';
   if (resultado === '1/2-1/2') return 'bg-aviso shadow-[0_0_10px_rgba(251,191,36,0.6)]';
-  return 'bg-primary shadow-[0_0_10px_rgba(0,229,255,0.6)]';
+  return 'bg-primary shadow-[0_0_10px_color-mix(in_srgb,var(--color-primary-container)_60%,transparent)]';
 }
 
 function oponenteLegible(tipoOponente) {
@@ -258,7 +258,7 @@ export default function Aprendizaje({
       {/* Franja superior */}
       <section className="bg-surface-container-lowest/80 backdrop-blur-md rounded-2xl p-space-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-space-md shadow-sm border border-outline-variant/5">
         <div className="flex flex-wrap items-center gap-space-sm">
-          <span className="w-2.5 h-2.5 rounded-full bg-primary-container shadow-[0_0_10px_rgba(0,229,255,0.7)]" />
+          <span className="w-2.5 h-2.5 rounded-full bg-primary-container shadow-[0_0_10px_color-mix(in_srgb,var(--color-primary-container)_70%,transparent)]" />
           <span className="font-mono-micro text-mono-micro tracking-widest text-primary font-semibold uppercase">
             APRENDIZAJE // ANÁLISIS JUGADA POR JUGADA
           </span>
@@ -318,7 +318,7 @@ export default function Aprendizaje({
                   onClick={() => setFiltro(btn.id)}
                   className={`px-3 py-1.5 rounded-xl font-mono text-xs transition-all flex items-center gap-2 border ${
                     filtro === btn.id
-                      ? 'bg-primary/20 text-primary border-primary shadow-[0_0_12px_rgba(0,229,255,0.2)] font-bold'
+                      ? 'bg-primary/20 text-primary border-primary shadow-[0_0_12px_color-mix(in_srgb,var(--color-primary-container)_20%,transparent)] font-bold'
                       : 'bg-surface-container/60 hover:bg-surface-container text-on-surface-variant border-outline-variant/5'
                   }`}
                 >
@@ -564,7 +564,7 @@ export default function Aprendizaje({
                       aria-current={activa}
                       className={`flex items-center justify-between gap-space-xs px-space-sm py-2 rounded-xl text-left transition-all border ${
                         activa
-                          ? 'bg-primary/15 border-primary text-on-surface shadow-[0_0_12px_rgba(0,229,255,0.2)] font-semibold'
+                          ? 'bg-primary/15 border-primary text-on-surface shadow-[0_0_12px_color-mix(in_srgb,var(--color-primary-container)_20%,transparent)] font-semibold'
                           : 'bg-transparent border-transparent hover:bg-on-surface/5 text-on-surface-variant'
                       }`}
                     >
@@ -849,7 +849,7 @@ function CurvaEfectividad({ jugadas, plySeleccionado, onSeleccionar }) {
               cy={p.y}
               r={esExtremo ? 5.5 : seleccionado ? 5 : 3.5}
               className={`cursor-pointer focus:outline-none focus-visible:stroke-on-surface transition-all ${claseColor} ${
-                seleccionado ? 'stroke-on-surface stroke-2 shadow-[0_0_8px_rgba(0,229,255,0.8)]' : ''
+                seleccionado ? 'stroke-on-surface stroke-2 shadow-[0_0_8px_color-mix(in_srgb,var(--color-primary-container)_80%,transparent)]' : ''
               }`}
               opacity={esExtremo || seleccionado ? 1 : 0.65}
               tabIndex={0}

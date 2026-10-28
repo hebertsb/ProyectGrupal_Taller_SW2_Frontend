@@ -89,7 +89,7 @@ export default function DemostracionEnVivo({ partidaId, alVolver }) {
           <div className="flex items-center gap-space-2xs">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary-container opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-primary-container shadow-[0_0_8px_#00e5ff]"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-primary-container shadow-[0_0_8px_var(--color-primary-container)]"></span>
             </span>
             <span className="font-mono-micro text-mono-micro tracking-widest text-primary uppercase font-medium">
               TRANSMISIÓN EN VIVO

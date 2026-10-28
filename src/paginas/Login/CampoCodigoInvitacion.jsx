@@ -153,7 +153,7 @@ const CampoCodigoInvitacion = forwardRef(function CampoCodigoInvitacion({ value,
               onKeyDown={(evento) => alTeclear(evento, indice)}
               onPaste={(evento) => alPegar(evento, indice)}
               onFocus={(evento) => evento.target.select()}
-              className={`w-full min-w-0 h-10 sm:h-11 text-center rounded-lg bg-on-surface/[0.04] backdrop-blur-md border font-mono text-base sm:text-lg font-bold text-on-surface uppercase caret-[#00e5ff] transition-all focus:outline-none focus:ring-1 focus:ring-primary ${colorBorde}`}
+              className={`w-full min-w-0 h-10 sm:h-11 text-center rounded-lg bg-on-surface/[0.04] backdrop-blur-md border font-mono text-base sm:text-lg font-bold text-on-surface uppercase caret-primary transition-all focus:outline-none focus:ring-1 focus:ring-primary ${colorBorde}`}
             />
             </div>
           </Fragment>

@@ -217,7 +217,7 @@ function Nodo({ estado, pieza, icono, reducir, indice = 0 }) {
         )}
         <div
           className="relative flex items-center justify-center w-16 h-16 rounded-full bg-surface-container-lowest border-[3px] border-primary-container text-primary"
-          style={{ boxShadow: '0 0 28px rgba(0, 229, 255, 0.5)' }}
+          style={{ boxShadow: '0 0 28px color-mix(in srgb, var(--color-primary-container) 50%, transparent)' }}
         >
           {pieza ? (
             <motion.img

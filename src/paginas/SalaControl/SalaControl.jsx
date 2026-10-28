@@ -1369,7 +1369,7 @@ export default function SalaControl({
       <div className="flex items-center justify-between px-space-md py-space-xs rounded-xl bg-surface-container-low/70 shadow-md flex-wrap gap-2">
         <div className="flex items-center gap-space-md flex-wrap">
           <div className="flex items-center gap-space-2xs">
-            <span className={`w-2 h-2 rounded-full ${partidaId && !terminada ? 'bg-primary-container animate-pulse shadow-[0_0_8px_#00e5ff]' : 'bg-outline'}`}></span>
+            <span className={`w-2 h-2 rounded-full ${partidaId && !terminada ? 'bg-primary-container animate-pulse shadow-[0_0_8px_var(--color-primary-container)]' : 'bg-outline'}`}></span>
             <span className="font-mono-micro text-mono-micro tracking-widest text-primary uppercase font-medium">
               {partidaId ? `PARTIDA ${partidaId.slice(0, 8)}` : 'SIN PARTIDA'}
             </span>
@@ -1706,7 +1706,7 @@ export default function SalaControl({
                 title={!partidaId ? 'Iniciá una partida primero' : 'Alterna el Gemelo Digital 3D (Dobot CR5AS) en pantalla'}
                 className={`w-full py-2.5 rounded-lg transition-all font-mono-label text-mono-label flex items-center justify-center gap-2 disabled:opacity-50 ${
                   vistaTablero === '3d'
-                    ? 'bg-primary-container text-on-primary font-bold shadow-[0_0_15px_rgba(0,229,255,0.45)]'
+                    ? 'bg-primary-container text-on-primary font-bold shadow-[0_0_15px_color-mix(in_srgb,var(--color-primary-container)_45%,transparent)]'
                     : 'bg-surface-container-high hover:bg-surface-bright text-on-surface'
                 }`}
               >
@@ -1774,7 +1774,7 @@ export default function SalaControl({
                   onClick={() => setVistaTablero('2d')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
                     vistaTablero === '2d'
-                      ? 'bg-primary-container text-on-primary font-bold shadow-[0_0_12px_rgba(0,229,255,0.4)]'
+                      ? 'bg-primary-container text-on-primary font-bold shadow-[0_0_12px_color-mix(in_srgb,var(--color-primary-container)_40%,transparent)]'
                       : 'text-on-surface-variant hover:text-on-surface'
                   }`}
                 >
@@ -1786,7 +1786,7 @@ export default function SalaControl({
                   onClick={() => setVistaTablero('3d')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
                     vistaTablero === '3d'
-                      ? 'bg-primary-container text-on-primary font-bold shadow-[0_0_12px_rgba(0,229,255,0.4)]'
+                      ? 'bg-primary-container text-on-primary font-bold shadow-[0_0_12px_color-mix(in_srgb,var(--color-primary-container)_40%,transparent)]'
                       : 'text-on-surface-variant hover:text-on-surface'
                   }`}
                 >
@@ -1850,7 +1850,7 @@ export default function SalaControl({
                   style={{ '--pct': `${porcentajeVentaja}%` }}
                 >
                   <div className="absolute inset-0.5 rounded-full overflow-hidden flex flex-col justify-end max-lg:flex-row max-lg:justify-start">
-                    <div className="w-full h-[var(--pct)] bg-gradient-to-t from-primary-container to-primary rounded-full transition-all duration-700 shadow-[0_0_8px_#00e5ff] max-lg:h-full max-lg:w-[var(--pct)]"></div>
+                    <div className="w-full h-[var(--pct)] bg-gradient-to-t from-primary-container to-primary rounded-full transition-all duration-700 shadow-[0_0_8px_var(--color-primary-container)] max-lg:h-full max-lg:w-[var(--pct)]"></div>
                   </div>
                   <span className="absolute -left-11 top-1/2 -translate-y-1/2 max-lg:left-1/2 max-lg:-translate-x-1/2 font-mono-micro text-mono-micro font-medium text-primary bg-surface-container-lowest/90 px-1 py-0.5 rounded shadow">
                     {etiquetaBarra(analisis)}
@@ -1906,8 +1906,8 @@ export default function SalaControl({
                                 <span
                                   className={`pointer-events-none absolute rounded-full ${
                                     pieza
-                                      ? 'inset-[8%] border-[3px] border-primary/80 shadow-[0_0_6px_rgba(0,229,255,0.5)]'
-                                      : 'w-[28%] h-[28%] bg-primary/70 shadow-[0_0_6px_rgba(0,229,255,0.6)]'
+                                      ? 'inset-[8%] border-[3px] border-primary/80 shadow-[0_0_6px_color-mix(in_srgb,var(--color-primary-container)_50%,transparent)]'
+                                      : 'w-[28%] h-[28%] bg-primary/70 shadow-[0_0_6px_color-mix(in_srgb,var(--color-primary-container)_60%,transparent)]'
                                   }`}
                                 ></span>
                               )}
@@ -2121,7 +2121,7 @@ export default function SalaControl({
                   onClick={() => manejarNuevaPartida()}
                   onPointerDown={manejarPulsacion}
                   disabled={cargando === 'nueva'}
-                  className="px-space-lg py-2.5 rounded-lg bg-primary-container text-on-primary-container font-headline-sm text-body-lg font-medium shadow-[0_0_16px_rgba(0,229,255,0.35)] hover:shadow-[0_0_24px_rgba(0,229,255,0.6)] hover:bg-primary transition-all flex items-center gap-2 disabled:opacity-50"
+                  className="px-space-lg py-2.5 rounded-lg bg-primary-container text-on-primary-container font-headline-sm text-body-lg font-medium shadow-[0_0_16px_color-mix(in_srgb,var(--color-primary-container)_35%,transparent)] hover:shadow-[0_0_24px_color-mix(in_srgb,var(--color-primary-container)_60%,transparent)] hover:bg-primary transition-all flex items-center gap-2 disabled:opacity-50"
                 >
                   <span className="material-symbols-outlined text-[20px]">smart_toy</span>
                   NUEVA PARTIDA
@@ -2339,7 +2339,7 @@ export default function SalaControl({
 function claseBotonRival(activo, bloqueado) {
   const base =
     'py-2 px-1.5 rounded-lg font-mono-label text-[11px] font-semibold flex flex-col items-center justify-center gap-1 transition-all motion-reduce:transition-none disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
-  if (activo) return `${base} bg-primary text-on-primary shadow-[0_0_14px_rgba(0,229,255,0.45)]`;
+  if (activo) return `${base} bg-primary text-on-primary shadow-[0_0_14px_color-mix(in_srgb,var(--color-primary-container)_45%,transparent)]`;
   return `${base} text-on-surface-variant ${bloqueado ? 'opacity-50' : 'hover:text-on-surface hover:bg-surface-container-high'}`;
 }
 

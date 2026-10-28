@@ -644,7 +644,7 @@ export default function RazonamientoNeuronal() {
                 onClick={() => fenActual && dispararInferencia?.(fenActual)}
                 disabled={estaAnalizando || !estadoModeloData?.disponible}
                 title="Ejecutar inferencia real del modelo sobre la posición actual"
-                className="flex-1 h-full min-h-10 px-2 rounded-lg bg-neon-cyan text-on-primary font-headline-sm text-[12px] font-bold flex items-center justify-center gap-1 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-all shadow-[0_0_12px_rgba(0,229,255,0.4)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                className="flex-1 h-full min-h-10 px-2 rounded-lg bg-neon-cyan text-on-primary font-headline-sm text-[12px] font-bold flex items-center justify-center gap-1 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-all shadow-[0_0_12px_color-mix(in_srgb,var(--color-primary-container)_40%,transparent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
               >
                 <span className="material-symbols-outlined text-[16px]">{estaAnalizando ? 'sync' : 'bolt'}</span>
                 {estaAnalizando ? 'Infiriendo…' : 'Inferencia'}
@@ -869,7 +869,7 @@ export default function RazonamientoNeuronal() {
                   type="button"
                   onClick={() => fenActual && dispararInferencia?.(fenActual)}
                   disabled={estaAnalizando || !estadoModeloData?.disponible}
-                  className="w-full py-2 rounded-lg bg-neon-cyan text-on-primary font-headline-sm text-[12px] font-bold flex items-center justify-center gap-1.5 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-all shadow-[0_0_12px_rgba(0,229,255,0.35)] mt-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                  className="w-full py-2 rounded-lg bg-neon-cyan text-on-primary font-headline-sm text-[12px] font-bold flex items-center justify-center gap-1.5 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-all shadow-[0_0_12px_color-mix(in_srgb,var(--color-primary-container)_35%,transparent)] mt-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                 >
                   <span className="material-symbols-outlined text-[16px]">psychology</span>
                   Disparar Pulso Sináptico
@@ -878,7 +878,7 @@ export default function RazonamientoNeuronal() {
             </div>
 
             {/* Columna central: cerebro de partículas — 100% real */}
-            <div className="2xl:col-span-7 flex flex-col gap-2 bg-surface-container/90 p-3.5 rounded-xl border border-neon-cyan/40 shadow-[0_0_35px_rgba(0,229,255,0.15)] relative overflow-hidden">
+            <div className="2xl:col-span-7 flex flex-col gap-2 bg-surface-container/90 p-3.5 rounded-xl border border-neon-cyan/40 shadow-[0_0_35px_color-mix(in_srgb,var(--color-primary-container)_15%,transparent)] relative overflow-hidden">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-outline-variant/30 pb-2">
                 <div className="flex items-center gap-2">
                   <div className="relative flex h-3 w-3">
@@ -1128,7 +1128,7 @@ export default function RazonamientoNeuronal() {
                           key={c.jugada ?? indice}
                           className={`flex flex-col gap-2 p-2.5 rounded-lg border ${
                             c.elegida
-                              ? 'bg-neon-cyan/10 border-neon-cyan/50 shadow-[0_0_14px_rgba(0,229,255,0.2)]'
+                              ? 'bg-neon-cyan/10 border-neon-cyan/50 shadow-[0_0_14px_color-mix(in_srgb,var(--color-primary-container)_20%,transparent)]'
                               : 'bg-surface-container-lowest border-outline-variant/20'
                           }`}
                         >

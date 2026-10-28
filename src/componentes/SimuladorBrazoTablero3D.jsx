@@ -507,6 +507,10 @@ export default function SimuladorBrazoTablero3D({
     gridHelper.position.y = 0.0;
     scene.add(gridHelper);
 
+    let marcoCianMat = null;
+    let anilloPlacaMat = null;
+    let anilloOficialMat = null;
+
     const dejarDeObservarTema = observarApariencia(() => {
       scene.background.set(colorDelTema('surface-container-lowest'));
       scene.fog.color.copy(scene.background);
@@ -522,6 +526,25 @@ export default function SimuladorBrazoTablero3D({
         coloresGrilla.setXYZ(i, color.r, color.g, color.b);
       }
       coloresGrilla.needsUpdate = true;
+
+      const acentoNeon = colorDelTema('neon-cyan') || '#00e5ff';
+      luzRelleno.color.set(acentoNeon);
+      luzPuntoBrazo.color.set(acentoNeon);
+      if (marcoCianMat) {
+        marcoCianMat.color.set(acentoNeon);
+        marcoCianMat.emissive.set(acentoNeon);
+      }
+      if (anilloPlacaMat) {
+        anilloPlacaMat.color.set(acentoNeon);
+        anilloPlacaMat.emissive.set(acentoNeon);
+      }
+      if (anilloOficialMat) {
+        anilloOficialMat.color.set(acentoNeon);
+        anilloOficialMat.emissive.set(acentoNeon);
+      }
+      if (robotArticuladoRef.current?.laser?.material) {
+        robotArticuladoRef.current.laser.material.color.set(acentoNeon);
+      }
     });
 
     // 2. Construcción del Tablero 3D
@@ -543,7 +566,7 @@ export default function SimuladorBrazoTablero3D({
 
     // Marco interior cian con neón
     const marcoCianGeo = new THREE.BoxGeometry(ANCHO_TABLERO + 0.15, 0.02, ANCHO_TABLERO + 0.15);
-    const marcoCianMat = new THREE.MeshStandardMaterial({
+    marcoCianMat = new THREE.MeshStandardMaterial({
       color: 0x00e5ff,
       emissive: 0x00e5ff,
       emissiveIntensity: 0.35,
@@ -645,7 +668,7 @@ export default function SimuladorBrazoTablero3D({
 
     // Anillo de luz cian en la base del pedestal
     const anilloPlacaGeo = new THREE.TorusGeometry(0.69, 0.018, 16, 48);
-    const anilloPlacaMat = new THREE.MeshStandardMaterial({
+    anilloPlacaMat = new THREE.MeshStandardMaterial({
       color: 0x00e5ff,
       emissive: 0x00e5ff,
       emissiveIntensity: 0.7,
@@ -703,7 +726,7 @@ export default function SimuladorBrazoTablero3D({
     robotOficialGroup.add(pedestalOficial);
 
     const anilloOficialGeo = new THREE.TorusGeometry(0.71, 0.016, 16, 48);
-    const anilloOficialMat = new THREE.MeshStandardMaterial({
+    anilloOficialMat = new THREE.MeshStandardMaterial({
       color: 0x00e5ff,
       emissive: 0x00e5ff,
       emissiveIntensity: 0.8,

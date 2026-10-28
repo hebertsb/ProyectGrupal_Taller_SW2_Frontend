@@ -321,8 +321,8 @@ export default function Login({ onLoginSuccess, apariencia }) {
       <style>{`
         .bg-tech-grid {
           background-image: 
-            linear-gradient(to right, rgba(0, 229, 255, 0.05) 1px, transparent 1px),
-            linear-gradient(to bottom, rgba(0, 229, 255, 0.05) 1px, transparent 1px);
+            linear-gradient(to right, color-mix(in srgb, var(--color-primary-container) 5%, transparent) 1px, transparent 1px),
+            linear-gradient(to bottom, color-mix(in srgb, var(--color-primary-container) 5%, transparent) 1px, transparent 1px);
           background-size: 38px 38px;
         }
         .neon-border-cyan {
@@ -431,7 +431,7 @@ export default function Login({ onLoginSuccess, apariencia }) {
             {/* LOGOTIPO E IDENTIDAD OFICIAL: ChessIA // KAIROS CORE */}
             <div className="text-center mb-5 max-[860px]:mb-3" data-purpose="brand-logo-identity">
               <div className="flex justify-center mb-4 max-[860px]:hidden">
-                <div className="inline-flex p-1.5 rounded-2xl bg-surface-container-lowest border border-primary/30 shadow-[0_0_20px_rgba(0,229,255,0.45)] overflow-hidden">
+                <div className="inline-flex p-1.5 rounded-2xl bg-surface-container-lowest border border-primary/30 shadow-[0_0_20px_color-mix(in_srgb,var(--color-primary-container)_45%,transparent)] overflow-hidden">
                   <img
                     alt="ChessIA Logo"
                     className="h-20 w-auto rounded-xl object-contain"
@@ -469,7 +469,7 @@ export default function Login({ onLoginSuccess, apariencia }) {
                   }}
                   className={`relative flex items-center justify-center py-2.5 px-3 rounded-lg text-xs font-semibold tracking-wide transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed ${
                     rolEsperado === 'jugador'
-                      ? 'bg-primary-container text-on-primary shadow-[0_0_16px_rgba(0,229,255,0.45)]'
+                      ? 'bg-primary-container text-on-primary shadow-[0_0_16px_color-mix(in_srgb,var(--color-primary-container)_45%,transparent)]'
                       : 'text-on-surface-variant hover:text-on-surface hover:bg-on-surface/5'
                   }`}
                 >
@@ -488,7 +488,7 @@ export default function Login({ onLoginSuccess, apariencia }) {
                   }}
                   className={`relative flex items-center justify-center py-2.5 px-3 rounded-lg text-xs font-semibold tracking-wide transition-all duration-200 ${
                     rolEsperado === 'facilitador'
-                      ? 'bg-primary-container text-on-primary shadow-[0_0_16px_rgba(0,229,255,0.45)]'
+                      ? 'bg-primary-container text-on-primary shadow-[0_0_16px_color-mix(in_srgb,var(--color-primary-container)_45%,transparent)]'
                       : 'text-on-surface-variant hover:text-on-surface hover:bg-on-surface/5'
                   }`}
                 >
@@ -863,7 +863,7 @@ export default function Login({ onLoginSuccess, apariencia }) {
                   type="submit"
                   disabled={cargando || faltaCodigoVerificado}
                   title={faltaCodigoVerificado ? 'Primero escribí un código de invitación válido' : undefined}
-                  className={`relative w-full overflow-hidden group py-3 px-4 rounded-xl text-on-primary font-semibold text-xs uppercase tracking-widest transition-all duration-200 shadow-[0_0_20px_rgba(0,229,255,0.45)] hover:shadow-[0_0_28px_rgba(0,229,255,0.7)] active:scale-[0.99] flex items-center justify-center cursor-pointer ${
+                  className={`relative w-full overflow-hidden group py-3 px-4 rounded-xl text-on-primary font-semibold text-xs uppercase tracking-widest transition-all duration-200 shadow-[0_0_20px_color-mix(in_srgb,var(--color-primary-container)_45%,transparent)] hover:shadow-[0_0_28px_color-mix(in_srgb,var(--color-primary-container)_70%,transparent)] active:scale-[0.99] flex items-center justify-center cursor-pointer ${
                     loginExitoso
                       ? 'bg-exito shadow-[0_0_24px_rgba(16,185,129,0.7)]'
                       : 'bg-gradient-to-r from-primary via-primary to-primary hover:from-primary hover:to-primary'
@@ -914,7 +914,7 @@ export default function Login({ onLoginSuccess, apariencia }) {
 
                   {/* Caballo de ajedrez avanzando por la pista */}
                   <div
-                    className="z-10 animate-chess-step text-primary drop-shadow-[0_0_10px_#00e5ff] flex items-center"
+                    className="z-10 animate-chess-step text-primary drop-shadow-[0_0_10px_var(--color-primary-container)] flex items-center"
                     id="chessWalkerPiece"
                   >
                     <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
@@ -924,7 +924,7 @@ export default function Login({ onLoginSuccess, apariencia }) {
 
                   {/* Barra de progreso */}
                   <div
-                    className="absolute bottom-0 left-0 h-[2px] bg-primary-container shadow-[0_0_8px_#00e5ff] transition-all duration-500"
+                    className="absolute bottom-0 left-0 h-[2px] bg-primary-container shadow-[0_0_8px_var(--color-primary-container)] transition-all duration-500"
                     style={{ width: `${progresoTrack}%` }}
                   />
                 </div>

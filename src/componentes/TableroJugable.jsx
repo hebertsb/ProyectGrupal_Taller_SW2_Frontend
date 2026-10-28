@@ -134,7 +134,7 @@ export default function TableroJugable({
                         <span
                           aria-hidden="true"
                           className={`pointer-events-none absolute rounded-full ${
-                            pieza ? 'inset-[8%] border-[3px] border-primary/80 shadow-[0_0_6px_rgba(0,229,255,0.5)]' : 'w-[28%] h-[28%] bg-primary/70 shadow-[0_0_6px_rgba(0,229,255,0.6)]'
+                            pieza ? 'inset-[8%] border-[3px] border-primary/80 shadow-[0_0_6px_color-mix(in_srgb,var(--color-primary-container)_50%,transparent)]' : 'w-[28%] h-[28%] bg-primary/70 shadow-[0_0_6px_color-mix(in_srgb,var(--color-primary-container)_60%,transparent)]'
                           }`}
                         />
                       )}

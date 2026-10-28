@@ -32,7 +32,7 @@ function barraResultadoColor(resultado) {
   if (resultado === '1-0') return 'bg-exito shadow-[0_0_10px_rgba(52,211,153,0.6)]';
   if (resultado === '0-1') return 'bg-error shadow-[0_0_10px_rgba(251,113,133,0.6)]';
   if (resultado === '1/2-1/2') return 'bg-aviso shadow-[0_0_10px_rgba(251,191,36,0.6)]';
-  return 'bg-primary shadow-[0_0_10px_rgba(0,229,255,0.6)]';
+  return 'bg-primary shadow-[0_0_10px_color-mix(in_srgb,var(--color-primary-container)_60%,transparent)]';
 }
 
 function oponenteLegible(tipoOponente) {
@@ -97,7 +97,7 @@ function TarjetaPartida({ partida, activa, alSeleccionar, esFacilitador, modoGri
       onClick={alSeleccionar}
       className={`cursor-pointer rounded-2xl p-5 sm:p-6 transition-all relative overflow-hidden group border min-h-[110px] ${
         activa
-          ? 'bg-surface-container-high border-primary shadow-[0_0_24px_rgba(0,229,255,0.3)] ring-2 ring-primary/60'
+          ? 'bg-surface-container-high border-primary shadow-[0_0_24px_color-mix(in_srgb,var(--color-primary-container)_30%,transparent)] ring-2 ring-primary/60'
           : 'bg-surface-container-low hover:bg-surface-container-high border-outline-variant/10 hover:border-primary/50 shadow-md hover:shadow-xl'
       }`}
     >
@@ -309,7 +309,7 @@ export default function RegistroPartidas({
       <section className="bg-surface-container-lowest/80 backdrop-blur-md rounded-xl p-space-md flex flex-col lg:flex-row items-start lg:items-center justify-between gap-space-md shadow-sm border border-outline-variant/5">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-space-md w-full lg:w-auto">
           <div className="flex items-center gap-space-xs shrink-0">
-            <span className="w-2.5 h-2.5 rounded-full bg-primary-container shadow-[0_0_10px_rgba(0,229,255,0.8)]"></span>
+            <span className="w-2.5 h-2.5 rounded-full bg-primary-container shadow-[0_0_10px_color-mix(in_srgb,var(--color-primary-container)_80%,transparent)]"></span>
             <span className="font-mono text-sm tracking-wider text-primary font-bold uppercase">
               REGISTRO DE PARTIDAS // {esFacilitador ? 'VISTA GENERAL' : 'MIS PARTIDAS'}
             </span>
@@ -330,7 +330,7 @@ export default function RegistroPartidas({
               onClick={() => setModoVista('grid')}
               className={`px-3 py-1.5 rounded-lg text-xs font-mono flex items-center gap-1.5 transition-all ${
                 modoVista === 'grid'
-                  ? 'bg-primary text-on-primary font-bold shadow-[0_0_10px_rgba(0,229,255,0.4)]'
+                  ? 'bg-primary text-on-primary font-bold shadow-[0_0_10px_color-mix(in_srgb,var(--color-primary-container)_40%,transparent)]'
                   : 'text-on-surface-variant hover:text-on-surface'
               }`}
               title="Ver todas las partidas en cuadrícula amplia"
@@ -348,7 +348,7 @@ export default function RegistroPartidas({
               }}
               className={`px-3 py-1.5 rounded-lg text-xs font-mono flex items-center gap-1.5 transition-all ${
                 modoVista === 'split'
-                  ? 'bg-primary text-on-primary font-bold shadow-[0_0_10px_rgba(0,229,255,0.4)]'
+                  ? 'bg-primary text-on-primary font-bold shadow-[0_0_10px_color-mix(in_srgb,var(--color-primary-container)_40%,transparent)]'
                   : 'text-on-surface-variant hover:text-on-surface'
               }`}
               title="Ver vista dividida con panel de inspección técnica"
@@ -389,7 +389,7 @@ export default function RegistroPartidas({
             onClick={() => setFiltro(item.id)}
             className={`px-3 py-1.5 rounded-lg font-mono text-xs transition-all flex items-center gap-1.5 ${
               filtro === item.id
-                ? 'bg-primary text-on-primary font-bold shadow-[0_0_10px_rgba(0,229,255,0.4)]'
+                ? 'bg-primary text-on-primary font-bold shadow-[0_0_10px_color-mix(in_srgb,var(--color-primary-container)_40%,transparent)]'
                 : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container/60'
             }`}
           >
@@ -603,7 +603,7 @@ export default function RegistroPartidas({
                           </span>
                         </div>
                         <span className="text-xs text-on-surface-variant font-mono flex items-center gap-1.5">
-                          <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: indice % 2 === 0 ? '#ffffff' : '#64748b' }}></span>
+                          <span className="w-2.5 h-2.5 rounded-full inline-block border border-outline" style={{ backgroundColor: indice % 2 === 0 ? '#ffffff' : '#64748b' }}></span>
                           {indice % 2 === 0 ? 'Blancas (Vos)' : (detalle.tipo_oponente === 'modelo' ? 'Turing IA' : 'Stockfish')}
                         </span>
                       </div>

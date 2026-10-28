@@ -16,7 +16,7 @@ export default function RelojAjedrez({ nombre, icono, ms, activo, agotado = fals
         agotado
           ? 'bg-error/20 border-error/60'
           : activo
-            ? 'bg-primary/10 border-primary/50 shadow-[0_0_14px_rgba(0,229,255,0.18)]'
+            ? 'bg-primary/10 border-primary/50 shadow-[0_0_14px_color-mix(in_srgb,var(--color-primary-container)_18%,transparent)]'
             : 'bg-on-surface/[0.04] border-outline-variant/10'
       }`}
       aria-label={`${nombre}: ${agotado ? 'sin tiempo' : `${formatearReloj(ms)} restantes${activo ? ', es su turno' : ''}`}`}

@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./paletas.css";
 
 @theme {
   --color-on-primary-container: #ffffff;

@@ -302,7 +302,11 @@ export default function AvatarAgente3D({
       ultimoMovimiento,
       versionModelo,
     });
-    const token = { '#10b981': 'exito', '#f43f5e': 'error', '#f59e0b': 'aviso', '#f97316': 'tertiary', '#fb923c': 'tertiary', '#00e5ff': 'primary' }[faceta.color] || 'secondary';
+    const token = {
+      '#10b981': 'exito', '#34d399': 'exito', '#f43f5e': 'error', '#ef4444': 'error',
+      '#f59e0b': 'aviso', '#f97316': 'tertiary', '#fb923c': 'tertiary',
+      '#00e5ff': 'primary', '#38bdf8': 'informacion',
+    }[faceta.color] || 'secondary';
     return { ...faceta, color: colorDelTema(token) };
   }, [pensando, evaluacionCp, mateEn, terminada, resultado, cantidadJugadas, ultimoMovimiento, versionModelo, tema]);
 
@@ -400,7 +404,7 @@ export default function AvatarAgente3D({
         {/* SPINNER DE CARGA DEL MODELO GLTF (solo vista avatar) */}
         {vista === 'avatar' && cargandoModelo && !errorCarga && (
           <div className="absolute inset-0 bg-surface-container-lowest/90 backdrop-blur-sm flex flex-col items-center justify-center gap-2 z-20">
-            <div className="w-8 h-8 border-2 border-primary/20 border-t-[#00e5ff] rounded-full animate-spin" />
+            <div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
             <span className="font-mono text-[11px] text-primary tracking-wider animate-pulse">
               CARGANDO MODELO 3D ({progresoCarga}%)...
             </span>

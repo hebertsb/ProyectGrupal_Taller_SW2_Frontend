@@ -464,7 +464,7 @@ function MiniTableroPieza({ pieza }) {
           >
             {esCentro && <img src={rutaImagenPieza(pieza.letra)} alt="" className="w-6 h-6 drop-shadow" draggable="false" />}
             {esDestino && (
-              <span className="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_8px_rgba(195,245,255,0.9)]" aria-hidden="true" />
+              <span className="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_8px_color-mix(in_srgb,var(--color-primary-container)_90%,transparent)]" aria-hidden="true" />
             )}
           </div>
         );
@@ -599,7 +599,7 @@ function BannerPiezas({ piezas, claseTextoContenido, onCambiarPieza, pausaExtern
               <div
                 key={p.tipo}
                 className={`h-full rounded-full transition-all ${
-                  i <= indice ? 'bg-primary shadow-[0_0_6px_rgba(0,229,255,0.7)]' : 'bg-surface-container-highest'
+                  i <= indice ? 'bg-primary shadow-[0_0_6px_color-mix(in_srgb,var(--color-primary-container)_70%,transparent)]' : 'bg-surface-container-highest'
                 }`}
               />
             ))}
@@ -624,7 +624,7 @@ function BannerPiezas({ piezas, claseTextoContenido, onCambiarPieza, pausaExtern
             <div
               aria-hidden="true"
               className="absolute inset-0 opacity-15"
-              style={{ backgroundImage: 'radial-gradient(rgba(0,229,255,0.5) 1px, transparent 1px)', backgroundSize: '16px 16px' }}
+              style={{ backgroundImage: 'radial-gradient(color-mix(in srgb, var(--color-primary-container) 50%, transparent) 1px, transparent 1px)', backgroundSize: '16px 16px' }}
             />
             <div
               aria-hidden="true"
@@ -659,7 +659,7 @@ function BannerPiezas({ piezas, claseTextoContenido, onCambiarPieza, pausaExtern
                 aria-current={activa || undefined}
                 title={p.nombre}
                 className={`flex flex-col items-center gap-space-2xs py-space-xs rounded-lg transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
-                  activa ? 'bg-surface-container-high shadow-[0_0_16px_rgba(0,229,255,0.2)]' : 'bg-surface-container hover:bg-surface-container-high'
+                  activa ? 'bg-surface-container-high shadow-[0_0_16px_color-mix(in_srgb,var(--color-primary-container)_20%,transparent)]' : 'bg-surface-container hover:bg-surface-container-high'
                 }`}
               >
                 <img src={rutaImagenPieza(p.letra)} alt="" draggable="false" className="w-7 h-7 object-contain" />

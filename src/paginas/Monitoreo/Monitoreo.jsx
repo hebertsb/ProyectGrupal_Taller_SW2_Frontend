@@ -11,6 +11,7 @@ import {
 } from '../../api/backend';
 import { turnoDeFen } from '../../ajedrez';
 import { fechaDesdeIso } from '../../formatoTiempo';
+import { colorDelTema } from '../../apariencia';
 import TableroSoloLectura from '../../componentes/TableroSoloLectura';
 
 gsap.registerPlugin(useGSAP);
@@ -346,6 +347,7 @@ export default function Monitoreo() {
   // vez que se ve un `partida.id` no cuenta como "cambio" (recién se cargó).
   useGSAP(
     () => {
+      const colorAcento = gsap.utils.splitColor(colorDelTema('primary-container')).slice(0, 3).join(',');
       for (const partida of partidasPagina) {
         const fenPrevio = fensPreviosRef.current.get(partida.id);
         fensPreviosRef.current.set(partida.id, partida.fen);
@@ -354,9 +356,9 @@ export default function Monitoreo() {
         if (!nodo) continue;
         gsap.fromTo(
           nodo,
-          { boxShadow: '0 0 0px rgba(0,229,255,0)' },
+          { boxShadow: `0 0 0px rgba(${colorAcento},0)` },
           {
-            boxShadow: '0 0 20px rgba(0,229,255,0.55)',
+            boxShadow: `0 0 20px rgba(${colorAcento},0.55)`,
             duration: 0.25,
             ease: 'power2.out',
             yoyo: true,
