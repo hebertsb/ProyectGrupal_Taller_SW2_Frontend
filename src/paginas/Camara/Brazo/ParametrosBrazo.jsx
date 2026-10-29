@@ -101,6 +101,18 @@ export default function ParametrosBrazo({ emulador }) {
       return { ...v, margenes_por_pieza: margenes };
     });
   }
+  function cambiarGiro(letra, texto) {
+    if (letra === 'p') {
+      cambiar('giro_diagonal_grados', texto);
+      return;
+    }
+    setValores((v) => {
+      const giros = { ...v.giros_por_pieza };
+      if (texto === '') delete giros[letra];
+      else giros[letra] = Number(texto);
+      return { ...v, giros_por_pieza: giros };
+    });
+  }
 
   async function aplicar() {
     // El cementerio y las reservas se editan en «Llevar una pieza»: acá no se tocan (si no, se pisarían con los valores viejos de esta pantalla).
@@ -190,6 +202,26 @@ export default function ParametrosBrazo({ emulador }) {
               value={(letra === 'p' ? valores.margen_agarre_mm : valores.margenes_por_pieza?.[letra]) ?? ''}
               onChange={(e) => cambiarMargen(letra, e.target.value)}
               placeholder={String(valores.margen_agarre_mm ?? '')}
+            />
+          </label>
+        ))}
+      </div>
+      <p className="font-body-sm text-body-sm text-on-surface m-0">
+        Giro de los dedos al agarrar o soltar cada pieza (°, -180 a 180). El del peón es el mismo de «Giro de los dedos (°)», arriba. Si una pieza es irregular (por ejemplo la torre a 35° o el caballo), dale su propio ángulo acá para que la pinza baje con esa orientación.
+      </p>
+      <div className="grid grid-cols-2 sm:grid-cols-6 gap-space-xs">
+        {PIEZAS.map(([letra, etiqueta]) => (
+          <label key={letra} className="font-body-sm text-body-sm text-on-surface-variant flex flex-col gap-1">
+            {etiqueta}
+            <input
+              className={CAMPO}
+              type="number"
+              min="-180"
+              max="180"
+              step="1"
+              value={(letra === 'p' ? valores.giro_diagonal_grados : valores.giros_por_pieza?.[letra]) ?? ''}
+              onChange={(e) => cambiarGiro(letra, e.target.value)}
+              placeholder={String(valores.giro_diagonal_grados ?? '')}
             />
           </label>
         ))}

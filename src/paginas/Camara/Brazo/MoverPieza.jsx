@@ -14,6 +14,14 @@ const LUGARES_DE_PRACTICA = Array.from({ length: 32 }, (_, indice) => ({
   fila: Math.floor(indice / 8) + 1,
   posicion: (indice % 8) + 1,
 }));
+const ETIQUETAS_CEMENTERIO = [
+  'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8',
+  'C1', 'C2', 'A1', 'A2', 'T1', 'T2', 'D1', 'D2',
+];
+const NOMBRES_CEMENTERIO = {
+  0: 'Peón 1', 1: 'Peón 2', 2: 'Peón 3', 3: 'Peón 4', 4: 'Peón 5', 5: 'Peón 6', 6: 'Peón 7', 7: 'Peón 8',
+  8: 'Caballo 1', 9: 'Caballo 2', 10: 'Alfil 1', 11: 'Alfil 2', 12: 'Torre 1 (caja)', 13: 'Torre 2', 14: 'Dama 1 (caja)', 15: 'Dama 2',
+};
 const ACCIONES = [
   ['llevar', 'Llevar a una casilla vacía'],
   ['capturar', 'Capturar (come la pieza del destino)'],
@@ -43,7 +51,11 @@ export default function MoverPieza({ estado }) {
   const enCurso = tarea?.estado === 'ejecutando';
   const nombreLugarDePractica = (indice = casillaCem - 1) => {
     const lugar = LUGARES_DE_PRACTICA[indice];
-    return lugar ? `fila ${lugar.fila}, lugar ${lugar.posicion}` : 'lugar elegido';
+    if (!lugar) return 'lugar elegido';
+    const pieza = NOMBRES_CEMENTERIO[indice];
+    return pieza
+      ? `fila ${lugar.fila}, lugar ${lugar.posicion} · ${pieza}`
+      : `fila ${lugar.fila}, lugar ${lugar.posicion}`;
   };
 
   function elegir(casilla) {
@@ -71,6 +83,8 @@ export default function MoverPieza({ estado }) {
     if (nueva === 'cementerio') {
       setDestino('');
       setModo(origen ? null : 'origen');
+      const slots = { p: 1, n: 9, b: 11, r: 13, q: 15, k: 1 };
+      setCasillaCem(slots[tipoPieza] || 1);
     } else {
       setModo(origen && !destino ? 'destino' : origen ? null : 'origen');
     }
@@ -195,7 +209,15 @@ export default function MoverPieza({ estado }) {
       <div className="flex flex-wrap items-end gap-space-xs">
         <label className="font-body-sm text-body-sm text-on-surface-variant flex flex-col gap-1">
           Pieza que se mueve
-          <select className={CLASE_CAMPO} value={tipoPieza} disabled={enCurso} onChange={(e) => { setPasos(null); setTipoPieza(e.target.value); }}>
+          <select className={CLASE_CAMPO} value={tipoPieza} disabled={enCurso} onChange={(e) => {
+              const nueva = e.target.value;
+              setPasos(null);
+              setTipoPieza(nueva);
+              if (accion === 'cementerio') {
+                const slots = { p: 1, n: 9, b: 11, r: 13, q: 15, k: 1 };
+                setCasillaCem(slots[nueva] || 1);
+              }
+            }}>
             {PIEZAS.map(([id, texto]) => (
               <option key={id} value={id}>
                 {texto}
@@ -238,14 +260,14 @@ export default function MoverPieza({ estado }) {
                   <button
                     key={lugar.indice}
                     type="button"
-                    className={`aspect-square rounded border text-mono-micro ${seleccionado ? 'bg-primary text-on-primary border-primary ring-2 ring-primary' : 'bg-surface-container border-outline-variant text-on-surface-variant'}`}
+                    className={`aspect-square rounded border text-mono-micro ${seleccionado ? 'bg-primary text-on-primary border-primary ring-2 ring-primary font-bold' : 'bg-surface-container border-outline-variant text-on-surface-variant'}`}
                     aria-pressed={seleccionado}
-                    aria-label={`Fila ${lugar.fila}, lugar ${lugar.posicion}`}
-                    title={`Fila ${lugar.fila}, lugar ${lugar.posicion}`}
+                    aria-label={`Fila ${lugar.fila}, lugar ${lugar.posicion}${NOMBRES_CEMENTERIO[lugar.indice] ? ` (${NOMBRES_CEMENTERIO[lugar.indice]})` : ''}`}
+                    title={`Fila ${lugar.fila}, lugar ${lugar.posicion}${NOMBRES_CEMENTERIO[lugar.indice] ? ` (${NOMBRES_CEMENTERIO[lugar.indice]})` : ''}`}
                     disabled={enCurso}
                     onClick={() => { setPasos(null); setCasillaCem(lugar.indice + 1); }}
                   >
-                    {lugar.posicion}
+                    {ETIQUETAS_CEMENTERIO[lugar.indice] || lugar.posicion}
                   </button>
                 );
               })}
