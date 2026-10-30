@@ -314,7 +314,7 @@ body { margin: 0; background: var(--color-background); color: var(--color-on-bac
 /* Hoja imprimible (informe de progreso de un alumno, `paginas/Progreso/InformeAlumno.jsx`): al imprimir o guardar como PDF queda solo
    el informe, en papel blanco y letra oscura, sin botones ni barras de desplazamiento. */
 @media print {
-  body > *:not(#informe-impreso) {
+  body > *:not(#informe-impreso):not(#reporte-impreso) {
     display: none !important;
   }
   body {
@@ -360,5 +360,31 @@ body { margin: 0; background: var(--color-background); color: var(--color-on-bac
   #informe-impreso .hoja-informe * {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+}
+
+/* Hoja imprimible del reporte de curso (`paginas/Administracion/ReporteCurso.jsx`): no es un modal en
+   pantalla (queda con `display: none`), solo existe para esto. Tabla simple en blanco y negro. */
+@media print {
+  #reporte-impreso {
+    display: block !important;
+    position: static !important;
+    background: #fff !important;
+    color: #111827;
+    padding: 0;
+  }
+  #reporte-impreso table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  #reporte-impreso th,
+  #reporte-impreso td {
+    border: 1px solid #9ca3af;
+    padding: 4px 8px;
+    text-align: left;
+    font-size: 12px;
+  }
+  #reporte-impreso tr {
+    break-inside: avoid;
   }
 }

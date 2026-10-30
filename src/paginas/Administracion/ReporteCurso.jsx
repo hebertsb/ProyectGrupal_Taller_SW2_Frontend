@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { obtenerProgresoCurso, obtenerReporteCurso } from '../../api/backend';
 import { InsigniaProvisional, InsigniaRango } from '../../componentes/InsigniaNivel';
 import { textoUltimaActividad } from '../../formatoTiempo';
@@ -64,6 +65,43 @@ function describirVariacion(variacion) {
 
 function textoPrecisionAlumno(alumno) {
   return alumno.precision != null ? `${Math.round(alumno.precision)} %` : '—';
+}
+
+/* ---------- Exportar CSV (sin librería: arma el texto y lo descarga) ---------- */
+
+/** Una celda de CSV: la envuelve en comillas solo si lo necesita (coma, comillas o salto de línea). */
+function celdaCsv(valor) {
+  const texto = valor == null ? '' : String(valor);
+  if (/[",\n]/.test(texto)) return `"${texto.replace(/"/g, '""')}"`;
+  return texto;
+}
+
+/** Dispara la descarga de un archivo de texto en el navegador (CSV); se limpia solo tras el click. */
+function descargarArchivo(nombreArchivo, contenido, tipoMime) {
+  const enlace = document.createElement('a');
+  enlace.href = URL.createObjectURL(new Blob([contenido], { type: tipoMime }));
+  enlace.download = nombreArchivo;
+  enlace.click();
+  URL.revokeObjectURL(enlace.href);
+}
+
+/** CSV del ranking del curso: una fila por alumno, con BOM para que Excel en español lea bien las tildes. */
+function exportarAlumnosCsv(nombreCurso, alumnos) {
+  const encabezado = ['Puesto', 'Alumno', 'Nivel', 'Rango', 'Precisión (%)', 'Partidas', 'Partidas (7 días)', 'Última partida', 'Cuenta activa'];
+  const filas = alumnos.map((alumno) => [
+    alumno.puesto ?? '',
+    alumno.nombre,
+    alumno.nivel ?? '',
+    alumno.rango ?? '',
+    alumno.precision != null ? Math.round(alumno.precision) : '',
+    alumno.partidas,
+    alumno.partidas_7_dias,
+    alumno.ultima_partida ?? '',
+    alumno.activo ? 'Sí' : 'No',
+  ]);
+  const csv = [encabezado, ...filas].map((fila) => fila.map(celdaCsv).join(',')).join('\n');
+  const fecha = new Date().toISOString().slice(0, 10);
+  descargarArchivo(`reporte-${nombreCurso || 'curso'}-${fecha}.csv`, `﻿${csv}`, 'text/csv;charset=utf-8');
 }
 
 /* ---------- Piezas chicas ---------- */
@@ -280,6 +318,60 @@ function AlumnosComoTabla({ alumnos }) {
 }
 
 /**
+ * Hoja para imprimir o guardar como PDF (`window.print()`): no es un modal, no se ve en pantalla — solo
+ * existe para esto, por eso se monta siempre que hay reporte y queda oculta con `hidden` (ver `index.css`,
+ * la regla de `#reporte-impreso` la muestra solo durante la impresión). Va por portal a `document.body`
+ * para que la regla global de impresión (que oculta todo lo que no sea la hoja) la deje visible.
+ */
+function ReporteImpreso({ nombreCurso, resumen, alumnos, totalAlumnos }) {
+  return createPortal(
+    <div id="reporte-impreso" className="hidden">
+      <h1>Reporte del curso {nombreCurso}</h1>
+      <p>Generado el {new Date().toLocaleDateString('es-BO', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+      <ul>
+        <li>Alumnos activos (7 días): {textoActivos(resumen, totalAlumnos)}</li>
+        <li>Partidas por alumno (7 días): {numeroConUnDecimal(resumen.partidas_por_alumno_semana)}</li>
+        <li>Precisión primera semana → última: {textoPrecisionSemanas(resumen)}</li>
+        <li>Partidas en 7 días (todo el curso): {resumen.partidas_7_dias ?? 0}</li>
+      </ul>
+      <table>
+        <thead>
+          <tr>
+            <th>Puesto</th>
+            <th>Alumno</th>
+            <th>Nivel</th>
+            <th>Precisión</th>
+            <th>Partidas</th>
+            <th>En 7 días</th>
+            <th>Última partida</th>
+          </tr>
+        </thead>
+        <tbody>
+          {alumnos.map((alumno) => (
+            <tr key={alumno.id}>
+              <td>{alumno.puesto ?? '—'}</td>
+              <td>
+                {alumno.nombre}
+                {!alumno.activo ? ' (inactivo)' : ''}
+              </td>
+              <td>
+                {alumno.nivel ?? '—'}
+                {alumno.rango ? ` (${alumno.rango})` : ''}
+              </td>
+              <td>{textoPrecisionAlumno(alumno)}</td>
+              <td>{alumno.partidas}</td>
+              <td>{alumno.partidas_7_dias}</td>
+              <td>{textoUltimaActividad(alumno.ultima_partida)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>,
+    document.body,
+  );
+}
+
+/**
  * Reporte de un curso para su facilitador: los tres indicadores de la prueba piloto (participación, práctica y
  * aprendizaje) y una fila por alumno. Se monta recién al desplegarlo, así que pide el reporte al abrirse; después
  * solo se actualiza con el botón (sin sondeo). Las dos vistas de alumnos (tarjetas y tabla) dependen del ancho del
@@ -330,15 +422,37 @@ export default function ReporteCurso({ cursoId }) {
             Últimos 7 días{horaActualizado ? ` · actualizado a las ${horaActualizado}` : ''}
           </span>
         </div>
-        <button type="button" onClick={() => setRecarga((n) => n + 1)} disabled={cargando} className={BOTON_ACTUALIZAR}>
-          <span
-            className={`material-symbols-outlined text-[16px] text-primary ${cargando ? 'animate-spin motion-reduce:animate-none' : ''}`}
-            aria-hidden="true"
-          >
-            refresh
-          </span>
-          {cargando && reporte ? 'Actualizando…' : 'Actualizar'}
-        </button>
+        <div className="flex flex-wrap items-center gap-space-xs">
+          {resumen && alumnos.length > 0 && (
+            <>
+              <button
+                type="button"
+                onClick={() => exportarAlumnosCsv(reporte?.curso?.nombre, alumnos)}
+                className={BOTON_ACTUALIZAR}
+              >
+                <span className="material-symbols-outlined text-[16px] text-primary" aria-hidden="true">
+                  download
+                </span>
+                Exportar CSV
+              </button>
+              <button type="button" onClick={() => window.print()} className={BOTON_ACTUALIZAR}>
+                <span className="material-symbols-outlined text-[16px] text-primary" aria-hidden="true">
+                  print
+                </span>
+                Imprimir o guardar PDF
+              </button>
+            </>
+          )}
+          <button type="button" onClick={() => setRecarga((n) => n + 1)} disabled={cargando} className={BOTON_ACTUALIZAR}>
+            <span
+              className={`material-symbols-outlined text-[16px] text-primary ${cargando ? 'animate-spin motion-reduce:animate-none' : ''}`}
+              aria-hidden="true"
+            >
+              refresh
+            </span>
+            {cargando && reporte ? 'Actualizando…' : 'Actualizar'}
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -366,6 +480,7 @@ export default function ReporteCurso({ cursoId }) {
 
       {reporte && resumen && alumnos.length > 0 && (
         <div aria-busy={cargando} className="flex flex-col gap-space-sm min-w-0">
+          <ReporteImpreso nombreCurso={reporte?.curso?.nombre} resumen={resumen} alumnos={alumnos} totalAlumnos={totalAlumnos} />
           <div className="grid grid-cols-1 @md:grid-cols-2 gap-space-xs">
             <Indicador icono="groups" titulo="Alumnos activos (7 días)" valor={textoActivos(resumen, totalAlumnos)}>
               Jugaron al menos una partida en la semana
