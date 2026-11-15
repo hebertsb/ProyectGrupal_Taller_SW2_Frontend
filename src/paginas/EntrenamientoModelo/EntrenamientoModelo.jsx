@@ -376,16 +376,14 @@ export default function EntrenamientoModelo({ estadoCompartido = null, alActuali
             <h2 className="font-headline-sm text-headline-sm text-on-surface">¿Cómo se entrena el modelo?</h2>
 
             <ol className="flex flex-col gap-space-sm">
-              <PasoEntrenamiento numero={1} titulo="Descarga el archivo" enDesarrollo={false}>
-                Cuando arriba diga <strong className="text-on-surface">&ldquo;Listo para entrenar&rdquo;</strong>, descarga el
-                archivo con el botón de esta pantalla.
+              <PasoEntrenamiento numero={1} titulo="Descarga del dataset anonimizado (PGN + CSV)" etiqueta="Descarga lista">
+                Cuando el estado indique <strong className="text-on-surface">&ldquo;Listo para entrenar&rdquo;</strong>, podés descargar el paquete comprimido de partidas filtradas y anonimizadas directamente desde esta pantalla.
               </PasoEntrenamiento>
-              <PasoEntrenamiento numero={2} titulo="Entrégaselo al equipo técnico" enDesarrollo>
-                El equipo técnico usa ese archivo para reentrenar a Turing en un lote controlado, fuera de una partida en
-                curso.
+              <PasoEntrenamiento numero={2} titulo="Reentrenamiento offline por lotes (Google Colab / PyTorch)" etiqueta="Offline / GPU">
+                El equipo técnico entrena el checkpoint con <code className="text-primary font-mono text-[11px]">colab_entrenamiento_v6_maestria.ipynb</code> o scripts locales fuera de línea, evitando cualquier deriva o contaminación del modelo durante una partida (Regla 2).
               </PasoEntrenamiento>
-              <PasoEntrenamiento numero={3} titulo="Se compara y se activa solo si mejora" enDesarrollo>
-                La nueva versión se compara con la actual y solo reemplaza al modelo en uso si mejora.
+              <PasoEntrenamiento numero={3} titulo="Auditoría científica y promoción de checkpoint (§10)" etiqueta="Protocolo §10">
+                La nueva versión se audita frente al oráculo Stockfish (<code className="text-primary font-mono text-[11px]">evaluar_modelo.py</code> y <code className="text-primary font-mono text-[11px]">enfrentar_modelos.py</code>) y solo se promueve a producción si garantiza 100% de legalidad y reduce la tasa de errores graves.
               </PasoEntrenamiento>
             </ol>
 
@@ -410,7 +408,7 @@ export default function EntrenamientoModelo({ estadoCompartido = null, alActuali
   );
 }
 
-function PasoEntrenamiento({ numero, titulo, enDesarrollo, children }) {
+function PasoEntrenamiento({ numero, titulo, etiqueta, children }) {
   return (
     <li className="flex items-start gap-space-sm">
       <span className="w-7 h-7 shrink-0 rounded-full bg-primary/15 text-primary flex items-center justify-center font-mono-label text-mono-label font-bold">
@@ -419,12 +417,12 @@ function PasoEntrenamiento({ numero, titulo, enDesarrollo, children }) {
       <div className="flex flex-col gap-space-2xs min-w-0">
         <div className="flex items-center gap-space-xs flex-wrap">
           <span className="font-body-sm text-body-sm font-medium text-on-surface">{titulo}</span>
-          {enDesarrollo && (
-            <span className="inline-flex items-center gap-1 px-space-xs py-space-2xs rounded-full bg-surface-container-high text-on-surface-variant font-mono-micro text-[10px] uppercase tracking-wide">
+          {etiqueta && (
+            <span className="inline-flex items-center gap-1 px-space-xs py-space-2xs rounded-full bg-primary/10 text-primary border border-primary/20 font-mono-micro text-[10px] uppercase tracking-wide">
               <span className="material-symbols-outlined text-[12px]" aria-hidden="true">
-                construction
+                verified
               </span>
-              En desarrollo (HU4)
+              {etiqueta}
             </span>
           )}
         </div>

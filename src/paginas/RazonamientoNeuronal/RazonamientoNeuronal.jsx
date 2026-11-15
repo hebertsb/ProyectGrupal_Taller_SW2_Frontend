@@ -7,6 +7,7 @@ import CerebroNeuronal from './CerebroNeuronal';
 import CerebroRed from './CerebroRed';
 import AnalisisRedPartida from './AnalisisRedPartida';
 import PanelCalculoTuring from './PanelCalculoTuring';
+import ModalFundamentosRazonamiento from './ModalFundamentosRazonamiento';
 
 // Las tres posiciones quedan con NEGRAS a mover a propósito: en Sala de Control el jugador
 // siempre abre con blancas, así que Turing (cuando es el rival) solo le toca responder con
@@ -174,6 +175,7 @@ export default function RazonamientoNeuronal() {
   // Selector de vista del "Mapa de Activación Neuronal" — dos lentes sobre el mismo dato
   // real (mismas props a ambas), 'organico' (partículas) es el default histórico.
   const [vistaCerebro, setVistaCerebro] = useState('organico');
+  const [mostrarFundamentos, setMostrarFundamentos] = useState(false);
 
   const analizandoPrevRef = useRef(false);
 
@@ -448,15 +450,33 @@ export default function RazonamientoNeuronal() {
           vivía metida como un ícono chico dentro de la fila de KPIs y solo aparecía en
           algunas combinaciones de estado; ahora es un botón propio, con texto, en el
           encabezado de la pantalla. */}
-      <button
-        type="button"
-        onClick={cambiarPartida}
-        title="Ver la partida de un estudiante"
-        className="self-start flex items-center gap-1.5 min-h-10 px-3 py-1.5 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface border border-outline-variant/40 font-mono-micro text-[11px] uppercase tracking-wider transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-      >
-        <span className="material-symbols-outlined text-[16px] text-neon-cyan">group</span>
-        Ver partida de un estudiante
-      </button>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={cambiarPartida}
+            title="Ver la partida de un estudiante"
+            className="flex items-center gap-1.5 min-h-10 px-3 py-1.5 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface border border-outline-variant/40 font-mono-micro text-[11px] uppercase tracking-wider transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+          >
+            <span className="material-symbols-outlined text-[16px] text-neon-cyan">group</span>
+            Ver partida de un estudiante
+          </button>
+          <button
+            type="button"
+            onClick={() => setMostrarFundamentos(true)}
+            title="Consultar los fundamentos teóricos y matemáticos del modelo"
+            className="flex items-center gap-1.5 min-h-10 px-3 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 font-mono-micro text-[11px] uppercase tracking-wider transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+          >
+            <span className="material-symbols-outlined text-[16px]">school</span>
+            Fundamentos Científicos (§2, §3, §9, §12)
+          </button>
+        </div>
+      </div>
+
+      <ModalFundamentosRazonamiento
+        abierto={mostrarFundamentos}
+        alCerrar={() => setMostrarFundamentos(false)}
+      />
 
       {error && (
         <div className="px-space-md py-space-xs rounded-lg bg-error-container text-on-error-container font-body-sm text-body-sm animate-in slide-in-from-top-2 duration-300">
