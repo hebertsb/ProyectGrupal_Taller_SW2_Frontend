@@ -1077,6 +1077,7 @@ export default function PanelAprendizaje({
                 usuarioId={usuario?.id}
                 rango={usuario?.rango_estimado ?? null}
                 piezasVistas={piezasVistas}
+                videosPorPieza={videosPorPieza}
                 alIrASeccion={manejarClickSeccionSidebar}
                 alIrASalaControl={alIrASalaControl}
                 claseTextoContenido={claseTextoContenido}
