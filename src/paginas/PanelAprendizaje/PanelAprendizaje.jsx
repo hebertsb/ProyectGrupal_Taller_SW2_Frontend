@@ -802,10 +802,10 @@ export default function PanelAprendizaje({
   const { narrar, detener, narrando, disponible: vozDisponible } = useNarracion();
 
   const rango = usuario?.rango_estimado || 'Intermedio';
-  // El camino de capítulos es para quien está aprendiendo las bases: principiantes
-  // y quienes todavía no se midieron. Intermedio y avanzado ven su análisis de partida.
-  const muestraCamino = !usuario?.rango_estimado || usuario.rango_estimado === 'Principiante';
-  const seccionesVisibles = muestraCamino ? SECCIONES : SECCIONES.filter((s) => s.id !== 'camino');
+  // El camino de aprendizaje es adaptativo y está disponible para todos los niveles:
+  // principiantes (Paso 1 FIDE), intermedios (Pasos 2-3) y avanzados (Paso 4+ maestría).
+  const muestraCamino = true;
+  const seccionesVisibles = SECCIONES;
   const nombreCorto = usuario?.nombre?.trim().split(/\s+/)[0] || 'jugador';
   // Escalón de tamaño de fuente para el contenido de texto de las secciones
   // (repaso, resumen, descripciones de piezas) — no toca badges ni etiquetas

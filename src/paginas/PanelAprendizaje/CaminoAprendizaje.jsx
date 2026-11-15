@@ -3,65 +3,183 @@ import { animate, motion, useReducedMotion } from 'motion/react';
 import { historialPartidasPropio, obtenerPartida } from '../../api/backend';
 import { rutaImagenPieza } from '../../ajedrez';
 
-/** Cuántas partidas recientes se revisan para los capítulos de captura y jaque. */
+/** Cuántas partidas recientes se revisan para los capítulos basados en historial. */
 const PARTIDAS_A_REVISAR = 20;
-/** Cuántas partidas se piden juntas al buscar la captura y el jaque (de la más reciente a la más vieja). */
+/** Cuántas partidas se piden juntas al buscar jugadas (de la más reciente a la más vieja). */
 const LOTE_DE_PARTIDAS = 4;
 
 /**
- * Capítulos del camino para jugadores principiantes. Los de tablero, piezas,
- * captura y jaque se completan con datos reales de las partidas o del panel;
- * los de posición y movimientos los marca el propio jugador (sin datos inventados).
- * `pieza` es la letra FEN de la pieza que representa el capítulo; `icono`, el de
- * Material Symbols cuando no hay pieza que lo represente.
+ * Etapas del Camino de Aprendizaje basadas en la metodología pedagógica
+ * de la FIDE (Stappenmethode de Brunia & Van Wijgerden) y Práctica Deliberada de Ericsson.
+ *
+ * Cada etapa corresponde a una franja de desarrollo ajedrecístico:
+ * - Principiante: Paso 1 (Reglas, tablero, movimientos, capturas y jaque).
+ * - Intermedio: Pasos 2 y 3 (Aperturas clásicas, defensas asimétricas, táctica y auditoría de blunders).
+ * - Avanzado: Paso 4+ (Estructuras de peones, finales teóricos, sparring con Turing ~1808 Elo y torneos).
  */
-const CAPITULOS = [
-  {
-    id: 'tablero',
-    titulo: 'El tablero',
-    descripcion: 'Cómo está armado el tablero. Se completa al jugar tu primera partida.',
-    accion: 'sala',
-    icono: 'grid_view',
+export const ETAPAS_APRENDIZAJE = {
+  principiante: {
+    id: 'principiante',
+    nombre: 'Paso 1 · Fundamentos',
+    nivelRecomendado: 'Principiante',
+    icono: 'school',
+    lema: 'Reglas esenciales, tablero y movimientos básicos (Stappenmethode)',
+    capitulos: [
+      {
+        id: 'tablero',
+        titulo: 'El tablero y coordenadas',
+        descripcion: 'Comprender la cuadrícula de 64 casillas, columnas (a-h) y filas (1-8). Se completa al jugar tu primera partida.',
+        accion: 'sala',
+        icono: 'grid_view',
+      },
+      {
+        id: 'piezas',
+        titulo: 'Las 6 piezas del ajedrez',
+        descripcion: 'Conocé el valor y la función de cada pieza. Se completa al revisarlas en "Aprendé cada pieza".',
+        accion: 'piezas',
+        pieza: 'Q',
+      },
+      {
+        id: 'posicion',
+        titulo: 'Posición inicial del combate',
+        descripcion: 'Ubicación reglamentaria de las 32 piezas en el tablero antes de la batalla. Marcala como vista cuando la domines.',
+        marcable: true,
+        pieza: 'R',
+      },
+      {
+        id: 'movimientos',
+        titulo: 'Movimiento de las piezas',
+        descripcion: 'Patrones de desplazamiento de peón, caballo, alfil, torre, dama y rey. Marcala como vista cuando la practiques.',
+        marcable: true,
+        pieza: 'N',
+      },
+      {
+        id: 'enroque',
+        titulo: 'Enroque corto y largo',
+        descripcion: 'La maniobra especial para poner a salvo al rey y activar la torre en un solo turno. Marcala o realizala en una partida.',
+        marcable: true,
+        accion: 'sala',
+        pieza: 'K',
+      },
+      {
+        id: 'captura',
+        titulo: 'Captura y peón al paso',
+        descripcion: 'Mecánica de captura tradicional y la regla histórica del "en passant". Se completa al realizar una captura en partida.',
+        accion: 'sala',
+        pieza: 'P',
+      },
+      {
+        id: 'jaque',
+        titulo: 'Jaque, jaque mate y tablas',
+        descripcion: 'Cómo amenazar al rey rival, defenderse del jaque y rematar la partida con mate. Se completa al dar jaque o mate.',
+        accion: 'sala',
+        pieza: 'K',
+      },
+    ],
   },
-  {
-    id: 'piezas',
-    titulo: 'Las piezas',
-    descripcion: 'Conocé las 6 piezas y cómo se mueve cada una. Se completa al revisarlas todas en "Aprendé cada pieza".',
-    accion: 'piezas',
-    pieza: 'Q',
+  intermedio: {
+    id: 'intermedio',
+    nombre: 'Pasos 2-3 · Aperturas y Táctica',
+    nivelRecomendado: 'Intermedio',
+    icono: 'psychology',
+    lema: 'Principios de apertura, defensas activas, combinaciones tácticas y práctica deliberada',
+    capitulos: [
+      {
+        id: 'mandamientos_apertura',
+        titulo: 'Los 3 principios de apertura',
+        descripcion: 'Controlar el centro (d4/e4/d5/e5), desarrollar caballos y alfiles activamente, y proteger al rey en las primeras 10 jugadas.',
+        marcable: true,
+        icono: 'flag',
+      },
+      {
+        id: 'aperturas_clasicas',
+        titulo: 'Apertura Italiana y Española',
+        descripcion: 'Sistemas abiertos con 1.e4 e5: rápido desarrollo del alfil para presionar el punto f7 o clavar el caballo defensor.',
+        marcable: true,
+        pieza: 'B',
+      },
+      {
+        id: 'defensas_activas',
+        titulo: 'Defensa Siciliana (1.e4 c5)',
+        descripcion: 'La respuesta asimétrica y combativa más popular contra el peón de rey para disputar la iniciativa desde la jugada 1.',
+        marcable: true,
+        pieza: 'N',
+      },
+      {
+        id: 'gambito_dama',
+        titulo: 'Juego cerrado: Gambito de Dama',
+        descripcion: 'Batalla posicional tras 1.d4 d5 2.c4: lucha estratégica por el dominio central, estructuras sólidas y cadenas de peones.',
+        marcable: true,
+        pieza: 'Q',
+      },
+      {
+        id: 'tactica_doble',
+        titulo: 'Táctica: Ataque doble y horquilla',
+        descripcion: 'El recurso táctico más letal: una sola pieza amenaza dos objetivos simultáneamente, ganando material decisivo.',
+        marcable: true,
+        pieza: 'N',
+      },
+      {
+        id: 'tactica_clavada',
+        titulo: 'Táctica: Clavada y enfilada',
+        descripcion: 'Inmovilizar una pieza enemiga porque detrás se encuentra el rey o una pieza de mayor valor que caería indefensa.',
+        marcable: true,
+        pieza: 'B',
+      },
+      {
+        id: 'erradicar_blunders',
+        titulo: 'Auditoría de colgadas (Blunders)',
+        descripcion: 'Práctica deliberada: usar la retroalimentación de Turing para erradicar piezas colgadas e imprecisiones tácticas graves.',
+        accion: 'repaso',
+        icono: 'verified_user',
+      },
+    ],
   },
-  {
-    id: 'posicion',
-    titulo: 'Posición inicial',
-    descripcion: 'Dónde empieza cada pieza en el tablero. Marcala como vista cuando la termines.',
-    marcable: true,
-    pieza: 'R',
+  avanzado: {
+    id: 'avanzado',
+    nombre: 'Paso 4+ · Estrategia y Maestría',
+    nivelRecomendado: 'Avanzado',
+    icono: 'military_tech',
+    lema: 'Estructuras de peones, finales teóricos, sparring con Turing (~1808 Elo) y ranking',
+    capitulos: [
+      {
+        id: 'estructuras_peones',
+        titulo: 'Estructuras e islas de peones',
+        descripcion: 'Comprender debilidades a largo plazo: peones doblados, peones aislados, mayorías en el flanco y peones pasados candidatos.',
+        marcable: true,
+        pieza: 'P',
+      },
+      {
+        id: 'finales_torre',
+        titulo: 'Finales teóricos de torre y peón',
+        descripcion: 'Dominio de las posiciones clave de finales: la técnica de construcción del puente de Lucena y la defensa activa de Filidor.',
+        marcable: true,
+        pieza: 'R',
+      },
+      {
+        id: 'sparring_turing',
+        titulo: 'Sparring contra Turing (~1808 Elo)',
+        descripcion: 'Partidas de alta exigencia contra la red neuronal profunda SE-ResNet-8 con búsqueda táctica de 2-3 plies.',
+        accion: 'sala',
+        icono: 'neurology',
+      },
+      {
+        id: 'analisis_centipeones',
+        titulo: 'Evaluación de centipeones y precisión',
+        descripcion: 'Auditar la pérdida promedio de centipeones (ACPL) en cada partida para afinar la toma de decisiones milimétrica.',
+        accion: 'repaso',
+        icono: 'analytics',
+      },
+      {
+        id: 'maestria_torneos',
+        titulo: 'Torneos y consolidación de Elo',
+        descripcion: 'Competir en el ranking global, sostener rachas ganadoras y consolidar tu maestría ajedrecística.',
+        accion: 'ranking',
+        icono: 'trophy',
+      },
+    ],
   },
-  {
-    id: 'movimientos',
-    titulo: 'Movimiento de las piezas',
-    descripcion: 'Cómo se mueve cada pieza en su turno. Marcala como vista cuando la termines.',
-    marcable: true,
-    pieza: 'N',
-  },
-  {
-    id: 'captura',
-    titulo: 'Captura de piezas',
-    descripcion: 'Cuándo una pieza captura a otra. Se completa cuando hacés una captura en una de tus partidas.',
-    accion: 'sala',
-    pieza: 'B',
-  },
-  {
-    id: 'jaque',
-    titulo: 'Jaque y jaque mate',
-    descripcion: 'Cómo dar jaque y jaque mate. Se completa cuando das jaque o mate en una de tus partidas.',
-    accion: 'sala',
-    pieza: 'K',
-  },
-];
-
-/** Capítulos previstos que todavía no tienen contenido: se muestran sin progreso. */
-const PROXIMOS = ['Estrategias básicas', 'Puzzles y práctica'];
+};
 
 /** En pantallas anchas el camino zigzaguea entre estas posiciones (en % del ancho). */
 const POSICIONES_ZIGZAG = [30, 70];
@@ -108,6 +226,10 @@ function hizoCaptura(jugadasSan) {
 
 function dioJaque(jugadasSan) {
   return jugadasDelJugador(jugadasSan).some((san) => san.includes('+') || san.includes('#'));
+}
+
+function hizoEnroque(jugadasSan) {
+  return jugadasDelJugador(jugadasSan).some((san) => san.includes('O-O') || san.includes('0-0'));
 }
 
 /** Días seguidos con al menos una partida, contando hoy (o ayer, si hoy todavía no jugó). */
@@ -174,7 +296,7 @@ function AnilloProgreso({ porcentaje, reducir }) {
   );
 }
 
-/** Nodo del camino: estrella dorada si está listo (con halo que respira), pieza con anillo si es el paso actual, candado si falta. */
+/** Nodo del camino: estrella dorada si está listo, pieza con anillo si es el paso actual, candado si falta. */
 function Nodo({ estado, pieza, icono, reducir, indice = 0 }) {
   if (estado === 'completado') {
     return (
@@ -228,7 +350,7 @@ function Nodo({ estado, pieza, icono, reducir, indice = 0 }) {
               transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
             />
           ) : (
-            <span className="material-symbols-outlined text-[30px]">{icono}</span>
+            <span className="material-symbols-outlined text-[30px]">{icono ?? 'school'}</span>
           )}
         </div>
       </div>
@@ -248,52 +370,50 @@ function Nodo({ estado, pieza, icono, reducir, indice = 0 }) {
 
 /** Trazo de una línea entre dos nodos: se dibuja al entrar, el activo fluye y el completado tiene una luz que viaja. */
 function TrazoConector({ d, estadoOrigen, estadoDestino, indice, reducir }) {
+  const idBase = useId();
   const hecho = estadoOrigen === 'completado' && estadoDestino === 'completado';
   const activo = estadoOrigen === 'completado' && estadoDestino === 'en_curso';
-  const color = hecho ? 'var(--color-tertiary)' : activo ? 'var(--color-primary)' : 'var(--color-outline)';
 
-  // La línea se revela de arriba hacia abajo con un recorte, así se ve que avanza sin tocar el patrón de dash.
-  const idRecorte = useId();
+  const color = hecho
+    ? 'var(--color-tertiary)'
+    : activo
+      ? 'var(--color-primary-container)'
+      : 'var(--color-outline-variant)';
+
+  const idRecorte = `${idBase}-recorte-camino`;
 
   return (
-    <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+    <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full overflow-visible" aria-hidden="true">
       <defs>
-        <clipPath id={idRecorte}>
-          <motion.rect
-            x="-5"
-            y="-5"
-            width="110"
-            initial={{ height: reducir ? 110 : 0 }}
-            animate={{ height: 110 }}
-            transition={{ duration: 0.9, delay: 0.2 + indice * 0.12, ease: 'easeInOut' }}
-          />
+        <clipPath id={idRecorte} clipPathUnits="userSpaceOnUse">
+          <rect x="-200" y="32" width="500" height="36" />
         </clipPath>
       </defs>
       <g clipPath={`url(#${idRecorte})`}>
-      <motion.path
-        d={d}
-        fill="none"
-        stroke={color}
-        strokeWidth={hecho || activo ? 5 : 4}
-        strokeLinecap="round"
-        strokeDasharray={hecho ? undefined : '6 8'}
-        vectorEffect="non-scaling-stroke"
-        animate={{ strokeDashoffset: activo && !reducir ? [0, -28] : 0 }}
-        transition={{ strokeDashoffset: { duration: 1.2, repeat: Infinity, ease: 'linear' } }}
-      />
-      {hecho && !reducir && (
         <motion.path
           d={d}
           fill="none"
-          stroke="var(--color-primary)"
-          strokeWidth={2}
+          stroke={color}
+          strokeWidth={hecho || activo ? 5 : 4}
           strokeLinecap="round"
-          strokeDasharray="4 60"
+          strokeDasharray={hecho ? undefined : '6 8'}
           vectorEffect="non-scaling-stroke"
-          animate={{ strokeDashoffset: [0, -64] }}
-          transition={{ duration: 1.8, repeat: Infinity, ease: 'linear', delay: indice * 0.25 }}
+          animate={{ strokeDashoffset: activo && !reducir ? [0, -28] : 0 }}
+          transition={{ strokeDashoffset: { duration: 1.2, repeat: Infinity, ease: 'linear' } }}
         />
-      )}
+        {hecho && !reducir && (
+          <motion.path
+            d={d}
+            fill="none"
+            stroke="var(--color-primary)"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeDasharray="4 60"
+            vectorEffect="non-scaling-stroke"
+            animate={{ strokeDashoffset: [0, -64] }}
+            transition={{ duration: 1.8, repeat: Infinity, ease: 'linear', delay: indice * 0.25 }}
+          />
+        )}
       </g>
     </svg>
   );
@@ -328,10 +448,17 @@ function Conector({ xDesde, xHasta, estadoOrigen, estadoDestino, indice, reducir
   );
 }
 
-/** Tarjeta del paso actual: va arriba del camino para que las líneas no la crucen. */
-function TarjetaPasoActual({ capitulo, claseTextoContenido, alMarcarVisto, alIrASeccion, alIrASalaControl, reducir }) {
+/** Tarjeta del paso actual: va arriba del camino para guiar al estudiante en su siguiente acción. */
+function TarjetaPasoActual({
+  capitulo,
+  claseTextoContenido,
+  alMarcarVisto,
+  alIrASeccion,
+  alIrASalaControl,
+  reducir,
+}) {
   const claseBoton =
-    'px-space-md py-space-xs rounded-full bg-primary-container text-on-primary font-body-sm text-body-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
+    'px-space-md py-space-xs rounded-full bg-primary-container text-on-primary font-body-sm text-body-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary transition-all hover:brightness-110';
 
   return (
     <motion.section
@@ -339,13 +466,16 @@ function TarjetaPasoActual({ capitulo, claseTextoContenido, alMarcarVisto, alIrA
       initial={reducir ? false : { opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.25, duration: 0.4 }}
-      className="p-space-md rounded-2xl border border-primary/40 bg-surface-container-lowest/80 flex flex-col gap-space-xs"
+      className="p-space-md rounded-2xl border border-primary/40 bg-surface-container-lowest/80 flex flex-col gap-space-xs shadow-sm"
     >
-      <span className="font-mono-micro text-mono-micro uppercase tracking-wider text-primary">
-        Paso actual · {capitulo.titulo}
-      </span>
+      <div className="flex items-center gap-2">
+        <span className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse" aria-hidden="true" />
+        <span className="font-mono-micro text-mono-micro uppercase tracking-wider text-primary font-bold">
+          Paso actual sugerido · {capitulo.titulo}
+        </span>
+      </div>
       <p className={`${claseTextoContenido} text-on-surface leading-relaxed`}>{capitulo.descripcion}</p>
-      <div className="flex flex-wrap gap-space-xs">
+      <div className="flex flex-wrap gap-space-xs pt-1">
         {capitulo.marcable && (
           <motion.button
             type="button"
@@ -354,10 +484,10 @@ function TarjetaPasoActual({ capitulo, claseTextoContenido, alMarcarVisto, alIrA
             whileTap={reducir ? undefined : { scale: 0.96 }}
             className={claseBoton}
           >
-            ¡Ya la vi!
+            ¡Ya lo comprendí! (Marcar listo)
           </motion.button>
         )}
-        {capitulo.accion === 'piezas' && (
+        {capitulo.accion === 'piezas' && alIrASeccion && (
           <motion.button
             type="button"
             onClick={() => alIrASeccion('piezas')}
@@ -376,7 +506,29 @@ function TarjetaPasoActual({ capitulo, claseTextoContenido, alMarcarVisto, alIrA
             whileTap={reducir ? undefined : { scale: 0.96 }}
             className={claseBoton}
           >
-            Ir a Sala de Control
+            Ir a Sala de Control y jugar
+          </motion.button>
+        )}
+        {capitulo.accion === 'repaso' && alIrASeccion && (
+          <motion.button
+            type="button"
+            onClick={() => alIrASeccion('repaso')}
+            whileHover={reducir ? undefined : { scale: 1.04 }}
+            whileTap={reducir ? undefined : { scale: 0.96 }}
+            className={claseBoton}
+          >
+            Ir a Repaso de tu partida
+          </motion.button>
+        )}
+        {capitulo.accion === 'ranking' && alIrASeccion && (
+          <motion.button
+            type="button"
+            onClick={() => alIrASeccion('ranking')}
+            whileHover={reducir ? undefined : { scale: 1.04 }}
+            whileTap={reducir ? undefined : { scale: 0.96 }}
+            className={claseBoton}
+          >
+            Ver Ranking de Maestría
           </motion.button>
         )}
       </div>
@@ -385,8 +537,10 @@ function TarjetaPasoActual({ capitulo, claseTextoContenido, alMarcarVisto, alIrA
 }
 
 /**
- * Camino de capítulos para el jugador principiante. Recibe las piezas ya vistas
- * del panel y lee sus partidas reales para marcar captura y jaque.
+ * Camino de Aprendizaje multinivel adaptativo.
+ * Implementa la fundamentación pedagógica formal (FIDE Stappenmethode y Práctica Deliberada):
+ * Permite a jugadores de cualquier nivel explorar su currículo personalizado según su rango,
+ * o inspeccionar y practicar etapas previas y avanzadas dinámicamente.
  */
 export default function CaminoAprendizaje({
   usuarioId,
@@ -403,6 +557,22 @@ export default function CaminoAprendizaje({
   const [error, setError] = useState(null);
   const [vistos, setVistos] = useState(() => cargarCapitulosVistos(usuarioId));
 
+  // Determinar etapa inicial sugerida según el rango estimado del jugador
+  const etapaSugerida = useMemo(() => {
+    if (rango === 'Avanzado') return 'avanzado';
+    if (rango === 'Intermedio') return 'intermedio';
+    return 'principiante';
+  }, [rango]);
+
+  const [etapaActiva, setEtapaActiva] = useState(etapaSugerida);
+
+  // Sincronizar si cambia el rango
+  useEffect(() => {
+    if (rango === 'Avanzado') setEtapaActiva('avanzado');
+    else if (rango === 'Intermedio') setEtapaActiva('intermedio');
+    else setEtapaActiva('principiante');
+  }, [rango]);
+
   useEffect(() => {
     let cancelado = false;
     setCargando(true);
@@ -416,9 +586,8 @@ export default function CaminoAprendizaje({
           setCargando(false);
           return;
         }
-        // Las jugadas se piden de a pocas partidas, de la más reciente a la más vieja, y se corta apenas el
-        // camino tiene lo que busca (una captura y un jaque): casi siempre alcanza con el primer lote, en vez
-        // de pedir las 20 partidas juntas. El camino se muestra al terminar el primer lote.
+
+        // Obtener jugadas detalladas por lotes para verificar capturas, jaques y enroques
         const acumuladas = [];
         for (let desde = 0; desde < jugadas.length; desde += LOTE_DE_PARTIDAS) {
           const lote = jugadas.slice(desde, desde + LOTE_DE_PARTIDAS);
@@ -428,17 +597,16 @@ export default function CaminoAprendizaje({
             if (d.status === 'fulfilled') acumuladas.push(d.value?.jugadas ?? []);
           });
           setJugadasPorPartida([...acumuladas]);
-          if (desde === 0) setCargando(false);
-          if (acumuladas.some(hizoCaptura) && acumuladas.some(dioJaque)) break;
-        }
-        if (!cancelado) setCargando(false);
-      })
-      .catch((err) => {
-        if (!cancelado) {
-          setError(err);
           setCargando(false);
         }
+      })
+      .catch((err) => {
+        if (!cancelado) setError(err);
+      })
+      .finally(() => {
+        if (!cancelado) setCargando(false);
       });
+
     return () => {
       cancelado = true;
     };
@@ -453,47 +621,63 @@ export default function CaminoAprendizaje({
     });
   }
 
+  // Evaluar estado de los capítulos para la etapa activa
+  const capitulosConfig = ETAPAS_APRENDIZAJE[etapaActiva]?.capitulos ?? ETAPAS_APRENDIZAJE.principiante.capitulos;
+
   const capitulos = useMemo(() => {
-    const hechos = {
-      tablero: partidas.length > 0,
-      piezas: (piezasVistas?.length ?? 0) >= 6,
+    // Mapa de verificaciones objetivas
+    const verificaciones = {
+      // Etapa Principiante
+      tablero: partidas.length > 0 || vistos.includes('tablero'),
+      piezas: (piezasVistas?.length ?? 0) >= 6 || vistos.includes('piezas'),
       posicion: vistos.includes('posicion'),
       movimientos: vistos.includes('movimientos'),
-      captura: jugadasPorPartida.some(hizoCaptura),
-      jaque: jugadasPorPartida.some(dioJaque),
+      enroque: vistos.includes('enroque') || jugadasPorPartida.some(hizoEnroque),
+      captura: vistos.includes('captura') || jugadasPorPartida.some(hizoCaptura),
+      jaque: vistos.includes('jaque') || jugadasPorPartida.some(dioJaque),
+
+      // Etapa Intermedia
+      mandamientos_apertura: vistos.includes('mandamientos_apertura'),
+      aperturas_clasicas: vistos.includes('aperturas_clasicas'),
+      defensas_activas: vistos.includes('defensas_activas'),
+      gambito_dama: vistos.includes('gambito_dama'),
+      tactica_doble: vistos.includes('tactica_doble'),
+      tactica_clavada: vistos.includes('tactica_clavada'),
+      erradicar_blunders: vistos.includes('erradicar_blunders') || partidas.length >= 3,
+
+      // Etapa Avanzada
+      estructuras_peones: vistos.includes('estructuras_peones'),
+      finales_torre: vistos.includes('finales_torre'),
+      sparring_turing: vistos.includes('sparring_turing') || partidas.some((p) => p.tipo_oponente === 'modelo'),
+      analisis_centipeones: vistos.includes('analisis_centipeones') || partidas.length >= 5,
+      maestria_torneos: vistos.includes('maestria_torneos') || rango === 'Avanzado',
     };
-    // Cada capítulo se desbloquea al terminar el anterior: el primero pendiente queda en curso.
+
     let hayEnCurso = false;
-    return CAPITULOS.map((c) => {
-      if (hechos[c.id]) return { ...c, estado: 'completado' };
+    return capitulosConfig.map((c) => {
+      const estaHecho = Boolean(verificaciones[c.id]);
+      if (estaHecho) return { ...c, estado: 'completado' };
       if (!hayEnCurso) {
         hayEnCurso = true;
         return { ...c, estado: 'en_curso' };
       }
       return { ...c, estado: 'bloqueado' };
     });
-  }, [partidas, jugadasPorPartida, piezasVistas, vistos]);
+  }, [capitulosConfig, partidas, jugadasPorPartida, piezasVistas, vistos, rango]);
 
   const completados = capitulos.filter((c) => c.estado === 'completado').length;
-  const porcentaje = Math.round((completados / CAPITULOS.length) * 100);
+  const porcentaje = Math.round((completados / capitulosConfig.length) * 100);
   const racha = useMemo(() => rachaDeDias(partidas.map((p) => p.fecha)), [partidas]);
   const enCurso = capitulos.find((c) => c.estado === 'en_curso');
 
-  // Filas del camino: los capítulos reales seguidos de los previstos.
-  const filas = [
-    ...capitulos,
-    ...PROXIMOS.map((titulo) => ({ id: titulo, titulo, estado: 'proximo' })),
-  ];
-
   if (cargando) {
     return (
-      <div className="flex flex-col gap-space-sm" aria-busy="true" aria-label="Armando tu camino">
+      <div className="flex flex-col gap-space-sm" aria-busy="true" aria-label="Armando tu camino pedagógico">
         <div className="flex items-center gap-2 text-on-surface-variant">
           <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin motion-reduce:animate-none" />
-          <span className="font-mono-micro text-mono-micro">Armando tu camino…</span>
+          <span className="font-mono-micro text-mono-micro">Sincronizando plan pedagógico según tu nivel…</span>
         </div>
-        <div className="h-32 rounded-3xl border border-outline-variant/10 bg-on-surface/[0.04] backdrop-blur-md animate-pulse motion-reduce:animate-none" />
-        <div className="h-24 rounded-2xl border border-outline-variant/10 bg-on-surface/[0.04] backdrop-blur-md animate-pulse motion-reduce:animate-none" />
+        <div className="h-28 rounded-3xl border border-outline-variant/10 bg-on-surface/[0.04] backdrop-blur-md animate-pulse motion-reduce:animate-none" />
       </div>
     );
   }
@@ -501,17 +685,61 @@ export default function CaminoAprendizaje({
   if (error) {
     return (
       <p className="font-body-sm text-body-sm text-error py-space-xs">
-        No pudimos cargar tu camino en este momento. {error.message || ''}
+        No pudimos cargar tu progreso en este momento. {error.message || ''}
       </p>
     );
   }
 
   return (
     <div className="flex flex-col gap-space-lg">
+      {/* Selector de Etapa Pedagógica (Tabs multinivel interactivos) */}
+      <div className="flex flex-col gap-space-xs">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <span className="font-mono-micro text-mono-micro uppercase tracking-wider text-on-surface-variant">
+            Metodología FIDE · Currículo adaptativo
+          </span>
+          <span className="font-mono-micro text-mono-micro px-2 py-0.5 rounded bg-surface-container text-primary font-medium">
+            Rango actual: {rango ?? 'Principiante'}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-surface-container-low p-1.5 rounded-2xl border border-outline-variant/30">
+          {Object.values(ETAPAS_APRENDIZAJE).map((etapa) => {
+            const esActiva = etapaActiva === etapa.id;
+            const esSugerida = etapaSugerida === etapa.id;
+
+            return (
+              <button
+                key={etapa.id}
+                type="button"
+                onClick={() => setEtapaActiva(etapa.id)}
+                className={`relative flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-body-sm text-body-sm transition-all text-left ${
+                  esActiva
+                    ? 'bg-surface-container-high text-primary font-semibold shadow-sm border border-primary/30'
+                    : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container/60'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[20px]">{etapa.icono}</span>
+                <div className="flex flex-col min-w-0">
+                  <span className="truncate">{etapa.nombre}</span>
+                  {esSugerida && (
+                    <span className="text-[10px] font-mono-micro text-neon-lime uppercase tracking-wider">
+                      ★ Recomendado
+                    </span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Cabecera de progreso de la etapa activa */}
       <motion.header
+        key={etapaActiva}
         initial={reducir ? false : { opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
+        transition={{ duration: 0.3 }}
         className="relative overflow-hidden rounded-3xl p-space-md border border-outline-variant/30"
         style={{
           background:
@@ -524,7 +752,7 @@ export default function CaminoAprendizaje({
           <div className="flex-1 min-w-[12rem] flex flex-col gap-space-2xs">
             <div className="flex flex-wrap items-center gap-space-xs">
               <span className="px-space-sm py-[2px] rounded-full bg-primary/15 text-primary font-mono-micro text-mono-micro uppercase tracking-wider font-semibold">
-                Nivel {rango ?? 'sin medir'}
+                {ETAPAS_APRENDIZAJE[etapaActiva]?.nombre}
               </span>
               <span className="flex items-center gap-1 px-space-sm py-[2px] rounded-full bg-tertiary/10 text-tertiary font-mono-micro text-mono-micro">
                 <motion.span
@@ -534,23 +762,30 @@ export default function CaminoAprendizaje({
                 >
                   local_fire_department
                 </motion.span>
-                {racha > 0 ? `${racha} ${racha === 1 ? 'día' : 'días'} seguidos` : 'Jugá hoy para arrancar una racha'}
+                {racha > 0 ? `${racha} ${racha === 1 ? 'día' : 'días'} de práctica` : 'Jugá hoy para iniciar racha'}
               </span>
             </div>
             <p className="font-headline-sm text-headline-sm text-on-surface">
-              {completados} de {CAPITULOS.length} capítulos listos
+              {completados} de {capitulosConfig.length} módulos completados
+            </p>
+            <p className="font-body-sm text-body-sm text-on-surface-variant line-clamp-2">
+              {ETAPAS_APRENDIZAJE[etapaActiva]?.lema}
             </p>
             {enCurso ? (
-              <p className="font-body-sm text-body-sm text-on-surface-variant">
-                Siguiente paso: <span className="text-primary font-medium">{enCurso.titulo}</span>
+              <p className="font-body-sm text-body-sm text-primary font-medium mt-1">
+                Siguiente objetivo: {enCurso.titulo}
               </p>
             ) : (
-              <p className="font-body-sm text-body-sm text-on-surface-variant">Terminaste los capítulos disponibles. Pronto llegan más.</p>
+              <p className="font-body-sm text-body-sm text-neon-lime font-medium mt-1 flex items-center gap-1">
+                <span className="material-symbols-outlined text-[16px]">verified</span>
+                ¡Felicitaciones! Has completado todos los módulos de esta etapa.
+              </p>
             )}
           </div>
         </div>
       </motion.header>
 
+      {/* Tarjeta de acción inmediata para el módulo actual */}
       {enCurso && (
         <TarjetaPasoActual
           capitulo={enCurso}
@@ -562,13 +797,14 @@ export default function CaminoAprendizaje({
         />
       )}
 
-      <ol className="flex flex-col" aria-label="Capítulos del camino">
-        {filas.map((fila, indice) => {
-          const siguiente = filas[indice + 1];
+      {/* Lista del camino en zigzag con nodos y conectores */}
+      <ol className="flex flex-col" aria-label={`Capítulos de ${ETAPAS_APRENDIZAJE[etapaActiva]?.nombre}`}>
+        {capitulos.map((fila, indice) => {
+          const siguiente = capitulos[indice + 1];
           const x = POSICIONES_ZIGZAG[indice % POSICIONES_ZIGZAG.length];
           const xSiguiente = POSICIONES_ZIGZAG[(indice + 1) % POSICIONES_ZIGZAG.length];
-          // La etiqueta va del lado contrario hacia donde sigue el camino, así la línea nunca la cruza.
           const etiquetaIzquierda = siguiente ? xSiguiente > x : x > 50;
+
           return (
             <motion.li
               key={fila.id}
@@ -576,7 +812,7 @@ export default function CaminoAprendizaje({
               style={{ '--x': `${x}%` }}
               initial={reducir ? false : { opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 + indice * 0.08, duration: 0.4 }}
+              transition={{ delay: 0.05 + indice * 0.05, duration: 0.35 }}
             >
               {siguiente && (
                 <Conector
@@ -596,19 +832,23 @@ export default function CaminoAprendizaje({
               </div>
 
               <div
-                className={`absolute top-0 left-[4.5rem] right-0 h-16 flex flex-col justify-center xl:w-32 ${
+                className={`absolute top-0 left-[4.5rem] right-0 h-16 flex flex-col justify-center xl:w-44 ${
                   etiquetaIzquierda
                     ? 'xl:left-auto xl:right-[calc(100%_-_var(--x)_+_2.75rem)] xl:text-right'
                     : 'xl:left-[calc(var(--x)_+_2.75rem)] xl:right-auto xl:text-left'
                 }`}
               >
-                <p className="font-body-sm text-body-sm font-semibold text-on-surface">{fila.titulo}</p>
+                <p className="font-body-sm text-body-sm font-semibold text-on-surface truncate">{fila.titulo}</p>
                 <p
                   className={`font-mono-micro text-mono-micro ${
-                    fila.estado === 'completado' ? 'text-tertiary-fixed-dim' : fila.estado === 'en_curso' ? 'text-primary' : 'text-outline'
+                    fila.estado === 'completado'
+                      ? 'text-tertiary-fixed-dim'
+                      : fila.estado === 'en_curso'
+                        ? 'text-primary font-bold'
+                        : 'text-outline'
                   }`}
                 >
-                  Capítulo {indice + 1} · {ETIQUETA_ESTADO[fila.estado]}
+                  Módulo {indice + 1} · {ETIQUETA_ESTADO[fila.estado]}
                 </p>
               </div>
             </motion.li>
