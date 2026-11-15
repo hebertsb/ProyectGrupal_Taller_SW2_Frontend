@@ -28,59 +28,112 @@ import { BOTON_NEUTRO, BOTON_PRINCIPAL, CLASE_ETIQUETA, CLASE_INPUT } from '../S
 
 const INTERVALO_LISTA_MS = 6000;
 const COLORES = [
-  { valor: 'aleatorio', texto: 'Al azar' },
-  { valor: 'blancas', texto: 'Blancas' },
-  { valor: 'negras', texto: 'Negras' },
+  { valor: 'aleatorio', texto: 'Al azar', subtitulo: 'Blancas o negras', icono: 'shuffle' },
+  { valor: 'blancas', texto: 'Blancas', subtitulo: 'Mueve primero', icono: 'radio_button_unchecked' },
+  { valor: 'negras', texto: 'Negras', subtitulo: 'Responde segundo', icono: 'radio_button_checked' },
 ];
 const RELACIONES = { compañero: 'Mi curso', amigo: 'Amigo', ambos: 'Curso y amigo' };
 
-/** Una fila de botones tipo «radio»: se elige una sola opción (sin reloj / minutos por lado, o el color). */
+/** Una fila de botones modernos tipo «radio»: se elige una sola opción con ícono y feedback visual didáctico. */
 function Opciones({ etiqueta, valor, opciones, alCambiar }) {
   return (
-    <div className="flex flex-col gap-space-2xs" role="radiogroup" aria-label={etiqueta}>
-      <span className={CLASE_ETIQUETA}>{etiqueta}</span>
-      <div className="flex flex-wrap gap-space-xs">
-        {opciones.map((opcion) => (
-          <button
-            key={opcion.valor}
-            type="button"
-            role="radio"
-            aria-checked={valor === opcion.valor}
-            onClick={() => alCambiar(opcion.valor)}
-            className={`min-h-11 px-space-md rounded-lg font-body-sm text-body-sm transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
-              valor === opcion.valor ? 'bg-primary text-on-primary font-medium' : 'bg-surface-container-high text-on-surface hover:bg-surface-bright'
-            }`}
-          >
-            {opcion.texto}
-          </button>
-        ))}
+    <div className="flex flex-col gap-1.5" role="radiogroup" aria-label={etiqueta}>
+      <span className="font-mono-micro text-mono-micro uppercase text-on-surface-variant tracking-wider font-bold">
+        {etiqueta}
+      </span>
+      <div className="flex flex-wrap gap-2">
+        {opciones.map((opcion) => {
+          const activo = valor === opcion.valor;
+          return (
+            <button
+              key={String(opcion.valor)}
+              type="button"
+              role="radio"
+              aria-checked={activo}
+              onClick={() => alCambiar(opcion.valor)}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl font-body-sm text-body-sm transition-all duration-200 cursor-pointer border ${
+                activo
+                  ? 'bg-primary text-on-primary font-bold shadow-md shadow-primary/20 border-primary ring-2 ring-primary/40 scale-[1.02]'
+                  : 'bg-surface-container hover:bg-surface-container-high text-on-surface border-outline-variant/30 hover:border-outline-variant/60'
+              }`}
+            >
+              {opcion.icono && (
+                <span
+                  className={`material-symbols-outlined text-[18px] transition-transform ${
+                    activo ? 'text-on-primary scale-110' : 'text-primary'
+                  }`}
+                  aria-hidden="true"
+                >
+                  {opcion.icono}
+                </span>
+              )}
+              <div className="flex flex-col text-left">
+                <span className="leading-tight font-medium">{opcion.texto}</span>
+                {opcion.subtitulo && (
+                  <span
+                    className={`font-mono-micro text-[10px] leading-tight ${
+                      activo ? 'text-on-primary/80 font-normal' : 'text-on-surface-variant'
+                    }`}
+                  >
+                    {opcion.subtitulo}
+                  </span>
+                )}
+              </div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-const OPCIONES_RELOJ = CONTROLES_DE_TIEMPO_SALA.map((ms) => ({ valor: ms, texto: textoDeReloj(ms) }));
+const OPCIONES_RELOJ = [
+  { valor: 0, texto: 'Sin reloj', subtitulo: 'Libre y sin presión', icono: 'all_inclusive' },
+  { valor: 180000, texto: '3 min', subtitulo: 'Partida Blitz', icono: 'bolt' },
+  { valor: 300000, texto: '5 min', subtitulo: 'Partida Rápida', icono: 'timer' },
+  { valor: 600000, texto: '10 min', subtitulo: 'Ritmo Clásico', icono: 'schedule' },
+  { valor: 900000, texto: '15 min', subtitulo: 'Análisis profundo', icono: 'hourglass_top' },
+];
 
 /** Una partida puntuada mueve el Elo de los dos; una amistosa se juega igual pero no lo mueve (sirve para practicar sin miedo a perder puntos). */
 const OPCIONES_PUNTUACION = [
-  { valor: true, texto: 'Puntuada' },
-  { valor: false, texto: 'Amistosa' },
+  { valor: true, texto: 'Puntuada', subtitulo: 'Mueve el Elo de ambos', icono: 'military_tech' },
+  { valor: false, texto: 'Amistosa', subtitulo: 'Práctica libre sin riesgo', icono: 'handshake' },
 ];
 
 function NotaDePuntuacion({ puntuada }) {
   return (
-    <p className="m-0 font-mono-micro text-mono-micro text-on-surface-variant">
-      {puntuada ? 'Puntuada: mueve el Elo de los dos.' : 'Amistosa: se juega igual, pero no mueve el Elo. Sirve para practicar sin miedo a perder puntos.'}
-    </p>
+    <div className="flex items-center gap-2 p-2.5 rounded-xl bg-surface-container-lowest/60 border border-outline-variant/20 font-mono-micro text-mono-micro text-on-surface-variant">
+      <span className="material-symbols-outlined text-[16px] text-primary" aria-hidden="true">
+        {puntuada ? 'insights' : 'verified_user'}
+      </span>
+      <span>
+        {puntuada
+          ? 'Puntuada: suma o resta Elo a ambos según el resultado de la partida.'
+          : 'Amistosa: se juega exactamente igual, pero no modifica el Elo. Ideal para experimentar.'}
+      </span>
+    </div>
   );
 }
 
-function Tarjeta({ titulo, icono, children, className = '' }) {
+function Tarjeta({ titulo, icono, badge, children, className = '' }) {
   return (
-    <section aria-label={titulo} className={`flex flex-col gap-space-sm bg-surface-container-low p-space-md rounded-xl shadow-md min-w-0 ${className}`}>
-      <div className="flex items-center gap-space-xs">
-        <span className="material-symbols-outlined text-[22px] text-primary" aria-hidden="true">{icono}</span>
-        <h2 className="m-0 font-headline-sm text-headline-sm text-on-surface">{titulo}</h2>
+    <section
+      aria-label={titulo}
+      className={`flex flex-col gap-4 bg-surface-container-low/95 border border-outline-variant/25 rounded-3xl shadow-lg p-5 sm:p-6 min-w-0 ${className}`}
+    >
+      <div className="flex items-center justify-between gap-2 border-b border-outline-variant/15 pb-3">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-xl bg-primary/10 border border-primary/25 flex items-center justify-center text-primary shrink-0">
+            <span className="material-symbols-outlined text-[20px]" aria-hidden="true">{icono}</span>
+          </div>
+          <h2 className="m-0 font-headline-sm text-headline-sm text-on-surface font-bold">{titulo}</h2>
+        </div>
+        {badge && (
+          <span className="px-2.5 py-0.5 rounded-full font-mono-micro text-[11px] bg-primary/10 text-primary border border-primary/20">
+            {badge}
+          </span>
+        )}
       </div>
       {children}
     </section>
@@ -461,19 +514,19 @@ export default function Jugar({ usuario, avisos, alRefrescarAvisos, alIrASala, a
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-space-lg items-start">
         <div className="flex flex-col gap-space-lg min-w-0">
-          <Tarjeta titulo="Buscar un rival" icono="travel_explore">
+          <Tarjeta titulo="Buscar un rival" icono="travel_explore" badge="Matchmaking">
             <p className="m-0 font-body-sm text-body-sm text-on-surface-variant">
               {usuario?.nivel_estimado != null
                 ? `Tu nivel es ${usuario.nivel_estimado}${usuario.rango_estimado ? ` (${usuario.rango_estimado})` : ''}${miElo ? ` y tu Elo es ${textoDeElo(miElo.elo)}${miElo.provisional ? '?' : ''}` : ''}.`
                 : 'Todavía no medimos tu nivel: jugá tus partidas de diagnóstico contra Turing para que te emparejemos mejor.'}{' '}
-              Te buscamos a alguien de nivel parecido, así la partida es pareja, o elegí vos un rango de Elo o de nivel.
+              Te buscamos a alguien de nivel parecido, así la partida es pareja, o elegí vos un rango de Elo o de nivel con las barras deslizantes.
             </p>
             <FiltrosDeBusqueda valor={filtros} alCambiar={setFiltros} miElo={miElo ? { elo: miElo.elo, elo_provisional: miElo.provisional } : null} miNivel={usuario?.nivel_estimado ?? null} deshabilitado={buscando} />
             <Opciones etiqueta="Reloj por lado" valor={relojBusqueda} opciones={OPCIONES_RELOJ} alCambiar={setRelojBusqueda} />
             <Opciones etiqueta="Tipo de partida" valor={puntuadaBusqueda} opciones={OPCIONES_PUNTUACION} alCambiar={setPuntuadaBusqueda} />
             <NotaDePuntuacion puntuada={puntuadaBusqueda} />
             {buscando ? (
-              <div className="flex flex-wrap items-center justify-between gap-space-sm p-space-sm rounded-xl bg-surface-container">
+              <div className="flex flex-wrap items-center justify-between gap-space-sm p-4 rounded-2xl bg-surface-container border border-primary/30">
                 <div className="flex items-center gap-space-sm min-w-0">
                   <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin motion-reduce:animate-none shrink-0" aria-hidden="true" />
                   <span className="font-body-sm text-body-sm text-on-surface" role="status">
@@ -482,29 +535,41 @@ export default function Jugar({ usuario, avisos, alRefrescarAvisos, alIrASala, a
                     {busqueda?.filtros ? ` · ${textoDeFiltros(busqueda.filtros)}` : ''}
                   </span>
                 </div>
-                <button type="button" onClick={dejarDeBuscar} className={BOTON_NEUTRO}>Dejar de buscar</button>
+                <button type="button" onClick={dejarDeBuscar} className="px-4 py-2 rounded-xl bg-surface-container-high hover:bg-surface-bright text-on-surface font-body-sm transition-colors cursor-pointer border border-outline-variant/30">
+                  Dejar de buscar
+                </button>
               </div>
             ) : (
-              <button type="button" onClick={empezarBusqueda} disabled={Boolean(salaActiva) || errorDeFiltros(filtros) != null} className={`${BOTON_PRINCIPAL} self-start`}>
-                <span className="material-symbols-outlined text-[18px]" aria-hidden="true">search</span>
+              <button
+                type="button"
+                onClick={empezarBusqueda}
+                disabled={Boolean(salaActiva) || errorDeFiltros(filtros) != null}
+                className="flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-primary to-neon-lime text-black font-bold font-body-sm shadow-lg shadow-neon-lime/20 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer self-start disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+              >
+                <span className="material-symbols-outlined text-[20px]" aria-hidden="true">travel_explore</span>
                 Buscar rival
               </button>
             )}
             {salaActiva && <p className="m-0 font-mono-micro text-mono-micro text-on-surface-variant">Terminá tu partida actual para buscar otra.</p>}
           </Tarjeta>
 
-          <Tarjeta titulo="Crear una partida y mandar el enlace" icono="share">
+          <Tarjeta titulo="Crear una partida y mandar el enlace" icono="share" badge="Sala privada">
             <Opciones etiqueta="Tu color" valor={colorPartida} opciones={COLORES} alCambiar={setColorPartida} />
             <Opciones etiqueta="Reloj por lado" valor={relojPartida} opciones={OPCIONES_RELOJ} alCambiar={setRelojPartida} />
             <Opciones etiqueta="Tipo de partida" valor={puntuadaPartida} opciones={OPCIONES_PUNTUACION} alCambiar={setPuntuadaPartida} />
             <NotaDePuntuacion puntuada={puntuadaPartida} />
-            <button type="button" onClick={crearPartida} disabled={creando || Boolean(salaActiva)} className={`${BOTON_PRINCIPAL} self-start`}>
-              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">add</span>
+            <button
+              type="button"
+              onClick={crearPartida}
+              disabled={creando || Boolean(salaActiva)}
+              className="flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-primary to-primary-container text-on-primary font-bold font-body-sm shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer self-start disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span className="material-symbols-outlined text-[20px]" aria-hidden="true">add_circle</span>
               {creando ? 'Creando…' : 'Crear partida'}
             </button>
             <p className="m-0 font-mono-micro text-mono-micro text-on-surface-variant">Te damos un código y un enlace para mandar por WhatsApp. Funciona con cualquier amigo, esté o no en tu curso.</p>
-            <form onSubmit={entrarConCodigo} className="flex flex-col gap-space-xs pt-space-xs border-t border-outline-variant/30">
-              <label htmlFor="codigo-sala" className={CLASE_ETIQUETA}>¿Te mandaron un código?</label>
+            <form onSubmit={entrarConCodigo} className="flex flex-col gap-space-xs pt-3 border-t border-outline-variant/30">
+              <label htmlFor="codigo-sala" className="font-mono-micro text-mono-micro uppercase text-on-surface-variant tracking-wider font-bold">¿Te mandaron un código?</label>
               <div className="flex gap-space-xs">
                 <input
                   id="codigo-sala"
@@ -513,16 +578,23 @@ export default function Jugar({ usuario, avisos, alRefrescarAvisos, alIrASala, a
                   maxLength={6}
                   autoComplete="off"
                   placeholder="K7QM4T"
-                  className={`${CLASE_INPUT} flex-1 uppercase tracking-widest`}
+                  className="px-4 py-2.5 rounded-2xl bg-surface-container-lowest border border-outline-variant/40 text-on-surface font-body-sm min-w-0 flex-1 uppercase tracking-widest focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary font-mono text-center text-lg"
                 />
-                <button type="submit" disabled={!codigoSala.trim()} className={BOTON_NEUTRO}>Entrar</button>
+                <button
+                  type="submit"
+                  disabled={!codigoSala.trim()}
+                  className="flex items-center gap-1.5 px-5 py-2.5 rounded-2xl bg-surface-container-high hover:bg-surface-bright text-on-surface font-body-sm font-medium transition-colors cursor-pointer border border-outline-variant/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span className="material-symbols-outlined text-[18px]">login</span>
+                  Entrar
+                </button>
               </div>
             </form>
           </Tarjeta>
         </div>
 
         <div className="flex flex-col gap-space-lg min-w-0">
-          <Tarjeta titulo="Mi curso y mis amigos" icono="groups">
+          <Tarjeta titulo="Mi curso y mis amigos" icono="groups" badge="Comunidad">
             {!datos ? (
               <span role="status" className="font-mono-micro text-mono-micro text-on-surface-variant">Cargando…</span>
             ) : datos.gente.length === 0 ? (
@@ -530,12 +602,12 @@ export default function Jugar({ usuario, avisos, alRefrescarAvisos, alIrASala, a
                 Todavía no tenés compañeros de curso ni amigos para retar. Agregá a alguien con su código o su correo, o buscá un rival de tu nivel.
               </p>
             ) : (
-              <ul className="m-0 p-0 list-none flex flex-col gap-space-xs">
+              <ul className="m-0 p-0 list-none flex flex-col gap-2">
                 {datos.gente.map((persona) => (
-                  <li key={persona.id} className="flex flex-wrap items-center gap-x-space-sm gap-y-space-xs p-space-sm rounded-xl bg-surface-container min-w-0">
+                  <li key={persona.id} className="flex flex-wrap items-center gap-x-space-sm gap-y-space-xs p-3.5 rounded-2xl bg-surface-container border border-outline-variant/20 hover:border-outline-variant/40 transition-colors min-w-0">
                     <Avatar persona={persona} />
                     <div className="flex flex-col min-w-0 flex-1">
-                      <span className="font-body-sm text-body-sm font-medium text-on-surface truncate">
+                      <span className="font-body-sm text-body-sm font-bold text-on-surface truncate">
                         {persona.nombre}
                         <span className="sr-only">{persona.en_linea ? ', en línea' : ', sin conexión'}</span>
                       </span>
@@ -546,32 +618,48 @@ export default function Jugar({ usuario, avisos, alRefrescarAvisos, alIrASala, a
                         {persona.en_linea ? ' · en línea' : ''}
                       </span>
                     </div>
-                    <div className="flex flex-wrap gap-space-xs">
-                      <button type="button" onClick={() => setRetando(persona)} disabled={Boolean(salaActiva)} className={BOTON_PRINCIPAL}>
-                        <span className="material-symbols-outlined text-[18px]" aria-hidden="true">swords</span>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setRetando(persona)}
+                        disabled={Boolean(salaActiva)}
+                        className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-on-primary font-body-sm text-body-sm font-medium hover:brightness-110 shadow-sm cursor-pointer disabled:opacity-50"
+                      >
+                        <span className="material-symbols-outlined text-[16px]" aria-hidden="true">swords</span>
                         Retar
                       </button>
                       {persona.relacion === 'compañero' && (
                         enviadas.has(persona.id) ? (
-                          <span className="min-h-10 px-space-sm flex items-center font-mono-micro text-mono-micro text-on-surface-variant">Solicitud enviada</span>
+                          <span className="min-h-9 px-space-sm flex items-center font-mono-micro text-mono-micro text-on-surface-variant">Solicitud enviada</span>
                         ) : (
                           <button
                             type="button"
                             onClick={() => accion(() => mandarSolicitudDeAmistad({ usuarioId: persona.id }), `Le mandamos tu solicitud a ${persona.nombre}.`)}
-                            className={BOTON_NEUTRO}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-container-high hover:bg-surface-bright text-on-surface font-body-sm text-body-sm cursor-pointer border border-outline-variant/30"
                           >
-                            <span className="material-symbols-outlined text-[18px] text-primary" aria-hidden="true">person_add</span>
+                            <span className="material-symbols-outlined text-[16px] text-primary" aria-hidden="true">person_add</span>
                             Agregar
                           </button>
                         )
                       )}
                       {persona.relacion !== 'compañero' && (
-                        <button type="button" onClick={() => accion(() => quitarAmigo(persona.id), `Dejaste de ser amigo de ${persona.nombre}.`)} className={BOTON_NEUTRO} aria-label={`Quitar a ${persona.nombre} de mis amigos`}>
-                          <span className="material-symbols-outlined text-[18px]" aria-hidden="true">person_remove</span>
+                        <button
+                          type="button"
+                          onClick={() => accion(() => quitarAmigo(persona.id), `Dejaste de ser amigo de ${persona.nombre}.`)}
+                          className="px-2.5 py-1.5 rounded-xl bg-surface-container-high hover:bg-surface-bright text-on-surface cursor-pointer border border-outline-variant/30"
+                          aria-label={`Quitar a ${persona.nombre} de mis amigos`}
+                        >
+                          <span className="material-symbols-outlined text-[16px]" aria-hidden="true">person_remove</span>
                         </button>
                       )}
-                      <button type="button" onClick={() => setDenunciando(persona)} className={BOTON_NEUTRO} aria-label={`Bloquear o denunciar a ${persona.nombre}`} title="Bloquear o denunciar">
-                        <span className="material-symbols-outlined text-[18px] text-error" aria-hidden="true">flag</span>
+                      <button
+                        type="button"
+                        onClick={() => setDenunciando(persona)}
+                        className="px-2.5 py-1.5 rounded-xl bg-surface-container-high hover:bg-surface-bright text-on-surface cursor-pointer border border-outline-variant/30"
+                        aria-label={`Bloquear o denunciar a ${persona.nombre}`}
+                        title="Bloquear o denunciar"
+                      >
+                        <span className="material-symbols-outlined text-[16px] text-error" aria-hidden="true">flag</span>
                       </button>
                     </div>
                   </li>
@@ -581,10 +669,10 @@ export default function Jugar({ usuario, avisos, alRefrescarAvisos, alIrASala, a
             {salaActiva && <p className="m-0 font-mono-micro text-mono-micro text-on-surface-variant">Terminá tu partida actual para retar a alguien.</p>}
           </Tarjeta>
 
-          <Tarjeta titulo="Agregar un amigo" icono="person_add">
-            <form onSubmit={agregarAmigo} className="flex flex-col gap-space-xs">
-              <label htmlFor="amigo-dato" className={CLASE_ETIQUETA}>Su correo o su código de amigo</label>
-              <div className="flex gap-space-xs">
+          <Tarjeta titulo="Agregar un amigo" icono="person_add" badge="Conexión directa">
+            <form onSubmit={agregarAmigo} className="flex flex-col gap-2">
+              <label htmlFor="amigo-dato" className="font-mono-micro text-mono-micro uppercase text-on-surface-variant tracking-wider font-bold">Su correo o su código de amigo</label>
+              <div className="flex gap-2">
                 <input
                   id="amigo-dato"
                   value={textoAmigo}
@@ -592,27 +680,39 @@ export default function Jugar({ usuario, avisos, alRefrescarAvisos, alIrASala, a
                   maxLength={120}
                   autoComplete="off"
                   placeholder="amigo@correo.com o AB3D-K7QM"
-                  className={`${CLASE_INPUT} flex-1`}
+                  className="px-4 py-2.5 rounded-2xl bg-surface-container-lowest border border-outline-variant/40 text-on-surface font-body-sm min-w-0 flex-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                 />
-                <button type="submit" disabled={enviandoAmistad || !textoAmigo.trim()} className={BOTON_PRINCIPAL}>Enviar</button>
+                <button
+                  type="submit"
+                  disabled={enviandoAmistad || !textoAmigo.trim()}
+                  className="flex items-center gap-1.5 px-5 py-2.5 rounded-2xl bg-primary text-on-primary font-bold font-body-sm shadow-md shadow-primary/20 hover:brightness-110 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span className="material-symbols-outlined text-[18px]">send</span>
+                  Enviar
+                </button>
               </div>
             </form>
-            <div className="flex flex-col gap-space-xs p-space-sm rounded-xl bg-surface-container">
-              <span className={CLASE_ETIQUETA}>Mi código de amigo</span>
-              <span className="font-mono-metric text-[24px] tracking-[0.18em] text-on-surface select-all">{miCodigo || '…'}</span>
-              <div className="flex flex-wrap gap-space-xs">
-                <button type="button" onClick={copiarCodigo} disabled={!miCodigo} className={BOTON_NEUTRO}>
+            <div className="flex flex-col gap-2.5 p-4 rounded-2xl bg-surface-container border border-outline-variant/20">
+              <span className="font-mono-micro text-mono-micro uppercase text-on-surface-variant tracking-wider font-bold">Mi código de amigo</span>
+              <span className="font-mono text-[24px] tracking-[0.18em] text-primary font-bold select-all">{miCodigo || '…'}</span>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={copiarCodigo}
+                  disabled={!miCodigo}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-surface-container-high hover:bg-surface-bright text-on-surface font-body-sm cursor-pointer border border-outline-variant/30"
+                >
                   <span className="material-symbols-outlined text-[18px] text-primary" aria-hidden="true">{copiado ? 'check' : 'content_copy'}</span>
-                  {copiado ? 'Copiado' : 'Copiar'}
+                  {copiado ? 'Copiado' : 'Copiar código'}
                 </button>
                 {miCodigo && (
                   <a
                     href={enlaceDeWhatsApp(mensajeDeAmigo({ enlace: enlaceAmigo, codigo: miCodigo }))}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className={`${BOTON_NEUTRO} no-underline`}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20 font-body-sm cursor-pointer border border-[#25D366]/30 no-underline"
                   >
-                    <span className="material-symbols-outlined text-[18px] text-primary" aria-hidden="true">send</span>
+                    <span className="material-symbols-outlined text-[18px]" aria-hidden="true">chat</span>
                     Mandar por WhatsApp
                   </a>
                 )}
