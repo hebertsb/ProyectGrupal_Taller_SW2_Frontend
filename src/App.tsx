@@ -1171,6 +1171,7 @@ export default function App() {
                 alIrASalaControl={() => irASalaControl()}
                 alVerTutorial={() => setPedidoTutorial((n) => n + 1)}
                 alIrAPerfil={() => setPantallaActiva('perfil')}
+                alIrAJugar={() => setPantallaActiva('jugar')}
               />
             )
           )}

@@ -121,16 +121,11 @@ const SECCIONES = [
   { id: 'turing', titulo: 'Preguntale a Turing', icono: 'forum' },
   { id: 'logros', titulo: 'Tus logros', icono: 'emoji_events' },
   { id: 'ranking', titulo: 'Ranking', icono: 'leaderboard' },
-  { id: 'proximamente', titulo: 'Próximamente', icono: 'lock' },
+  { id: 'comunidad', titulo: 'Comunidad y Retos', icono: 'swords' },
 ];
 
 /** Secciones que muestran datos del análisis completo de la última partida. */
 const SECCIONES_CON_ANALISIS = ['repaso', 'resumen', 'logros'];
-
-const BOTONES_PROXIMAMENTE = [
-  { titulo: 'Invitar a un amigo', icono: 'person_add' },
-  { titulo: 'Buscar rival de mi nivel', icono: 'search' },
-];
 
 function clavePiezasVistas(usuarioId) {
   return `panel_aprendizaje_piezas_${usuarioId ?? 'anon'}`;
@@ -693,6 +688,7 @@ export default function PanelAprendizaje({
   alIrASalaControl = null,
   alVerTutorial = null,
   alIrAPerfil = null,
+  alIrAJugar = null,
 }) {
   const [seccionAbierta, setSeccionAbierta] = useState(() => seccionInicial || 'nivel');
   const refsSeccion = useRef({});
@@ -1385,31 +1381,36 @@ export default function PanelAprendizaje({
             <RankingJugadores claseTexto={claseTextoContenido} />
           </SeccionAcordeon>
 
-          {/* 8. Próximamente */}
+          {/* 8. Comunidad y Retos */}
           <SeccionAcordeon
-            id="proximamente"
-            titulo="Próximamente"
-            icono="lock"
-            abierta={seccionAbierta === 'proximamente'}
-            onToggle={() => alternarSeccion('proximamente')}
-            innerRef={(el) => { refsSeccion.current.proximamente = el; }}
+            id="comunidad"
+            titulo="Comunidad y Retos"
+            icono="swords"
+            abierta={seccionAbierta === 'comunidad'}
+            onToggle={() => alternarSeccion('comunidad')}
+            innerRef={(el) => { refsSeccion.current.comunidad = el; }}
           >
-            <div className="opacity-60 flex flex-col gap-space-sm">
-              <p className="font-body-sm text-body-sm text-on-surface-variant">Estas funciones todavía no están disponibles.</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-space-xs">
-                {BOTONES_PROXIMAMENTE.map((b) => (
-                  <button
-                    key={b.titulo}
-                    type="button"
-                    disabled
-                    title="Próximamente"
-                    className="flex items-center justify-center gap-space-xs px-space-sm py-space-sm rounded-lg bg-surface-container-lowest border border-outline-variant/20 text-on-surface-variant cursor-not-allowed font-body-sm text-body-sm"
-                  >
-                    <span className="material-symbols-outlined text-[16px]">{b.icono}</span>
-                    {b.titulo}
-                    <span className="material-symbols-outlined text-[14px]">lock</span>
-                  </button>
-                ))}
+            <div className="flex flex-col gap-space-sm">
+              <p className="font-body-sm text-body-sm text-on-surface-variant">
+                Pon a prueba lo que aprendiste jugando contra compañeros de tu curso o buscando rivales de tu nivel en partidas amistosas o con reloj.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-space-sm pt-1">
+                <button
+                  type="button"
+                  onClick={() => alIrAJugar?.()}
+                  className="flex items-center justify-center gap-space-xs px-space-md py-space-sm rounded-xl bg-surface-container-high hover:bg-surface-bright font-body-sm text-body-sm text-on-surface border border-outline-variant/40 hover:border-primary/50 transition-all shadow-sm cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[20px] text-primary">person_add</span>
+                  <span className="font-semibold">Invitar a un amigo / Retar compañero</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => alIrAJugar?.()}
+                  className="flex items-center justify-center gap-space-xs px-space-md py-space-sm rounded-xl bg-primary text-on-primary font-body-sm text-body-sm font-bold shadow hover:brightness-110 transition-all cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[20px]">search</span>
+                  <span>Buscar rival de mi nivel (Matchmaking)</span>
+                </button>
               </div>
             </div>
           </SeccionAcordeon>
