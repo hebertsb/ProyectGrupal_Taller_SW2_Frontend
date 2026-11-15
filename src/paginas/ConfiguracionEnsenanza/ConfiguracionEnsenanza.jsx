@@ -18,12 +18,93 @@ import FiguritasMedallas from './FiguritasMedallas';
  * (`backend/servicios/facilitador/servicio_videos.py`). `letra` en
  * mayúscula para `rutaImagenPieza` (siempre el set blanco, ilustrativo). */
 const PIEZAS = [
-  { tipo: 'rey', nombre: 'Rey', letra: 'K' },
-  { tipo: 'dama', nombre: 'Dama', letra: 'Q' },
-  { tipo: 'torre', nombre: 'Torre', letra: 'R' },
-  { tipo: 'alfil', nombre: 'Alfil', letra: 'B' },
-  { tipo: 'caballo', nombre: 'Caballo', letra: 'N' },
-  { tipo: 'peon', nombre: 'Peón', letra: 'P' },
+  { tipo: 'rey', nombre: 'Rey', letra: 'K', descripcion: 'Movimiento de un paso en cualquier dirección y seguridad.' },
+  { tipo: 'dama', nombre: 'Dama', letra: 'Q', descripcion: 'Máxima movilidad combinando torre y alfil.' },
+  { tipo: 'torre', nombre: 'Torre', letra: 'R', descripcion: 'Desplazamiento lineal en filas y columnas.' },
+  { tipo: 'alfil', nombre: 'Alfil', letra: 'B', descripcion: 'Desplazamiento diagonal por casillas de su color.' },
+  { tipo: 'caballo', nombre: 'Caballo', letra: 'N', descripcion: 'Movimiento en forma de L con capacidad de salto.' },
+  { tipo: 'peon', nombre: 'Peón', letra: 'P', descripcion: 'Avance frontal, captura diagonal y coronación.' },
+];
+
+/** Módulos y temas del camino pedagógico de aprendizaje: aperturas, tácticas y maniobras */
+export const MODULOS_CAMINO = [
+  {
+    tipo: 'enroque',
+    nombre: 'Enroque corto y largo',
+    descripcion: 'Maniobra especial para poner a salvo al rey y activar la torre en un solo movimiento.',
+    icono: 'shield',
+    etapa: 'Paso 1 · Fundamentos',
+  },
+  {
+    tipo: 'mandamientos_apertura',
+    nombre: 'Los 3 principios de apertura',
+    descripcion: 'Controlar el centro (e4/d4), desarrollar piezas menores y proteger al rey temprano.',
+    icono: 'flag',
+    etapa: 'Pasos 2-3 · Aperturas',
+  },
+  {
+    tipo: 'defensas_activas',
+    nombre: 'Defensa Siciliana (1.e4 c5)',
+    descripcion: 'Estrategia asimétrica combativa contra 1.e4 para disputar la iniciativa desde el inicio.',
+    icono: 'swords',
+    etapa: 'Pasos 2-3 · Aperturas',
+  },
+  {
+    tipo: 'aperturas_clasicas',
+    nombre: 'Apertura Italiana y Española',
+    descripcion: 'Sistemas abiertos con 1.e4 e5: rápido desarrollo de piezas y presión sobre f7.',
+    icono: 'school',
+    etapa: 'Pasos 2-3 · Aperturas',
+  },
+  {
+    tipo: 'gambito_dama',
+    nombre: 'Juego cerrado: Gambito de Dama',
+    descripcion: 'Batalla posicional tras 1.d4 d5 2.c4: lucha estratégica por el dominio central.',
+    icono: 'account_tree',
+    etapa: 'Pasos 2-3 · Aperturas',
+  },
+  {
+    tipo: 'tactica_doble',
+    nombre: 'Táctica: Ataque doble y horquilla',
+    descripcion: 'Una sola pieza amenaza dos objetivos simultáneos ganando material decisivo.',
+    icono: 'flash_on',
+    etapa: 'Pasos 2-3 · Táctica',
+  },
+  {
+    tipo: 'tactica_clavada',
+    nombre: 'Táctica: Clavada y enfilada',
+    descripcion: 'Inmovilización de piezas rivales protegiendo piezas de mayor valor detrás.',
+    icono: 'lock',
+    etapa: 'Pasos 2-3 · Táctica',
+  },
+  {
+    tipo: 'captura',
+    nombre: 'Captura y peón al paso (En passant)',
+    descripcion: 'Mecánica de captura tradicional y regla histórica del peón al paso.',
+    icono: 'content_cut',
+    etapa: 'Paso 1 · Fundamentos',
+  },
+  {
+    tipo: 'jaque',
+    nombre: 'Jaque, jaque mate y tablas',
+    descripcion: 'Amenaza al rey, formas de eludir el jaque y condiciones de tablas reglamentarias.',
+    icono: 'emoji_events',
+    etapa: 'Paso 1 · Fundamentos',
+  },
+  {
+    tipo: 'estructuras_peones',
+    nombre: 'Estructuras e islas de peones',
+    descripcion: 'Análisis posicional de peones aislados, doblados y peones pasados.',
+    icono: 'grid_goldenratio',
+    etapa: 'Paso 4+ · Estrategia',
+  },
+  {
+    tipo: 'finales_torre',
+    nombre: 'Finales teóricos de torre y peón',
+    descripcion: 'Construcción del puente de Lucena y técnica defensiva de Filidor.',
+    icono: 'castle',
+    etapa: 'Paso 4+ · Finales',
+  },
 ];
 
 function mensajeError(err, mensajePorDefecto) {
@@ -130,11 +211,22 @@ function TarjetaVideoPieza({ pieza, urlPropio, urlGeneral, esPrincipal, estado, 
       : 'Esta pieza va a quedar sin video.';
 
   return (
-    <div className="flex flex-col gap-space-sm p-space-md rounded-xl bg-surface-container-low shadow-md min-w-0">
+    <div className="flex flex-col gap-space-sm p-space-md rounded-2xl bg-surface-container-low shadow-md border border-outline-variant/20 min-w-0">
       <div className="flex flex-wrap items-center justify-between gap-space-xs">
-        <div className="flex items-center gap-space-xs">
-          <img src={rutaImagenPieza(pieza.letra)} alt="" className="w-7 h-7 shrink-0" draggable="false" />
-          <span className="font-headline-sm text-headline-sm text-on-surface">{pieza.nombre}</span>
+        <div className="flex items-center gap-space-xs min-w-0">
+          {pieza.letra ? (
+            <img src={rutaImagenPieza(pieza.letra)} alt="" className="w-8 h-8 shrink-0" draggable="false" />
+          ) : (
+            <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+              <span className="material-symbols-outlined text-[20px]">{pieza.icono || 'videocam'}</span>
+            </div>
+          )}
+          <div className="flex flex-col min-w-0">
+            <span className="font-headline-sm text-headline-sm text-on-surface truncate">{pieza.nombre}</span>
+            {pieza.etapa && (
+              <span className="font-mono-micro text-[10px] text-primary uppercase font-bold">{pieza.etapa}</span>
+            )}
+          </div>
         </div>
         <span
           className={`flex items-center gap-1 font-mono-micro text-mono-micro tracking-wide uppercase px-space-xs py-space-2xs rounded-full font-medium ${claseEstado}`}
@@ -145,6 +237,10 @@ function TarjetaVideoPieza({ pieza, urlPropio, urlGeneral, esPrincipal, estado, 
           {etiquetaEstado}
         </span>
       </div>
+
+      {pieza.descripcion && (
+        <p className="font-body-sm text-body-sm text-on-surface-variant m-0 leading-snug">{pieza.descripcion}</p>
+      )}
 
       {previewUrl ? (
         <video
@@ -170,8 +266,8 @@ function TarjetaVideoPieza({ pieza, urlPropio, urlGeneral, esPrincipal, estado, 
             className="w-full aspect-video rounded-lg bg-surface-container-lowest"
           />
           <p className="font-mono-micro text-mono-micro text-on-surface-variant">
-            Este es el video general: tus jugadores lo ven hasta que subas el tuyo, y el tuyo lo reemplaza solo en esta
-            pieza.
+            Este es el video general: tus jugadores lo ven hasta que subas el tuyo, y el tuyo lo reemplaza solo en este
+            contenido.
           </p>
         </>
       ) : (
@@ -180,7 +276,7 @@ function TarjetaVideoPieza({ pieza, urlPropio, urlGeneral, esPrincipal, estado, 
             videocam
           </span>
           <p className="font-mono-micro text-mono-micro text-on-surface-variant">
-            Todavía no hay un video de esta pieza.{' '}
+            Todavía no hay un video para este contenido.{' '}
             {esPrincipal ? 'Subí uno y lo ven todos los jugadores.' : 'Subí uno y lo ven los jugadores de tus cursos.'}
           </p>
         </div>
@@ -357,6 +453,7 @@ function TarjetaPreset({ preset, seleccionado, onSeleccionar }) {
  */
 export default function ConfiguracionEnsenanza({ usuario, alActualizarUsuario }) {
   const [ayudaAbierta, setAyudaAbierta] = useState(false);
+  const [pestanaVideos, setPestanaVideos] = useState('piezas'); // 'piezas' | 'camino'
 
   // La sesión guardada puede ser anterior a `es_principal`: se relee el perfil del servidor al entrar.
   const [esPrincipal, setEsPrincipal] = useState(usuario?.es_principal === true);
@@ -545,16 +642,62 @@ export default function ConfiguracionEnsenanza({ usuario, alActualizarUsuario })
         )}
       </div>
 
-      {/* Gestor de videos por pieza */}
+      {/* Gestor de videos educativos (Por pieza y por temas del camino) */}
       <section className="flex flex-col gap-space-md">
-        <div className="flex items-center gap-space-xs">
-          <span className="material-symbols-outlined text-[20px] text-primary">video_library</span>
-          <h2 className="font-headline-sm text-headline-sm text-on-surface">Videos por pieza</h2>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-space-xs">
+            <span className="material-symbols-outlined text-[24px] text-primary">video_library</span>
+            <h2 className="font-headline-sm text-headline-sm text-on-surface m-0">Gestión de Videos Educativos</h2>
+          </div>
+
+          {/* Selector de pestañas: Piezas vs Camino de Aprendizaje */}
+          <div className="flex flex-wrap gap-2" role="tablist" aria-label="Sección de videos">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={pestanaVideos === 'piezas'}
+              onClick={() => setPestanaVideos('piezas')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-2xl font-body-sm font-bold transition-all cursor-pointer border ${
+                pestanaVideos === 'piezas'
+                  ? 'bg-primary text-on-primary border-primary shadow-md shadow-primary/20 scale-[1.02]'
+                  : 'bg-surface-container hover:bg-surface-container-high text-on-surface border-outline-variant/30'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[18px]">category</span>
+              <span>Videos por Pieza</span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] bg-black/20 text-inherit font-mono font-normal">
+                6 piezas
+              </span>
+            </button>
+
+            <button
+              type="button"
+              role="tab"
+              aria-selected={pestanaVideos === 'camino'}
+              onClick={() => setPestanaVideos('camino')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-2xl font-body-sm font-bold transition-all cursor-pointer border ${
+                pestanaVideos === 'camino'
+                  ? 'bg-neon-lime text-black border-neon-lime shadow-md shadow-neon-lime/20 scale-[1.02]'
+                  : 'bg-surface-container hover:bg-surface-container-high text-on-surface border-outline-variant/30'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[18px]">route</span>
+              <span>Videos del Camino (Aperturas, Tácticas y Maniobras)</span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] bg-black/20 text-inherit font-mono font-normal">
+                {MODULOS_CAMINO.length} lecciones
+              </span>
+            </button>
+          </div>
         </div>
-        <p className="font-body-sm text-body-sm text-on-surface-variant">
-          {esPrincipal
-            ? 'Tus videos son los generales: los ven todos los jugadores, salvo en las piezas donde el facilitador de su curso subió el suyo.'
-            : 'Los videos generales los pone el facilitador principal. Si subís uno para una pieza, tus jugadores ven el tuyo en lugar del general, solo en esa pieza.'}
+
+        <p className="font-body-sm text-body-sm text-on-surface-variant m-0">
+          {pestanaVideos === 'piezas'
+            ? esPrincipal
+              ? 'Videos generales del movimiento de cada pieza. Los ven todos los estudiantes de la plataforma por defecto.'
+              : 'Videos de tu autoría para conocer las piezas. Reemplazan al video general solo para los estudiantes de tus cursos.'
+            : esPrincipal
+              ? 'Videos generales para las lecciones del camino (Enroque, Siciliana, Táctica, etc.). Tus alumnos los ven en las ventanas de demostración.'
+              : 'Videos específicos de tu autoría para las lecciones y maniobras del camino (Enroque, Siciliana, etc.). Permiten explicar cada táctica sin alterar el video base de las piezas.'}
         </p>
 
         {cargandoVideos && <CargandoInline texto="Buscando tus videos…" />}
@@ -567,14 +710,14 @@ export default function ConfiguracionEnsenanza({ usuario, alActualizarUsuario })
 
         {!cargandoVideos && !errorVideos && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-space-md">
-            {PIEZAS.map((pieza) => (
+            {(pestanaVideos === 'piezas' ? PIEZAS : MODULOS_CAMINO).map((item) => (
               <TarjetaVideoPieza
-                key={pieza.tipo}
-                pieza={pieza}
-                urlPropio={videos[pieza.tipo] ?? null}
-                urlGeneral={general[pieza.tipo] ?? null}
+                key={item.tipo}
+                pieza={item}
+                urlPropio={videos[item.tipo] ?? null}
+                urlGeneral={general[item.tipo] ?? null}
                 esPrincipal={esPrincipal}
-                estado={estadoSubida[pieza.tipo]}
+                estado={estadoSubida[item.tipo]}
                 onSubir={manejarSubirVideo}
                 onQuitar={manejarQuitarVideo}
               />

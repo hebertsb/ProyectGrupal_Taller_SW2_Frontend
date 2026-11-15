@@ -740,7 +740,12 @@ function ModalLeccionCapitulo({
   };
 
   const tipoPieza = capitulo.tipoPiezaVideo;
-  const urlVideoFacilitador = tipoPieza && videosPorPieza ? videosPorPieza[tipoPieza] : null;
+  // Prioridad 1: Video específico del tema/módulo subido por el facilitador (ej: 'enroque', 'mandamientos_apertura', 'defensas_activas')
+  // Prioridad 2: Fallback al video de la pieza asociada (ej: 'rey', 'alfil', etc.)
+  const urlVideoFacilitador =
+    (videosPorPieza && videosPorPieza[capitulo.id]) ||
+    (tipoPieza && videosPorPieza ? videosPorPieza[tipoPieza] : null);
+  const esVideoEspecificoDelModulo = Boolean(videosPorPieza && videosPorPieza[capitulo.id]);
 
   // Si el módulo ya estaba completado previamente, puede ingresar a probar directo;
   // si es el paso en curso, debe completar la visualización/demostración.
@@ -807,7 +812,9 @@ function ModalLeccionCapitulo({
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <span className="flex items-center gap-1.5 font-mono-micro text-mono-micro text-primary font-bold uppercase tracking-wider">
                 <span className="material-symbols-outlined text-[16px]">smart_display</span>
-                Video Demostrativo del Docente
+                {esVideoEspecificoDelModulo
+                  ? `Video de la Lección (${capitulo.titulo})`
+                  : 'Video Demostrativo del Docente'}
               </span>
               {urlVideoFacilitador ? (
                 <span className="px-2 py-0.5 rounded bg-neon-lime/15 text-neon-lime text-[10px] font-mono uppercase font-bold">
