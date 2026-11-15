@@ -677,7 +677,7 @@ export default function ConfiguracionEnsenanza({ usuario, alActualizarUsuario })
               onClick={() => setPestanaVideos('camino')}
               className={`flex items-center gap-2 px-4 py-2 rounded-2xl font-body-sm font-bold transition-all cursor-pointer border ${
                 pestanaVideos === 'camino'
-                  ? 'bg-neon-lime text-black border-neon-lime shadow-md shadow-neon-lime/20 scale-[1.02]'
+                  ? 'bg-primary text-on-primary border-primary shadow-md shadow-primary/20 scale-[1.02]'
                   : 'bg-surface-container hover:bg-surface-container-high text-on-surface border-outline-variant/30'
               }`}
             >
