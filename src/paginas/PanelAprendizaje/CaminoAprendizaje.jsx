@@ -197,7 +197,6 @@ export const ETAPAS_APRENDIZAJE = {
 
 /**
  * Contenido pedagógico detallado para la ventana flotante (Modal) de cada módulo.
- * Incluye instrucciones paso a paso, reglas obligatorias, diagramas y consejos del tutor.
  */
 const CONTENIDO_LECCIONES = {
   enroque: {
@@ -228,24 +227,26 @@ const CONTENIDO_LECCIONES = {
     tipoDiagrama: 'enroque',
     consejo: 'Procura enrocar en las primeras 10 jugadas. Un rey que permanece en el centro es el objetivo más fácil para los ataques tácticos del rival.',
   },
+  mandamientos_apertura: {
+    subtitulo: 'Los 3 principios de oro en las primeras 10 jugadas',
+    pasos: [
+      { num: 1, titulo: '1. Ocupar y controlar el centro', desc: 'Avanza los peones centrales (e4, d4) para disputar las casillas clave y abrir diagonales a tus alfiles.' },
+      { num: 2, titulo: '2. Desarrollar piezas menores activamente', desc: 'Saca los caballos (Cf3, Cc3) antes que los alfiles (Ac4, Ab5). No muevas la misma pieza dos veces en la apertura.' },
+      { num: 3, titulo: '3. Enrocar y asegurar el Rey', desc: 'Pon a salvo tu rey antes de lanzar operaciones ofensivas o abrir el centro.' },
+    ],
+    reglas: [
+      { tipo: 'ok', texto: 'Desarrolla caballos antes que alfiles para controlar el centro rápidamente.' },
+      { tipo: 'prohibido', texto: 'No saques la Dama demasiado temprano: será atacada por peones y piezas menores rivales con pérdida de tiempos.' },
+    ],
+    tipoDiagrama: 'mandamientos',
+    consejo: 'Si sigues estos 3 mandamientos, llegarás al medio juego con una posición sólida, coordinada y sin piezas colgadas.',
+  },
   tablero: {
     subtitulo: 'Geometría del tablero de 64 casillas, columnas y filas',
     pasos: [
-      {
-        num: 1,
-        titulo: 'Casilla blanca a la derecha',
-        desc: 'Al sentarse ante el tablero, la esquina inferior derecha de cada jugador (h1 para blancas, a8 para negras) siempre debe ser una casilla de color claro.',
-      },
-      {
-        num: 2,
-        titulo: 'Columnas y Filas',
-        desc: 'Las columnas se identifican con letras minúsculas (a, b, c, d, e, f, g, h) de izquierda a derecha. Las filas se numeran del 1 al 8 desde las blancas hacia las negras.',
-      },
-      {
-        num: 3,
-        titulo: 'El Centro del tablero',
-        desc: 'Las 4 casillas d4, e4, d5 y e5 forman el "centro grande". Dominar estas casillas permite que tus piezas se desplacen rápidamente a cualquier flanco.',
-      },
+      { num: 1, titulo: 'Casilla blanca a la derecha', desc: 'La esquina inferior derecha de cada jugador (h1 para blancas, a8 para negras) siempre debe ser una casilla clara.' },
+      { num: 2, titulo: 'Columnas y Filas', desc: 'Las columnas se identifican con letras minúsculas (a-h) de izquierda a derecha. Las filas se numeran del 1 al 8.' },
+      { num: 3, titulo: 'El Centro del tablero', desc: 'Las 4 casillas d4, e4, d5 y e5 forman el centro grande. Dominar estas casillas otorga ventaja posicional.' },
     ],
     reglas: [
       { tipo: 'ok', texto: 'Cada casilla tiene una coordenada única (ejemplo: e4, f7, c3).' },
@@ -324,20 +325,6 @@ const CONTENIDO_LECCIONES = {
     ],
     tipoDiagrama: 'jaque',
     consejo: 'Antes de realizar una jugada cuando tienes gran ventaja, verifica que el rey enemigo tenga al menos una casilla libre para evitar el empate por ahogado.',
-  },
-  mandamientos_apertura: {
-    subtitulo: 'Los 3 principios de oro en las primeras 10 jugadas',
-    pasos: [
-      { num: 1, titulo: '1. Ocupar y controlar el centro', desc: 'Avanza los peones centrales (e4, d4) para disputar las casillas clave y abrir caminos a tus piezas.' },
-      { num: 2, titulo: '2. Desarrollar piezas menores rápidamente', desc: 'Saca los caballos y alfiles a casillas activas. No muevas la misma pieza dos veces en la apertura.' },
-      { num: 3, titulo: '3. Enrocar y asegurar el Rey', desc: 'Pon a salvo tu rey antes de lanzar operaciones ofensivas en el centro.' },
-    ],
-    reglas: [
-      { tipo: 'ok', texto: 'Desarrolla caballos antes que alfiles (generalmente Cf3 y Cc3).' },
-      { tipo: 'prohibido', texto: 'No saques la Dama demasiado temprano: será atacada por peones y piezas menores rivales con pérdida de tiempo.' },
-    ],
-    tipoDiagrama: 'apertura',
-    consejo: 'Si sigues estos 3 mandamientos, llegarás al medio juego con una posición sólida y sin piezas colgadas.',
   },
   aperturas_clasicas: {
     subtitulo: 'Apertura Italiana (1.e4 e5 2.Cf3 Cc6 3.Ac4) y Española (3.Ab5)',
@@ -477,14 +464,12 @@ const CONTENIDO_LECCIONES = {
 
 /**
  * Diagrama interactivo específico para la maniobra del Enroque.
- * Permite al alumno alternar entre enroque corto (O-O) y largo (O-O-O),
- * y ver la posición antes y después del movimiento con etiquetas claras.
+ * Al ver el movimiento enrocado, notifica a la lección que la demostración fue completada.
  */
-function DiagramaEnroque() {
+function DiagramaEnroque({ onCompletar }) {
   const [tipo, setTipo] = useState('corto'); // 'corto' | 'largo'
-  const [estado, setEstado] = useState('enrocado'); // 'inicial' | 'enrocado'
+  const [estado, setEstado] = useState('inicial'); // Inicia en posición inicial
 
-  // Configuración de piezas en la fila 1 (blancas)
   const casillas = ['a1', 'b1', 'c1', 'd1', 'e1', 'f1', 'g1', 'h1'];
 
   function piezaEnCasilla(c) {
@@ -494,24 +479,26 @@ function DiagramaEnroque() {
         if (c === 'h1') return 'R';
         return null;
       } else {
-        // Enrocado corto: Rey en g1, Torre en f1
         if (c === 'g1') return 'K';
         if (c === 'f1') return 'R';
         return null;
       }
     } else {
-      // Enroque largo
       if (estado === 'inicial') {
         if (c === 'e1') return 'K';
         if (c === 'a1') return 'R';
         return null;
       } else {
-        // Enrocado largo: Rey en c1, Torre en d1
         if (c === 'c1') return 'K';
         if (c === 'd1') return 'R';
         return null;
       }
     }
+  }
+
+  function ejecutarEnroque() {
+    setEstado('enrocado');
+    if (onCompletar) onCompletar();
   }
 
   return (
@@ -520,7 +507,10 @@ function DiagramaEnroque() {
         <div className="flex items-center gap-1.5 bg-surface-container p-1 rounded-xl">
           <button
             type="button"
-            onClick={() => setTipo('corto')}
+            onClick={() => {
+              setTipo('corto');
+              setEstado('inicial');
+            }}
             className={`px-3 py-1 rounded-lg font-mono-micro text-mono-micro transition-colors ${
               tipo === 'corto'
                 ? 'bg-primary text-on-primary font-bold shadow-sm'
@@ -531,7 +521,10 @@ function DiagramaEnroque() {
           </button>
           <button
             type="button"
-            onClick={() => setTipo('largo')}
+            onClick={() => {
+              setTipo('largo');
+              setEstado('inicial');
+            }}
             className={`px-3 py-1 rounded-lg font-mono-micro text-mono-micro transition-colors ${
               tipo === 'largo'
                 ? 'bg-primary text-on-primary font-bold shadow-sm'
@@ -556,14 +549,15 @@ function DiagramaEnroque() {
           </button>
           <button
             type="button"
-            onClick={() => setEstado('enrocado')}
-            className={`px-2.5 py-1 rounded-lg font-mono-micro text-mono-micro transition-colors ${
+            onClick={ejecutarEnroque}
+            className={`px-2.5 py-1 rounded-lg font-mono-micro text-mono-micro transition-colors flex items-center gap-1 ${
               estado === 'enrocado'
-                ? 'bg-neon-lime text-black font-bold shadow-sm'
-                : 'text-on-surface-variant hover:text-on-surface'
+                ? 'bg-neon-lime text-black font-extrabold shadow-sm'
+                : 'bg-primary/20 text-primary font-bold hover:bg-primary/30'
             }`}
           >
-            2. ¡Enrocado!
+            <span className="material-symbols-outlined text-[15px]">play_arrow</span>
+            2. ¡Ejecutar Enroque!
           </button>
         </div>
       </div>
@@ -573,11 +567,11 @@ function DiagramaEnroque() {
         <span className="font-mono-micro text-mono-micro text-on-surface-variant text-center">
           {tipo === 'corto'
             ? estado === 'inicial'
-              ? 'Posición previa: Rey en e1 y Torre en h1 con casillas libres intermedias'
-              : 'Resultado: El Rey saltó a g1 (2 casillas) y la Torre saltó a f1'
+              ? 'Posición previa: Rey en e1 y Torre en h1 con casillas f1 y g1 libres. ¡Toca "2. Ejecutar Enroque"!'
+              : 'Resultado: El Rey saltó a g1 (2 casillas) y la Torre saltó a f1.'
             : estado === 'inicial'
-              ? 'Posición previa: Rey en e1 y Torre en a1 con 3 casillas libres intermedias'
-              : 'Resultado: El Rey saltó a c1 (2 casillas) y la Torre saltó a d1'}
+              ? 'Posición previa: Rey en e1 y Torre en a1 con casillas b1, c1, d1 libres. ¡Toca "2. Ejecutar Enroque"!'
+              : 'Resultado: El Rey saltó a c1 (2 casillas) y la Torre saltó a d1.'}
         </span>
 
         <div className="grid grid-cols-8 w-full max-w-md border-2 border-outline-variant/60 rounded-xl overflow-hidden shadow-inner">
@@ -616,7 +610,6 @@ function DiagramaEnroque() {
                   />
                 )}
 
-                {/* Guía visual en casilla de destino cuando está en posición inicial */}
                 {!pieza && estado === 'inicial' && (
                   <>
                     {tipo === 'corto' && coord === 'g1' && (
@@ -643,8 +636,90 @@ function DiagramaEnroque() {
 }
 
 /**
- * Ventana Flotante / Modal que muestra la lección completa, video y demostración
- * cuando el estudiante toca cualquier nodo del camino o el botón de ver cómo se hace.
+ * Diagrama interactivo específico para Los 3 Principios de Apertura.
+ * Permite explorar los 3 mandamientos y desbloquear la práctica en Sala de Control.
+ */
+function DiagramaMandamientosApertura({ onCompletar }) {
+  const [paso, setPaso] = useState(1);
+
+  function verPaso(num) {
+    setPaso(num);
+    if (num === 3 && onCompletar) {
+      onCompletar();
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3 p-4 rounded-2xl bg-surface-container-high/60 border border-outline-variant/30">
+      <div className="grid grid-cols-3 gap-1.5 bg-surface-container p-1 rounded-xl">
+        <button
+          type="button"
+          onClick={() => verPaso(1)}
+          className={`px-2 py-1.5 rounded-lg font-mono-micro text-mono-micro transition-colors flex items-center justify-center gap-1 ${
+            paso === 1 ? 'bg-primary text-on-primary font-bold shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
+          }`}
+        >
+          <span>1. Centro</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => verPaso(2)}
+          className={`px-2 py-1.5 rounded-lg font-mono-micro text-mono-micro transition-colors flex items-center justify-center gap-1 ${
+            paso === 2 ? 'bg-primary text-on-primary font-bold shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
+          }`}
+        >
+          <span>2. Desarrollo</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => verPaso(3)}
+          className={`px-2 py-1.5 rounded-lg font-mono-micro text-mono-micro transition-colors flex items-center justify-center gap-1 ${
+            paso === 3 ? 'bg-neon-lime text-black font-extrabold shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
+          }`}
+        >
+          <span>3. Enroque</span>
+        </button>
+      </div>
+
+      <div className="p-3.5 rounded-xl bg-surface-container-lowest border border-outline-variant/30 flex items-start gap-3">
+        <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center text-primary font-mono text-base font-bold shrink-0">
+          {paso}
+        </div>
+        <div className="flex flex-col gap-1 min-w-0">
+          <h4 className="font-body-sm text-body-sm font-bold text-on-surface">
+            {paso === 1 && 'Dominar las casillas centrales (d4, e4, d5, e5)'}
+            {paso === 2 && 'Desarrollar Caballos y Alfiles hacia casillas activas'}
+            {paso === 3 && 'Asegurar al Rey mediante el enroque rápido'}
+          </h4>
+          <p className="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
+            {paso === 1 && 'Avanza e4 o d4 en las dos primeras jugadas. Un peón en el centro frena el avance enemigo y abre paso a tus alfiles y dama.'}
+            {paso === 2 && 'Mueve los caballos a f3 y c3, y los alfiles a c4 o b5. No muevas la misma pieza dos veces en la apertura.'}
+            {paso === 3 && 'El rey en el centro es vulnerable a sacrificios y ataques en la columna e. ¡Enroca antes de la jugada 10!'}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => {
+            verPaso(3);
+            if (onCompletar) onCompletar();
+          }}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-container-highest hover:bg-surface-bright text-primary font-mono-micro text-mono-micro font-bold border border-primary/30 transition-colors"
+        >
+          <span className="material-symbols-outlined text-[16px]">verified</span>
+          He revisado los 3 principios de apertura
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Ventana Flotante / Modal que muestra la lección completa, video y demostración.
+ * REGLA PEDAGÓGICA: El botón "Probar una partida (Ir a Sala de Control)" SOLO aparece
+ * una vez que el estudiante haya finalizado el video o interactuado con la demostración.
  */
 function ModalLeccionCapitulo({
   capitulo,
@@ -666,6 +741,11 @@ function ModalLeccionCapitulo({
 
   const tipoPieza = capitulo.tipoPiezaVideo;
   const urlVideoFacilitador = tipoPieza && videosPorPieza ? videosPorPieza[tipoPieza] : null;
+
+  // Si el módulo ya estaba completado previamente, puede ingresar a probar directo;
+  // si es el paso en curso, debe completar la visualización/demostración.
+  const yaEstabaCompletado = capitulo.estado === 'completado';
+  const [demostracionCompletada, setDemostracionCompletada] = useState(yaEstabaCompletado);
 
   return (
     <div
@@ -729,40 +809,62 @@ function ModalLeccionCapitulo({
                 <span className="material-symbols-outlined text-[16px]">smart_display</span>
                 Video Demostrativo del Docente
               </span>
-              {urlVideoFacilitador && (
+              {urlVideoFacilitador ? (
                 <span className="px-2 py-0.5 rounded bg-neon-lime/15 text-neon-lime text-[10px] font-mono uppercase font-bold">
-                  Video oficial cargado
+                  {demostracionCompletada ? '✓ Video Visto' : 'Reproduciendo'}
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded bg-surface-container text-on-surface-variant text-[10px] font-mono uppercase">
+                  Guía interactiva activa
                 </span>
               )}
             </div>
 
             {urlVideoFacilitador ? (
-              <div className="relative aspect-video w-full rounded-xl overflow-hidden bg-black shadow-md">
-                <video
-                  src={urlVideoFacilitador}
-                  controls
-                  playsInline
-                  className="w-full h-full object-contain"
-                  aria-label={`Video explicativo para ${capitulo.titulo}`}
-                />
+              <div className="flex flex-col gap-2">
+                <div className="relative aspect-video w-full rounded-xl overflow-hidden bg-black shadow-md">
+                  <video
+                    src={urlVideoFacilitador}
+                    controls
+                    playsInline
+                    onEnded={() => setDemostracionCompletada(true)}
+                    className="w-full h-full object-contain"
+                    aria-label={`Video explicativo para ${capitulo.titulo}`}
+                  />
+                </div>
+                {!demostracionCompletada && (
+                  <button
+                    type="button"
+                    onClick={() => setDemostracionCompletada(true)}
+                    className="self-end px-3 py-1 rounded-lg bg-surface-container text-primary hover:bg-surface-container-high text-mono-micro font-bold transition-colors"
+                  >
+                    ✓ Ya terminé de ver el video
+                  </button>
+                )}
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center gap-2 py-6 px-4 rounded-xl border border-dashed border-outline-variant/40 bg-surface-container-high/40 text-center">
-                <span className="material-symbols-outlined text-[32px] text-on-surface-variant opacity-70">
+              <div className="flex flex-col items-center justify-center gap-2 py-5 px-4 rounded-xl border border-dashed border-outline-variant/40 bg-surface-container-high/40 text-center">
+                <span className="material-symbols-outlined text-[30px] text-on-surface-variant opacity-70">
                   videocam
                 </span>
                 <p className="font-body-sm text-body-sm text-on-surface-variant max-w-md">
-                  El docente o facilitador puede subir videos demostrativos personalizados desde el panel de gestión para enriquecer este módulo.
+                  El docente o facilitador puede subir videos demostrativos desde su panel de gestión para enriquecer este módulo.
                 </p>
                 <span className="font-mono-micro text-mono-micro text-primary font-semibold">
-                  ¡Aprende con la guía y demostración interactiva a continuación!
+                  Aprende e interactúa con la demostración a continuación para desbloquear tu partida:
                 </span>
               </div>
             )}
           </div>
 
-          {/* Demostración interactiva específica (Tablero de Enroque o Visual) */}
-          {contenido.tipoDiagrama === 'enroque' && <DiagramaEnroque />}
+          {/* Demostraciones interactivas específicas */}
+          {contenido.tipoDiagrama === 'enroque' && (
+            <DiagramaEnroque onCompletar={() => setDemostracionCompletada(true)} />
+          )}
+
+          {contenido.tipoDiagrama === 'mandamientos' && (
+            <DiagramaMandamientosApertura onCompletar={() => setDemostracionCompletada(true)} />
+          )}
 
           {/* Pasos pedagógicos explicativos */}
           <div className="flex flex-col gap-3">
@@ -790,6 +892,20 @@ function ModalLeccionCapitulo({
               ))}
             </div>
           </div>
+
+          {/* Botón explícito para validar la demostración en lecciones generales */}
+          {contenido.tipoDiagrama !== 'enroque' && contenido.tipoDiagrama !== 'mandamientos' && !demostracionCompletada && (
+            <div className="flex justify-center p-3 rounded-2xl bg-surface-container-high/60 border border-primary/30">
+              <button
+                type="button"
+                onClick={() => setDemostracionCompletada(true)}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-on-primary font-body-sm text-body-sm font-bold shadow-md hover:brightness-110 transition-all"
+              >
+                <span className="material-symbols-outlined text-[18px]">visibility</span>
+                He completado la lectura y demostración de esta lección
+              </button>
+            </div>
+          )}
 
           {/* Reglas y Condiciones Obligatorias */}
           {contenido.reglas.length > 0 && (
@@ -839,8 +955,8 @@ function ModalLeccionCapitulo({
           )}
         </div>
 
-        {/* Pie de acciones del Modal */}
-        <div className="flex flex-wrap items-center justify-between gap-2 p-4 sm:p-5 border-t border-outline-variant/30 bg-surface-container-high/60 shrink-0">
+        {/* Pie de acciones del Modal con condición de finalización de demostración */}
+        <div className="flex flex-wrap items-center justify-between gap-3 p-4 sm:p-5 border-t border-outline-variant/30 bg-surface-container-high/70 shrink-0">
           <button
             type="button"
             onClick={onCerrar}
@@ -849,32 +965,38 @@ function ModalLeccionCapitulo({
             Cerrar
           </button>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            {alIrASalaControl && (
-              <button
-                type="button"
-                onClick={() => {
-                  onCerrar();
-                  alIrASalaControl();
-                }}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-surface-container-highest hover:bg-surface-bright text-on-surface font-body-sm text-body-sm font-semibold border border-outline-variant/40 transition-colors"
-              >
-                <span className="material-symbols-outlined text-[16px]">smart_toy</span>
-                Practicar en Sala de Control
-              </button>
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Si NO ha terminado la demostración o video: se muestra el candado pedagógico */}
+            {!demostracionCompletada && (
+              <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-surface-container-lowest border border-outline-variant/40 text-on-surface-variant font-mono-micro text-mono-micro">
+                <span className="material-symbols-outlined text-[16px] text-primary animate-pulse">lock</span>
+                <span>Termina la demostración para desbloquear tu partida</span>
+              </div>
             )}
 
-            <button
-              type="button"
-              onClick={() => {
-                alMarcarVisto(capitulo.id);
-                onCerrar();
-              }}
-              className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-primary-container text-on-primary font-body-sm text-body-sm font-semibold shadow-md hover:brightness-110 transition-all"
-            >
-              <span className="material-symbols-outlined text-[18px]">verified</span>
-              ¡Ya lo comprendí! (Marcar listo)
-            </button>
+            {/* Si YA terminó la demostración o video: APARECE EL BOTÓN DESTACADO "PROBAR UNA PARTIDA" */}
+            <AnimatePresence>
+              {demostracionCompletada && (
+                <motion.button
+                  key="btn-probar-partida"
+                  type="button"
+                  initial={{ scale: 0.85, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.85, opacity: 0 }}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => {
+                    alMarcarVisto(capitulo.id);
+                    onCerrar();
+                    if (alIrASalaControl) alIrASalaControl();
+                  }}
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-neon-lime text-black font-body-sm text-body-sm font-black shadow-[0_0_24px_rgba(204,255,0,0.55)] hover:brightness-110 transition-all animate-pulse"
+                >
+                  <span className="material-symbols-outlined text-[20px] font-black">sports_esports</span>
+                  Probar una partida (Ir a Sala de Control)
+                </motion.button>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       </motion.div>
@@ -1234,18 +1356,6 @@ function TarjetaPasoActual({
             Ir a Aprendé cada pieza
           </motion.button>
         )}
-        {capitulo.accion === 'sala' && alIrASalaControl && (
-          <motion.button
-            type="button"
-            onClick={alIrASalaControl}
-            whileHover={reducir ? undefined : { scale: 1.04 }}
-            whileTap={reducir ? undefined : { scale: 0.96 }}
-            className={claseBoton}
-          >
-            <span className="material-symbols-outlined text-[16px]">smart_toy</span>
-            Ir a Sala de Control y jugar
-          </motion.button>
-        )}
         {capitulo.accion === 'repaso' && alIrASeccion && (
           <motion.button
             type="button"
@@ -1278,7 +1388,7 @@ function TarjetaPasoActual({
 /**
  * Camino de Aprendizaje multinivel adaptativo.
  * Implementa la fundamentación pedagógica formal (FIDE Stappenmethode y Práctica Deliberada).
- * Ahora con flechas indicadoras animadas sobre cada esfera activa y ventanas flotantes interactivas.
+ * Ventana flotante con verificación de demostración/video antes de permitir probar partida.
  */
 export default function CaminoAprendizaje({
   usuarioId,
@@ -1308,7 +1418,6 @@ export default function CaminoAprendizaje({
 
   const [etapaActiva, setEtapaActiva] = useState(etapaSugerida);
 
-  // Sincronizar si cambia el rango
   useEffect(() => {
     if (rango === 'Avanzado') setEtapaActiva('avanzado');
     else if (rango === 'Intermedio') setEtapaActiva('intermedio');
