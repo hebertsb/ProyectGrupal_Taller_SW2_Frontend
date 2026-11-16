@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { login as loginApi, loginGoogle, registro as registroApi, verificarCodigoFacilitador } from '../../api/backend';
+import { backendEnLinea, login as loginApi, loginGoogle, registro as registroApi, verificarCodigoFacilitador } from '../../api/backend';
 import { capturarCursoDelEnlace, cursoPendiente } from '../../enlaceCurso';
 import { capturarEnlaceDeJuego, enlaceDeJuegoPendiente } from '../../enlaceJuego';
 import { borrarInvitacionDelEnlace, leerInvitacionDelEnlace } from '../../enlaceInvitacion';
@@ -100,6 +100,24 @@ export default function Login({ onLoginSuccess, apariencia, modoInicial = 'login
 
   const animTimerRef = useRef(null);
 
+  // Estado real del servidor: se consulta /health al abrir y cada 20 s; la respuesta es lo que tardó esa consulta.
+  const [servidor, setServidor] = useState({ conectado: null, ms: null });
+  useEffect(() => {
+    let activo = true;
+    const consultar = async () => {
+      const inicio = performance.now();
+      const conectado = await backendEnLinea();
+      if (activo) setServidor({ conectado, ms: conectado ? Math.round(performance.now() - inicio) : null });
+    };
+    consultar();
+    const intervalo = setInterval(consultar, 20000);
+    return () => {
+      activo = false;
+      clearInterval(intervalo);
+    };
+  }, []);
+  const conexionCifrada = window.location.protocol === 'https:';
+
   // Botón oficial de Google (Google Identity Services). La librería se carga una sola vez y
   // dibuja el botón clásico de Google, que abre la ventana real para elegir la cuenta.
   const googleBtnRef = useRef(null);
@@ -188,7 +206,7 @@ export default function Login({ onLoginSuccess, apariencia, modoInicial = 'login
 
     // Modal / Prompt de fallback para desarrollo local o demostración inmediata
     const emailPrompt = window.prompt(
-      `Acceso Google OAuth (Entorno de Desarrollo Kairos Core):\n\nIngresa tu correo de Google para simular el inicio federado (o déjalo en blanco para usar tu cuenta de prueba ${rolEsperado === 'facilitador' ? 'facilitador@test.com' : 'jugador@test.com'}):`,
+      `Acceso con Google (entorno de desarrollo):\n\nIngresa tu correo de Google para simular el inicio federado (o déjalo en blanco para usar tu cuenta de prueba ${rolEsperado === 'facilitador' ? 'facilitador@test.com' : 'jugador@test.com'}):`,
       rolEsperado === 'facilitador' ? 'facilitador@test.com' : 'jugador@test.com'
     );
 
@@ -198,7 +216,7 @@ export default function Login({ onLoginSuccess, apariencia, modoInicial = 'login
     const mockCredential = `demo_${emailElegido}`;
 
     setCargando(true);
-    setMensajeEstado('Validando federación OAuth2 con KAIROS Core...');
+    setMensajeEstado('Validando tu cuenta de Google...');
     setProgresoTrack(30);
 
     setTimeout(async () => {
@@ -216,12 +234,12 @@ export default function Login({ onLoginSuccess, apariencia, modoInicial = 'login
   // Secuencia visual de éxito con pista de ajedrez
   const ejecutarSecuenciaExito = (data) => {
     setProgresoTrack(75);
-    setMensajeEstado('Sincronizando enlace con Actuador KAIROS...');
+    setMensajeEstado('Preparando tu sesión...');
 
     animTimerRef.current = setTimeout(() => {
       setProgresoTrack(100);
       setLoginExitoso(true);
-      setMensajeEstado('¡Enlace Actuador confirmado! Sesión autorizada.');
+      setMensajeEstado('¡Sesión autorizada!');
 
       // Guardar en Storage
       guardarSesion(
@@ -241,7 +259,7 @@ export default function Login({ onLoginSuccess, apariencia, modoInicial = 'login
     setError(null);
     setCargando(true);
     setProgresoTrack(25);
-    setMensajeEstado('Cifrando credenciales de acceso...');
+    setMensajeEstado('Verificando tus credenciales...');
 
     try {
       let data;
@@ -253,7 +271,7 @@ export default function Login({ onLoginSuccess, apariencia, modoInicial = 'login
         if (rolEsperado === 'jugador' && esMenorDeclarado && autorizaTutor && (tutorNombre.trim().length < 2 || tutorTelefono.replace(/\D/g, '').length < 7)) {
           throw new Error('Para declarar la autorización escribí el nombre y el teléfono de tu madre, padre o tutor.');
         }
-        setMensajeEstado('Registrando nuevo operador en el nodo...');
+        setMensajeEstado('Creando tu cuenta...');
         setProgresoTrack(45);
         data = await registroApi(
           email.trim(),
@@ -365,18 +383,14 @@ export default function Login({ onLoginSuccess, apariencia, modoInicial = 'login
         }
       `}</style>
 
-      {/* 1. FONDO CON MARCA DE AGUA FUTURISTA Y ARTE ROBÓTICO KAIROS */}
+      {/* 1. FONDO DE ARTE ROBÓTICO */}
       <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none" data-purpose="futuristic-scenery">
         {/* Imagen de fondo representativa de ajedrez robótico */}
         <img
-          alt="Fondo KAIROS Robot Chess Art"
+          alt=""
+          aria-hidden="true"
           className="absolute w-full h-full object-cover object-center filter brightness-90 contrast-110 opacity-60 scale-100 transform duration-700 ease-out"
-          src="/img/kairos_robot_bg.png"
-          onError={(e) => {
-            e.currentTarget.onerror = null;
-            e.currentTarget.src =
-              "https://lh3.googleusercontent.com/aida/AEtjO1WN9d-8ugCVVIzHn-mJLurilDjUiMqCn5WUFd2FjJpShzOTF4elBT7C07H_K3clHB0m6uDp9Grw5mfBFYvTJ2gTWOqbLr7gG1tAFS0iKH7-8TXqYbkXLY0AZ4RUa2nIrjGcxz_EQuh64eo9Yltx-fdjQ25gUKIrg3n5gA1mJf3HZEFgxMY--KpaDoOm-XMNm0pjEYhbJPSoJbzShoE8I9iqTJM_U2gIfWVF5MOI7gr3pJBbgzccMOSPgliu";
-          }}
+          src="/img/login_fondo.png"
         />
 
         {/* Overlay semitransparente degradado (#0c0e14 / #111319) */}
@@ -397,34 +411,30 @@ export default function Login({ onLoginSuccess, apariencia, modoInicial = 'login
         <div className="flex items-center space-x-3 sm:space-x-5">
           <div className="flex items-center space-x-2">
             <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary-container opacity-80" />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-primary-container" />
+              {servidor.conectado && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary-container opacity-80" />}
+              <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${servidor.conectado === false ? 'bg-error' : 'bg-primary-container'}`} />
             </span>
             <span className="tracking-wider text-on-surface-variant font-semibold">
-              NODO KAIROS: <span className="text-primary text-glow-cyan">EN LÍNEA</span>
-            </span>
-          </div>
-          <span className="text-on-surface-variant hidden sm:inline">|</span>
-          <div className="hidden sm:flex items-center space-x-1.5 text-on-surface-variant">
-            <span className="w-1.5 h-1.5 rounded-full bg-exito" />
-            <span>
-              CINEMÁTICA: <span className="text-exito font-medium">CALIBRADA</span>
+              SERVIDOR:{' '}
+              {servidor.conectado === null ? (
+                <span>VERIFICANDO</span>
+              ) : servidor.conectado ? (
+                <span className="text-primary text-glow-cyan">EN LÍNEA</span>
+              ) : (
+                <span className="text-error">SIN CONEXIÓN</span>
+              )}
             </span>
           </div>
         </div>
 
         <div className="flex items-center space-x-3 sm:space-x-4">
           <BotonTema apariencia={apariencia} />
-          <div className="hidden md:flex items-center space-x-1.5 text-on-surface-variant">
-            <svg className="w-3.5 h-3.5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
-            </svg>
-            <span className="tracking-wider text-on-surface-variant text-[11px]">E2E TLS 1.3</span>
-          </div>
-          <div className="flex items-center space-x-1 px-2.5 py-1 rounded bg-primary-container/10 border border-primary/30 text-[11px] text-primary font-semibold">
-            <span className="w-1.5 h-1.5 rounded-full bg-primary-container animate-pulse" />
-            <span>LATENCIA: 1.2ms</span>
-          </div>
+          {servidor.ms != null && (
+            <div className="hidden sm:flex items-center space-x-1 px-2.5 py-1 rounded bg-primary-container/10 border border-primary/30 text-[11px] text-primary font-semibold">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary-container" />
+              <span>RESPUESTA: {servidor.ms} ms</span>
+            </div>
+          )}
         </div>
       </header>
 
@@ -438,7 +448,7 @@ export default function Login({ onLoginSuccess, apariencia, modoInicial = 'login
             <div className="absolute -bottom-1 -left-1 w-3.5 h-3.5 border-b-2 border-l-2 border-primary" />
             <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 border-b-2 border-r-2 border-primary" />
 
-            {/* LOGOTIPO E IDENTIDAD OFICIAL: ChessIA // KAIROS CORE */}
+            {/* LOGOTIPO E IDENTIDAD OFICIAL: ChessIA */}
             <div className="text-center mb-5 max-[860px]:mb-3" data-purpose="brand-logo-identity">
               <div className="flex justify-center mb-4 max-[860px]:hidden">
                 <div className="inline-flex p-1.5 rounded-2xl bg-surface-container-lowest border border-primary/30 shadow-[0_0_20px_color-mix(in_srgb,var(--color-primary-container)_45%,transparent)] overflow-hidden">
@@ -446,23 +456,15 @@ export default function Login({ onLoginSuccess, apariencia, modoInicial = 'login
                     alt="ChessIA Logo"
                     className="h-20 w-auto rounded-xl object-contain"
                     src="/img/chessia_logo.png"
-                    onError={(e) => {
-                      e.currentTarget.onerror = null;
-                      e.currentTarget.src =
-                        "https://lh3.googleusercontent.com/aida-public/AB6AXuCMO5vNCHUFCALRsMCB3d9zKKZBq2uymquENQzCns1KnL-MM6bgeZembHFCzONDVXmn2D7mlufw6mTJ0PoUsy-2n-FkcyT8gic2zvIUjSc6MyD2rmIEKY7GwNaYRA5yIPOIcbP9M3Z2GbLAvy-Nivp26y-zCUt66g5vzNcjA1q0uBRwTfO1Fyfe2N8NtuP6YMADjpk23a0B7p3IVeTZz3kfN0UI79lVyoVbT6ZhkBfFHKVxQU7djqCHq7vzqvrZ7zDGSMc";
-                    }}
                   />
                 </div>
               </div>
 
-              <h1 className="font-display font-bold text-2xl sm:text-[26px] tracking-tight text-on-surface flex items-center justify-center space-x-1.5">
-                <span>ChessIA</span>
-                <span className="text-on-surface-variant font-light">//</span>
-                <span className="text-primary text-glow-cyan">KAIROS</span>
-                <span className="text-exito font-semibold text-glow-emerald">CORE</span>
+              <h1 className="font-display font-bold text-2xl sm:text-[26px] tracking-tight text-on-surface">
+                Chess<span className="text-primary text-glow-cyan">IA</span>
               </h1>
               <p className="mt-1 text-[10.5px] font-mono tracking-widest text-primary/80 uppercase">
-                SISTEMA AUTÓNOMO DE AJEDREZ ROBÓTICO
+                Aprendé ajedrez con IA y un brazo robótico
               </p>
             </div>
 
@@ -981,31 +983,22 @@ export default function Login({ onLoginSuccess, apariencia, modoInicial = 'login
             )}
           </section>
 
-          {/* PIE DE SEGURIDAD CRIPTOGRÁFICA */}
-          <div className="mt-3 text-center">
-            <p className="text-[10px] text-on-surface-variant font-mono tracking-wider">
-              ACCESO SEGURO • TERMINAL CRIPTOGRÁFICA KAIROS CORE v4.2
-            </p>
-          </div>
+          {/* Solo se afirma lo que es cierto: la conexión está cifrada si la página se abrió por HTTPS */}
+          {conexionCifrada && (
+            <div className="mt-3 text-center">
+              <p className="text-[10px] text-on-surface-variant font-mono tracking-wider">CONEXIÓN CIFRADA (HTTPS)</p>
+            </div>
+          )}
         </div>
       </main>
 
-      {/* 4. BARRA DE TELEMETRÍA PERIMETRAL INFERIOR */}
+      {/* 4. PIE DE PÁGINA */}
       <footer className="max-sm:hidden max-[860px]:hidden relative z-10 w-full px-5 sm:px-8 py-2.5 border-t border-primary/20 bg-surface-container-lowest/90 backdrop-blur-md flex flex-col sm:flex-row items-center justify-between text-[11px] font-mono text-on-surface-variant">
         <div className="flex items-center space-x-3 mb-1.5 sm:mb-0">
-          <span>
-            MOTOR CHESS IA: <span className="text-on-surface">STOCKFISH NEURAL HYBRID</span>
-          </span>
-          <span className="text-on-surface-variant hidden sm:inline">•</span>
-          <span className="hidden sm:inline">
-            ACTUADOR: <span className="text-on-surface">6-DOF ROBOTIC ARM</span>
-          </span>
+          <span>Brazo robótico con inteligencia artificial para el aprendizaje del ajedrez</span>
         </div>
         <div className="flex items-center space-x-3">
-          <span className="inline-flex items-center px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/30 text-[10px] tracking-wide">
-            ESTADO: LISTO PARA EMPAREJAMIENTO
-          </span>
-          <span className="text-on-surface-variant">© 2025 KAIROS AI LABS</span>
+          <span className="text-on-surface-variant">© 2026 ChessIA</span>
         </div>
       </footer>
     </div>
