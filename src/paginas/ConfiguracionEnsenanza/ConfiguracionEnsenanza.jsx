@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   actualizarPerfil,
   listarCursos,
@@ -10,7 +10,8 @@ import {
 } from '../../api/backend';
 import { rutaImagenPieza } from '../../ajedrez';
 import InsigniaTonoCurso from '../../componentes/InsigniaTonoCurso';
-import { PRESETS_TONO } from '../../tonoTuring';
+import { buscarTono, PRESETS_TONO } from '../../tonoTuring';
+import useModalAccesible from '../../useModalAccesible';
 import CrearMedallas from './CrearMedallas';
 import FiguritasMedallas from './FiguritasMedallas';
 
@@ -114,6 +115,231 @@ function mensajeError(err, mensajePorDefecto) {
   return err?.message || mensajePorDefecto;
 }
 
+/** Construye los 4 pasos de la guía paginada del facilitador respetando su rol (principal vs. curso). */
+function obtenerPasosGuia(esPrincipal) {
+  return [
+    {
+      titulo: 'Videos de piezas y lecciones del camino',
+      icono: 'video_library',
+      texto: `Subí un video corto para explicar el movimiento de cada pieza o las 11 lecciones del camino. ${
+        esPrincipal
+          ? 'Como facilitador principal, los tuyos son los generales: los ven todos los jugadores.'
+          : 'Si ya hay uno general, el tuyo lo reemplaza solo en esa lección o pieza para los jugadores de tus cursos.'
+      } Si no subís ningún MP4, el alumno conserva la demostración interactiva guiada.`,
+    },
+    {
+      titulo: 'Tono pedagógico de Turing',
+      icono: 'record_voice_over',
+      texto:
+        'Elegí cómo querés que Turing (el tutor) le hable a tus estudiantes: con más ánimo y simple (Infantil), equilibrado (Estándar) o más técnico (Adultos). Este tono se aplica a tus cursos que no tengan uno propio.',
+    },
+    {
+      titulo: 'Alcance en tus cursos e invitados',
+      icono: 'groups',
+      texto: `Los cursos los creás en Gestión de Usuarios → Mis cursos y los compartís con su código. ${
+        esPrincipal
+          ? 'El tono y los videos generales llegan a los jugadores inscritos y libres.'
+          : 'El tono de cada curso y tus videos propios les llegan directamente a los jugadores inscritos en él.'
+      }`,
+    },
+    {
+      titulo: 'Medallas personalizadas e insignias',
+      icono: 'military_tech',
+      texto: `Más abajo podés crear tus propias medallas: elegí el nivel, el nombre, cómo se gana y la ilustración central. ${
+        esPrincipal
+          ? 'Las tuyas pueden ser generales y también podés personalizar las medallas de fábrica.'
+          : 'Las ven los jugadores de tus cursos, y las manuales las entregás vos desde la lista.'
+      }`,
+    },
+  ];
+}
+
+/**
+ * Vista previa en vivo de cómo ve un estudiante la combinación actual de tono de Turing y material
+ * audiovisual (video propio, video general o respaldo interactivo) para cualquier pieza o tema del camino.
+ */
+function ModalVistaPreviaAlumno({ alCerrar, presetId, videos, general, esPrincipal, cursos }) {
+  const dialogoRef = useRef(null);
+  const cerrarRef = useRef(null);
+  useModalAccesible(dialogoRef, { alCerrar, focoInicialRef: cerrarRef });
+
+  const [grupo, setGrupo] = useState('piezas');
+  const [tipoSeleccionado, setTipoSeleccionado] = useState(PIEZAS[0].tipo);
+  const items = grupo === 'piezas' ? PIEZAS : MODULOS_CAMINO;
+  const itemActivo = items.find((it) => it.tipo === tipoSeleccionado) ?? items[0];
+  const tono = buscarTono(presetId) ?? PRESETS_TONO[1];
+
+  const urlPropio = videos[itemActivo.tipo] ?? null;
+  const urlGeneralVisible = !urlPropio && !esPrincipal ? general[itemActivo.tipo] ?? null : null;
+  const urlEfectiva = urlPropio || urlGeneralVisible;
+  const origenVideo = urlPropio
+    ? esPrincipal
+      ? 'Video general cargado por vos'
+      : 'Tu video propio (reemplaza al general)'
+    : urlGeneralVisible
+      ? 'Video general del facilitador principal'
+      : 'Sin MP4: respaldo interactivo paso a paso con Turing';
+
+  function cambiarGrupo(nuevoGrupo) {
+    setGrupo(nuevoGrupo);
+    const lista = nuevoGrupo === 'piezas' ? PIEZAS : MODULOS_CAMINO;
+    setTipoSeleccionado(lista[0].tipo);
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-space-sm bg-black/70 backdrop-blur-sm"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) alCerrar();
+      }}
+    >
+      <div
+        ref={dialogoRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="titulo-vista-previa-alumno"
+        tabIndex={-1}
+        className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl bg-surface-container-low border border-outline-variant/30 shadow-2xl p-space-lg flex flex-col gap-space-md"
+      >
+        <div className="flex items-start justify-between gap-space-sm">
+          <div className="flex items-center gap-space-xs min-w-0">
+            <span className="material-symbols-outlined text-[22px] text-primary shrink-0" aria-hidden="true">
+              visibility
+            </span>
+            <div>
+              <h2 id="titulo-vista-previa-alumno" className="font-headline-sm text-headline-sm text-on-surface m-0">
+                Vista Previa en Vivo del Estudiante
+              </h2>
+              <p className="font-body-sm text-body-sm text-on-surface-variant m-0">
+                Así perciben Turing y el material audiovisual tus estudiantes ({cursos.length}{' '}
+                {cursos.length === 1 ? 'curso' : 'cursos'}).
+              </p>
+            </div>
+          </div>
+          <button
+            ref={cerrarRef}
+            type="button"
+            onClick={alCerrar}
+            aria-label="Cerrar vista previa"
+            className="p-space-xs rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          >
+            <span className="material-symbols-outlined text-[20px]">close</span>
+          </button>
+        </div>
+
+        {/* Simulación del mensaje de Turing según el tono elegido */}
+        <div className="p-space-md rounded-xl bg-surface-container border border-primary/25 flex flex-col gap-space-xs">
+          <div className="flex flex-wrap items-center justify-between gap-space-xs">
+            <span className="flex items-center gap-space-2xs font-body-sm text-body-sm font-medium text-on-surface">
+              <span className="material-symbols-outlined text-[18px] text-primary" aria-hidden="true">
+                {tono.icono}
+              </span>
+              Turing habla en {tono.titulo}
+            </span>
+            <span className="font-mono-micro text-mono-micro uppercase px-space-xs py-space-2xs rounded-full bg-primary-container text-on-primary-container">
+              Tono en vivo
+            </span>
+          </div>
+          <p className="font-body-sm text-body-sm italic text-on-surface m-0">«{tono.ejemplo}»</p>
+          <p className="font-mono-micro text-mono-micro text-on-surface-variant m-0">{tono.descripcion}</p>
+        </div>
+
+        {/* Selector de categoría y contenido a previsualizar */}
+        <div className="flex flex-col gap-space-xs">
+          <div className="flex flex-wrap items-center justify-between gap-space-xs">
+            <div className="flex gap-2" role="tablist" aria-label="Tipo de contenido en vista previa">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={grupo === 'piezas'}
+                onClick={() => cambiarGrupo('piezas')}
+                className={`px-space-sm py-space-2xs rounded-lg font-body-sm text-body-sm font-medium transition-colors ${
+                  grupo === 'piezas'
+                    ? 'bg-primary text-on-primary'
+                    : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface'
+                }`}
+              >
+                Piezas ({PIEZAS.length})
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={grupo === 'camino'}
+                onClick={() => cambiarGrupo('camino')}
+                className={`px-space-sm py-space-2xs rounded-lg font-body-sm text-body-sm font-medium transition-colors ${
+                  grupo === 'camino'
+                    ? 'bg-primary text-on-primary'
+                    : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface'
+                }`}
+              >
+                Camino ({MODULOS_CAMINO.length})
+              </button>
+            </div>
+            <span className="font-mono-micro text-mono-micro text-primary">{origenVideo}</span>
+          </div>
+
+          <div className="flex flex-wrap gap-space-2xs">
+            {items.map((item) => {
+              const activo = item.tipo === itemActivo.tipo;
+              const tieneVideo = Boolean(videos[item.tipo] || (!esPrincipal && general[item.tipo]));
+              return (
+                <button
+                  key={item.tipo}
+                  type="button"
+                  onClick={() => setTipoSeleccionado(item.tipo)}
+                  className={`flex items-center gap-1.5 px-space-xs py-space-2xs rounded-lg font-mono-micro text-mono-micro transition-colors ${
+                    activo
+                      ? 'bg-primary-container text-on-primary-container border border-primary/50 font-medium'
+                      : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+                  }`}
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full ${tieneVideo ? 'bg-primary' : 'bg-outline/50'}`}
+                    aria-hidden="true"
+                  />
+                  {item.nombre}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Reproductor o respaldo interactivo del contenido elegido */}
+        <div className="flex flex-col gap-space-xs">
+          <div className="flex items-center justify-between gap-space-xs">
+            <span className="font-body-sm text-body-sm font-medium text-on-surface">{itemActivo.nombre}</span>
+            {itemActivo.etapa && (
+              <span className="font-mono-micro text-mono-micro text-primary">{itemActivo.etapa}</span>
+            )}
+          </div>
+          {urlEfectiva ? (
+            <video
+              key={urlEfectiva}
+              controls
+              preload="metadata"
+              src={urlEfectiva}
+              className="w-full aspect-video rounded-xl bg-surface-container-lowest border border-outline-variant/20"
+            />
+          ) : (
+            <div className="w-full aspect-video rounded-xl bg-surface-container-lowest border border-dashed border-primary/35 flex flex-col items-center justify-center gap-space-xs text-center p-space-md">
+              <span className="material-symbols-outlined text-[32px] text-primary" aria-hidden="true">
+                smart_toy
+              </span>
+              <p className="font-body-sm text-body-sm font-medium text-on-surface m-0">
+                Respaldo interactivo activo para «{itemActivo.nombre}»
+              </p>
+              <p className="font-mono-micro text-mono-micro text-on-surface-variant max-w-md m-0">
+                {itemActivo.descripcion} Como no hay MP4 asignado, tus estudiantes ven el tablero interactivo guiado
+                por Turing en su Camino de Aprendizaje.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CargandoInline({ texto }) {
   return (
     <div className="flex items-center gap-space-xs py-space-xs text-on-surface-variant">
@@ -197,13 +423,13 @@ function TarjetaVideoPieza({ pieza, urlPropio, urlGeneral, esPrincipal, estado, 
       : 'Video propio'
     : urlGeneralVisible
       ? 'Se usa el video general'
-      : 'Sin video';
-  const iconoEstado = urlPropio ? 'check_circle' : urlGeneralVisible ? 'public' : 'videocam_off';
+      : 'Respaldo interactivo';
+  const iconoEstado = urlPropio ? 'check_circle' : urlGeneralVisible ? 'public' : 'smart_toy';
   const claseEstado = urlPropio
     ? 'bg-primary-container text-on-primary-container'
     : urlGeneralVisible
       ? 'bg-surface-container-high text-on-surface'
-      : 'bg-surface-container-lowest text-outline border border-outline-variant/40';
+      : 'bg-surface-container-high text-primary border border-primary/25';
   const mensajeQuitar = esPrincipal
     ? 'Esta pieza va a quedar sin video general: los jugadores no van a ver ningún video de ella.'
     : urlGeneral
@@ -271,13 +497,16 @@ function TarjetaVideoPieza({ pieza, urlPropio, urlGeneral, esPrincipal, estado, 
           </p>
         </>
       ) : (
-        <div className="w-full aspect-video rounded-lg bg-surface-container-lowest border border-dashed border-outline-variant/40 flex flex-col items-center justify-center gap-space-2xs text-center px-space-sm">
-          <span className="material-symbols-outlined text-[28px] text-outline" aria-hidden="true">
-            videocam
+        <div className="w-full aspect-video rounded-lg bg-surface-container-lowest border border-dashed border-primary/35 flex flex-col items-center justify-center gap-space-2xs text-center px-space-sm">
+          <span className="material-symbols-outlined text-[28px] text-primary" aria-hidden="true">
+            smart_toy
           </span>
-          <p className="font-mono-micro text-mono-micro text-on-surface-variant">
-            Todavía no hay un video para este contenido.{' '}
-            {esPrincipal ? 'Subí uno y lo ven todos los jugadores.' : 'Subí uno y lo ven los jugadores de tus cursos.'}
+          <span className="font-mono-micro text-mono-micro font-medium text-on-surface">
+            Respaldo interactivo activo
+          </span>
+          <p className="font-mono-micro text-mono-micro text-on-surface-variant m-0">
+            Mientras no subas un MP4, tus alumnos ven la guía interactiva de Turing.{' '}
+            {esPrincipal ? 'Si subís uno, lo ven todos los jugadores.' : 'Si subís uno, lo ven tus cursos.'}
           </p>
         </div>
       )}
@@ -444,15 +673,17 @@ function TarjetaPreset({ preset, seleccionado, onSeleccionar }) {
  * `preset_ensenanza`).
  *
  * Videos: los del facilitador PRINCIPAL son los generales y los ve todo jugador;
- * el de otro facilitador reemplaza al general solo en esa pieza, para los
- * jugadores de sus cursos (por eso cada pieza dice si tiene "Video propio", si
- * "Se usa el video general" o si está "Sin video"). El tono que se elige acá es el de
+ * el de otro facilitador reemplaza al general solo en esa pieza o lección, para los
+ * jugadores de sus cursos (por eso cada tarjeta indica si tiene "Video propio", si
+ * "Se usa el video general" o si mantiene el "Respaldo interactivo"). El tono que se elige acá es el de
  * sus cursos que no tengan uno propio: cada curso puede tener el suyo desde Gestión de
  * Usuarios → Mis cursos (ver PanelCursos.jsx). La pantalla lista sus cursos reales con el
  * tono vigente de cada uno (`preset_efectivo`).
  */
 export default function ConfiguracionEnsenanza({ usuario, alActualizarUsuario }) {
   const [ayudaAbierta, setAyudaAbierta] = useState(false);
+  const [pasoGuia, setPasoGuia] = useState(0);
+  const [vistaPreviaAbierta, setVistaPreviaAbierta] = useState(false);
   const [pestanaVideos, setPestanaVideos] = useState('piezas'); // 'piezas' | 'camino'
 
   // La sesión guardada puede ser anterior a `es_principal`: se relee el perfil del servidor al entrar.
@@ -586,58 +817,187 @@ export default function ConfiguracionEnsenanza({ usuario, alActualizarUsuario })
   }
 
   const presetCambiado = presetSeleccionado !== presetGuardado;
+  const pasosGuia = obtenerPasosGuia(esPrincipal);
+  const pasoActual = pasosGuia[pasoGuia] ?? pasosGuia[0];
+  const totalPiezasConVideo = PIEZAS.filter((p) => Boolean(videos[p.tipo] || (!esPrincipal && general[p.tipo]))).length;
+  const totalCaminoConVideo = MODULOS_CAMINO.filter((m) =>
+    Boolean(videos[m.tipo] || (!esPrincipal && general[m.tipo]))
+  ).length;
+  const totalEstudiantes = cursos.reduce((acum, curso) => acum + (Number(curso?.estudiantes) || 0), 0);
+  const tonoSeleccionadoObj = buscarTono(presetSeleccionado);
+
+  function alternarGuia() {
+    setAyudaAbierta((actual) => {
+      if (!actual) setPasoGuia(0);
+      return !actual;
+    });
+  }
 
   return (
     <div className="w-full px-space-lg py-space-lg flex flex-col gap-space-lg animate-in fade-in duration-500">
-      {/* Encabezado */}
+      {/* Encabezado, acciones principales y resumen en tiempo real del aula */}
       <div className="flex flex-col gap-space-sm">
         <div className="flex items-center justify-between gap-space-sm flex-wrap">
-          <div className="flex items-center gap-space-xs">
-            <span className="material-symbols-outlined text-[24px] text-primary">video_settings</span>
-            <h1 className="font-headline-sm text-headline-sm text-on-surface">Configuración de Enseñanza</h1>
+          <div className="flex items-center gap-space-xs min-w-0">
+            <span className="material-symbols-outlined text-[24px] text-primary shrink-0">video_settings</span>
+            <h1 className="font-headline-sm text-headline-sm text-on-surface m-0">Configuración de Enseñanza</h1>
           </div>
-          <button
-            type="button"
-            onClick={() => setAyudaAbierta((actual) => !actual)}
-            aria-expanded={ayudaAbierta}
-            aria-controls="ayuda-configuracion-ensenanza"
-            className="flex items-center gap-space-2xs px-space-sm py-space-xs rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface font-body-sm text-body-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-          >
-            <span className="material-symbols-outlined text-[18px]">help</span>
-            Cómo usar esto
-          </button>
+          <div className="flex flex-wrap items-center gap-space-xs">
+            <button
+              type="button"
+              onClick={alternarGuia}
+              aria-expanded={ayudaAbierta}
+              aria-controls="ayuda-configuracion-ensenanza"
+              className="flex items-center gap-space-2xs px-space-sm py-space-xs rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface font-body-sm text-body-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            >
+              <span className="material-symbols-outlined text-[18px]">help</span>
+              Cómo usar esto
+            </button>
+            <button
+              type="button"
+              onClick={() => setVistaPreviaAbierta(true)}
+              className="flex items-center gap-space-2xs px-space-sm py-space-xs rounded-lg bg-primary/15 hover:bg-primary/25 text-primary border border-primary/30 font-body-sm text-body-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            >
+              <span className="material-symbols-outlined text-[18px]">visibility</span>
+              Vista Previa en Vivo
+            </button>
+          </div>
         </div>
 
+        {/* Franja de resumen real del facilitador, cursos, cobertura de videos y tono vigente */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-space-xs p-space-sm rounded-xl bg-surface-container-low border border-outline-variant/20">
+          <div className="flex items-center gap-space-xs min-w-0 px-space-xs py-space-2xs rounded-lg bg-surface-container">
+            <span className="material-symbols-outlined text-[18px] text-primary shrink-0" aria-hidden="true">
+              badge
+            </span>
+            <div className="flex flex-col min-w-0">
+              <span className="font-mono-micro text-mono-micro text-on-surface-variant uppercase">Facilitador</span>
+              <span className="font-body-sm text-body-sm font-medium text-on-surface truncate">
+                {usuario?.nombre || 'Docente'} · {esPrincipal ? 'Principal' : 'De curso'}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-space-xs min-w-0 px-space-xs py-space-2xs rounded-lg bg-surface-container">
+            <span className="material-symbols-outlined text-[18px] text-primary shrink-0" aria-hidden="true">
+              groups
+            </span>
+            <div className="flex flex-col min-w-0">
+              <span className="font-mono-micro text-mono-micro text-on-surface-variant uppercase">Alcance</span>
+              <span className="font-body-sm text-body-sm font-medium text-on-surface truncate">
+                {cargandoCursos
+                  ? 'Cargando cursos…'
+                  : `${cursos.length} ${cursos.length === 1 ? 'curso' : 'cursos'} · ${totalEstudiantes} ${
+                      totalEstudiantes === 1 ? 'estudiante' : 'estudiantes'
+                    }`}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-space-xs min-w-0 px-space-xs py-space-2xs rounded-lg bg-surface-container">
+            <span className="material-symbols-outlined text-[18px] text-primary shrink-0" aria-hidden="true">
+              movie
+            </span>
+            <div className="flex flex-col min-w-0">
+              <span className="font-mono-micro text-mono-micro text-on-surface-variant uppercase">Videos activos</span>
+              <span className="font-body-sm text-body-sm font-medium text-on-surface truncate">
+                {cargandoVideos
+                  ? 'Cargando…'
+                  : `${totalPiezasConVideo}/${PIEZAS.length} piezas · ${totalCaminoConVideo}/${MODULOS_CAMINO.length} camino`}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-space-xs min-w-0 px-space-xs py-space-2xs rounded-lg bg-surface-container">
+            <span className="material-symbols-outlined text-[18px] text-primary shrink-0" aria-hidden="true">
+              {tonoSeleccionadoObj?.icono || 'record_voice_over'}
+            </span>
+            <div className="flex flex-col min-w-0">
+              <span className="font-mono-micro text-mono-micro text-on-surface-variant uppercase">Tono Turing</span>
+              <span className="font-body-sm text-body-sm font-medium text-on-surface truncate">
+                {tonoSeleccionadoObj?.titulo || 'Modo Estándar'}
+                {presetCambiado ? ' (sin guardar)' : ''}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Guía paginada de 4 pasos */}
         {ayudaAbierta && (
           <div
             id="ayuda-configuracion-ensenanza"
-            className="p-space-md rounded-xl bg-surface-container-low border border-outline-variant/20 flex flex-col gap-space-xs"
+            className="p-space-md rounded-xl bg-surface-container-low border border-primary/25 flex flex-col gap-space-sm"
           >
-            <p className="font-body-sm text-body-sm text-on-surface leading-relaxed">
-              <strong className="text-primary">1.</strong> Subí un video corto explicando cómo se mueve cada pieza.{' '}
-              {esPrincipal
-                ? 'Como facilitador principal, los tuyos son los generales: los ven todos los jugadores.'
-                : 'Si ya hay uno general, el tuyo lo reemplaza para tus jugadores, solo en esa pieza.'}
-            </p>
-            <p className="font-body-sm text-body-sm text-on-surface leading-relaxed">
-              <strong className="text-primary">2.</strong> Elegí cómo querés que Turing (el tutor) le hable a tus
-              estudiantes: con más ánimo y simple, con el tono de siempre, o más técnico. Ese es el tono de tus cursos
-              que no tengan uno propio; cada curso puede tener el suyo desde Gestión de Usuarios → Mis cursos.
-            </p>
-            <p className="font-body-sm text-body-sm text-on-surface leading-relaxed">
-              <strong className="text-primary">3.</strong> Los cursos los creás en Gestión de Usuarios y se los
-              compartís a tus estudiantes con su código.{' '}
-              {esPrincipal
-                ? 'El tono de cada curso les llega a los jugadores inscritos en él.'
-                : 'El tono de cada curso (y tus videos propios) les llegan a los jugadores inscritos en él.'}
-            </p>
-            <p className="font-body-sm text-body-sm text-on-surface leading-relaxed">
-              <strong className="text-primary">4.</strong> Más abajo podés crear tus propias medallas: elegí el nivel, el
-              nombre, cómo se gana y, si querés, la ilustración del centro (el escudo lo pone el sistema).{' '}
-              {esPrincipal
-                ? 'Las tuyas pueden ser generales, y también podés cambiar la ilustración de las medallas de fábrica.'
-                : 'Las ven los jugadores de tus cursos, y las manuales las entregás vos desde la lista.'}
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-space-xs">
+              <div className="flex items-center gap-space-xs flex-wrap">
+                <span className="material-symbols-outlined text-[20px] text-primary" aria-hidden="true">
+                  {pasoActual.icono}
+                </span>
+                <span className="font-body-sm text-body-sm font-semibold text-on-surface">
+                  Guía rápida para el facilitador
+                </span>
+                <span className="font-mono-micro text-mono-micro uppercase px-space-xs py-0.5 rounded-full bg-primary-container text-on-primary-container font-medium">
+                  Paso {pasoGuia + 1} de {pasosGuia.length}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-space-xs">
+                <button
+                  type="button"
+                  onClick={() => setPasoGuia((p) => Math.max(0, p - 1))}
+                  disabled={pasoGuia === 0}
+                  className="px-space-sm py-space-2xs rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface font-body-sm text-body-sm disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Anterior
+                </button>
+                {pasoGuia < pasosGuia.length - 1 ? (
+                  <button
+                    type="button"
+                    onClick={() => setPasoGuia((p) => Math.min(pasosGuia.length - 1, p + 1))}
+                    className="px-space-sm py-space-2xs rounded-lg bg-primary text-on-primary font-body-sm text-body-sm font-medium transition-colors"
+                  >
+                    Siguiente paso
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setAyudaAbierta(false)}
+                    className="px-space-sm py-space-2xs rounded-lg bg-primary text-on-primary font-body-sm text-body-sm font-medium transition-colors"
+                  >
+                    Finalizar
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setAyudaAbierta(false)}
+                  aria-label="Cerrar guía rápida"
+                  className="p-space-2xs rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[18px]">close</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-space-2xs">
+              <p className="font-body-sm text-body-sm font-medium text-primary m-0">{pasoActual.titulo}</p>
+              <p className="font-body-sm text-body-sm text-on-surface leading-relaxed m-0">{pasoActual.texto}</p>
+            </div>
+
+            <div className="flex items-center gap-space-2xs pt-space-2xs" role="tablist" aria-label="Pasos de la guía">
+              {pasosGuia.map((paso, idx) => (
+                <button
+                  key={paso.titulo}
+                  type="button"
+                  role="tab"
+                  aria-selected={idx === pasoGuia}
+                  aria-label={`Ir al paso ${idx + 1}: ${paso.titulo}`}
+                  onClick={() => setPasoGuia(idx)}
+                  className={`h-2 rounded-full transition-all ${
+                    idx === pasoGuia ? 'w-8 bg-primary' : 'w-2 bg-outline-variant/50 hover:bg-outline'
+                  }`}
+                />
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -836,6 +1196,65 @@ export default function ConfiguracionEnsenanza({ usuario, alActualizarUsuario })
 
       {/* Ilustraciones de las 13 medallas de fábrica: solo el facilitador principal (ver FiguritasMedallas.jsx). */}
       {esPrincipal && <FiguritasMedallas />}
+
+      {/* Barra de confirmación cuando el tono de Turing fue modificado y aún no se guardó */}
+      {presetCambiado && (
+        <div
+          role="region"
+          aria-label="Cambios pendientes de tono"
+          className="sticky bottom-space-sm z-30 p-space-md rounded-2xl bg-surface-container-high/95 backdrop-blur-md border border-primary/40 shadow-xl flex flex-wrap items-center justify-between gap-space-sm"
+        >
+          <div className="flex items-center gap-space-xs min-w-0">
+            <span className="material-symbols-outlined text-[20px] text-primary shrink-0" aria-hidden="true">
+              pending_actions
+            </span>
+            <div className="flex flex-col min-w-0">
+              <span className="font-body-sm text-body-sm font-semibold text-on-surface">
+                Cambios pendientes sin publicar
+              </span>
+              <span className="font-mono-micro text-mono-micro text-on-surface-variant">
+                Nuevo tono seleccionado: {tonoSeleccionadoObj?.titulo || presetSeleccionado}. Los videos ya confirmados se
+                aplicaron al instante.
+              </span>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-space-xs">
+            <button
+              type="button"
+              onClick={() => {
+                setPresetSeleccionado(presetGuardado);
+                setErrorPreset(null);
+              }}
+              disabled={guardandoPreset}
+              className="px-space-md py-space-xs rounded-xl bg-surface-container hover:bg-surface-bright text-on-surface font-body-sm text-body-sm transition-colors disabled:opacity-50"
+            >
+              Descartar cambios
+            </button>
+            <button
+              type="button"
+              onClick={manejarGuardarPreset}
+              disabled={guardandoPreset}
+              className="flex items-center gap-space-xs px-space-md py-space-xs rounded-xl bg-primary text-on-primary font-body-sm text-body-sm font-medium transition-colors disabled:opacity-50"
+            >
+              {guardandoPreset && (
+                <div className="w-4 h-4 border-2 border-on-primary/30 border-t-on-primary rounded-full animate-spin motion-reduce:animate-none" />
+              )}
+              {guardandoPreset ? 'Publicando…' : 'Guardar y publicar tono'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {vistaPreviaAbierta && (
+        <ModalVistaPreviaAlumno
+          alCerrar={() => setVistaPreviaAbierta(false)}
+          presetId={presetSeleccionado}
+          videos={videos}
+          general={general}
+          esPrincipal={esPrincipal}
+          cursos={cursos}
+        />
+      )}
     </div>
   );
 }
