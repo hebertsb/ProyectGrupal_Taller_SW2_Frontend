@@ -2,6 +2,18 @@ import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { casillasIlustrativas, rutaImagenPieza } from '../../ajedrez';
 import { PIEZAS } from '../../contenido/piezas';
+import {
+  CASILLA_INICIAL_TORRE,
+  CASILLA_REY_NEGRO,
+  daJaque,
+  esDestinoTorre,
+  marcarOnboardingCompletado,
+  mismaCasilla,
+  onboardingCompletado,
+  porcentajeAvance,
+} from '../../onboardingReglas';
+
+export { onboardingCompletado };
 
 /**
  * Onboarding educativo (HU12): tarjetas que enseñan las reglas básicas antes de
@@ -11,27 +23,6 @@ import { PIEZAS } from '../../contenido/piezas';
 
 const TAMANO_TABLERO = 8;
 const CASILLA_CENTRAL = [3, 3];
-
-function claveCompletado(usuarioId) {
-  return `onboarding_completado_${usuarioId ?? 'anon'}`;
-}
-
-/** `true` si este usuario ya vio (o saltó) el onboarding en este navegador. */
-export function onboardingCompletado(usuarioId) {
-  try {
-    return localStorage.getItem(claveCompletado(usuarioId)) === '1';
-  } catch {
-    return false;
-  }
-}
-
-function marcarOnboardingCompletado(usuarioId) {
-  try {
-    localStorage.setItem(claveCompletado(usuarioId), '1');
-  } catch {
-    // Modo privado o cuota llena: el tutorial puede volver a aparecer, no es crítico.
-  }
-}
 
 const TARJETAS = [
   {
@@ -61,7 +52,6 @@ function casillasDelTablero() {
   return casillas;
 }
 
-const mismaCasilla = (a, b) => a[0] === b[0] && a[1] === b[1];
 
 /** Tablero chico con una pieza en el centro. Las casillas que puede alcanzar se marcan; hay que tocar una. */
 function MiniTableroPieza({ pieza, reducir }) {
@@ -128,7 +118,6 @@ function MiniTableroPieza({ pieza, reducir }) {
 }
 
 /** Puzzle de una jugada: la torre blanca tiene que dar jaque al rey negro. */
-const CASILLA_INICIAL_TORRE = [7, 0]; // a1
 /** Cuánto se queda la torre en una casilla que no da jaque antes de volver a a1. */
 const MS_ANTES_DE_VOLVER = 1100;
 
@@ -137,19 +126,12 @@ function PuzzleJaque({ onResuelto }) {
   const [torre, setTorre] = useState(CASILLA_INICIAL_TORRE);
   const [volviendo, setVolviendo] = useState(false); // la torre está de paso en una casilla sin jaque
   const temporizador = useRef(null);
-  const reyNegro = [0, 4]; // e8
+  const reyNegro = CASILLA_REY_NEGRO;
   const [seleccionada, setSeleccionada] = useState(false);
   const [mensaje, setMensaje] = useState('Tocá la torre blanca y después la casilla a la que la movés para dar jaque.');
   const [resuelto, setResuelto] = useState(false);
 
-  // Movimientos legales de la torre en este tablero: por su fila (1) y su columna (a).
-  const destinos = [
-    ...Array.from({ length: 7 }, (_, i) => [7, i + 1]),
-    ...Array.from({ length: 7 }, (_, i) => [i, 0]),
-  ];
-  // Da jaque si queda en la fila del rey (octava) o en su columna (e): el camino está libre.
-  const daJaque = ([f, c]) => f === reyNegro[0] || c === reyNegro[1];
-  const esDestino = (casilla) => destinos.some((d) => mismaCasilla(d, casilla));
+  const esDestino = esDestinoTorre;
 
   // Si se cierra la tarjeta con la torre de paso, no queda un temporizador colgado.
   useEffect(() => () => clearTimeout(temporizador.current), []);
@@ -256,7 +238,7 @@ export default function Onboarding({ usuario = null, alVerPiezas = null, pedidoA
 
   const tarjeta = TARJETAS[indice];
   const esUltima = indice === TARJETAS.length - 1;
-  const porcentaje = Math.round(((indice + 1) / TARJETAS.length) * 100);
+  const porcentaje = porcentajeAvance(indice, TARJETAS.length);
 
   function cerrar() {
     marcarOnboardingCompletado(usuario?.id);

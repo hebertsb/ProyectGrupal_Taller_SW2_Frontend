@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useState } from 'react';
 import { animate, motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { historialPartidasPropio, obtenerPartida } from '../../api/backend';
 import { rutaImagenPieza } from '../../ajedrez';
+import { demostracionInicialCompletada, puedeProbarPartida, videoDelCapitulo } from '../../caminoReglas';
 
 /** Cuántas partidas recientes se revisan para los capítulos basados en historial. */
 const PARTIDAS_A_REVISAR = 20;
@@ -739,18 +740,13 @@ function ModalLeccionCapitulo({
     consejo: 'Practica este concepto en tus partidas contra Turing para dominarlo.',
   };
 
-  const tipoPieza = capitulo.tipoPiezaVideo;
   // Prioridad 1: Video específico del tema/módulo subido por el facilitador (ej: 'enroque', 'mandamientos_apertura', 'defensas_activas')
   // Prioridad 2: Fallback al video de la pieza asociada (ej: 'rey', 'alfil', etc.)
-  const urlVideoFacilitador =
-    (videosPorPieza && videosPorPieza[capitulo.id]) ||
-    (tipoPieza && videosPorPieza ? videosPorPieza[tipoPieza] : null);
-  const esVideoEspecificoDelModulo = Boolean(videosPorPieza && videosPorPieza[capitulo.id]);
+  const { url: urlVideoFacilitador, esEspecificoDelModulo: esVideoEspecificoDelModulo } = videoDelCapitulo(videosPorPieza, capitulo);
 
   // Si el módulo ya estaba completado previamente, puede ingresar a probar directo;
   // si es el paso en curso, debe completar la visualización/demostración.
-  const yaEstabaCompletado = capitulo.estado === 'completado';
-  const [demostracionCompletada, setDemostracionCompletada] = useState(yaEstabaCompletado);
+  const [demostracionCompletada, setDemostracionCompletada] = useState(demostracionInicialCompletada(capitulo));
 
   return (
     <div
@@ -974,7 +970,7 @@ function ModalLeccionCapitulo({
 
           <div className="flex items-center gap-3 flex-wrap">
             {/* Si NO ha terminado la demostración o video: se muestra el candado pedagógico */}
-            {!demostracionCompletada && (
+            {!puedeProbarPartida(demostracionCompletada) && (
               <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-surface-container-lowest border border-outline-variant/40 text-on-surface-variant font-mono-micro text-mono-micro">
                 <span className="material-symbols-outlined text-[16px] text-primary animate-pulse">lock</span>
                 <span>Termina la demostración para desbloquear tu partida</span>
@@ -983,7 +979,7 @@ function ModalLeccionCapitulo({
 
             {/* Si YA terminó la demostración o video: APARECE EL BOTÓN DESTACADO "PROBAR UNA PARTIDA" */}
             <AnimatePresence>
-              {demostracionCompletada && (
+              {puedeProbarPartida(demostracionCompletada) && (
                 <motion.button
                   key="btn-probar-partida"
                   type="button"
