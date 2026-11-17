@@ -19,3 +19,12 @@ export function videoDelCapitulo(videosPorPieza, capitulo) {
   const dePieza = (videosPorPieza && tipoPieza && videosPorPieza[tipoPieza]) || null;
   return { url: delModulo || dePieza, esEspecificoDelModulo: Boolean(delModulo) };
 }
+
+/** Un módulo bloqueado no abre su lección: primero hay que terminar el que está en curso. */
+export const puedeAbrirLeccion = (capitulo) => capitulo?.estado !== 'bloqueado';
+
+/** Aviso al tocar un módulo bloqueado, con el nombre del módulo que hay que terminar antes. */
+export function avisoDeModuloBloqueado(capitulos) {
+  const enCurso = capitulos?.find((c) => c.estado === 'en_curso');
+  return enCurso ? `Primero terminá el módulo en curso: «${enCurso.titulo}».` : 'Primero terminá el módulo anterior para abrir este.';
+}

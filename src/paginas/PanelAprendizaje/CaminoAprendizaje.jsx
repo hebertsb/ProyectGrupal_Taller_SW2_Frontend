@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useState } from 'react';
 import { animate, motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { historialPartidasPropio, obtenerPartida } from '../../api/backend';
 import { rutaImagenPieza } from '../../ajedrez';
-import { demostracionInicialCompletada, puedeProbarPartida, videoDelCapitulo } from '../../caminoReglas';
+import { avisoDeModuloBloqueado, demostracionInicialCompletada, puedeAbrirLeccion, puedeProbarPartida, videoDelCapitulo } from '../../caminoReglas';
 
 /** Cuántas partidas recientes se revisan para los capítulos basados en historial. */
 const PARTIDAS_A_REVISAR = 20;
@@ -1411,6 +1411,14 @@ export default function CaminoAprendizaje({
 
   // Estado para la ventana flotante (Modal) de lección
   const [capituloSeleccionado, setCapituloSeleccionado] = useState(null);
+  const [avisoBloqueo, setAvisoBloqueo] = useState(null);
+
+  // el aviso de «módulo bloqueado» se quita solo
+  useEffect(() => {
+    if (!avisoBloqueo) return undefined;
+    const temporizador = setTimeout(() => setAvisoBloqueo(null), 5000);
+    return () => clearTimeout(temporizador);
+  }, [avisoBloqueo]);
 
   // Determinar etapa inicial sugerida según el rango estimado del jugador
   const etapaSugerida = useMemo(() => {
@@ -1521,6 +1529,16 @@ export default function CaminoAprendizaje({
   const porcentaje = Math.round((completados / capitulosConfig.length) * 100);
   const racha = useMemo(() => rachaDeDias(partidas.map((p) => p.fecha)), [partidas]);
   const enCurso = capitulos.find((c) => c.estado === 'en_curso');
+
+  /** Abre la lección de un módulo; si está bloqueado no se abre y se avisa qué módulo falta terminar. */
+  function abrirLeccion(fila) {
+    if (!puedeAbrirLeccion(fila)) {
+      setAvisoBloqueo(avisoDeModuloBloqueado(capitulos));
+      return;
+    }
+    setAvisoBloqueo(null);
+    setCapituloSeleccionado(fila);
+  }
 
   if (cargando) {
     return (
@@ -1650,6 +1668,13 @@ export default function CaminoAprendizaje({
         />
       )}
 
+      {avisoBloqueo && (
+        <p role="status" className="mt-4 flex items-start gap-2 rounded-xl border border-outline-variant/40 bg-surface-container px-3.5 py-2.5 font-body-sm text-body-sm text-on-surface-variant">
+          <span className="material-symbols-outlined text-[18px] text-primary" aria-hidden="true">lock</span>
+          <span>{avisoBloqueo}</span>
+        </p>
+      )}
+
       {/* Lista del camino en zigzag con nodos y conectores */}
       <ol className="flex flex-col pt-8" aria-label={`Capítulos de ${ETAPAS_APRENDIZAJE[etapaActiva]?.nombre}`}>
         {capitulos.map((fila, indice) => {
@@ -1708,27 +1733,29 @@ export default function CaminoAprendizaje({
                   reducir={reducir}
                   indice={indice}
                   titulo={fila.titulo}
-                  onClick={() => setCapituloSeleccionado(fila)}
+                  onClick={() => abrirLeccion(fila)}
                 />
 
-                {/* Pequeño distintivo en la esquina de la esfera indicando que abre lección */}
+                {/* Distintivo en la esquina de la esfera: solo en los módulos que se pueden abrir (el bloqueado ya muestra su candado) */}
+                {fila.estado !== 'bloqueado' && (
                 <span className="absolute -bottom-1 -right-1 flex items-center justify-center w-6 h-6 rounded-full bg-surface-container-lowest border-2 border-primary text-primary shadow-sm pointer-events-none">
                   <span className="material-symbols-outlined text-[13px] font-bold">
                     {fila.estado === 'completado' ? 'visibility' : esPasoActual ? 'play_arrow' : 'info'}
                   </span>
                 </span>
+                )}
               </div>
 
               {/* Etiqueta del módulo (también cliqueable para abrir ventana flotante) */}
               <button
                 type="button"
-                onClick={() => setCapituloSeleccionado(fila)}
+                onClick={() => abrirLeccion(fila)}
                 className={`absolute top-0 left-[4.5rem] right-0 h-16 flex flex-col justify-center xl:w-52 text-left cursor-pointer group focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded-lg ${
                   etiquetaIzquierda
                     ? 'xl:left-auto xl:right-[calc(100%_-_var(--x)_+_2.75rem)] xl:text-right'
                     : 'xl:left-[calc(var(--x)_+_2.75rem)] xl:right-auto xl:text-left'
                 }`}
-                title={`Clic para ver la lección y demostración de: ${fila.titulo}`}
+                title={fila.estado === 'bloqueado' ? 'Bloqueado: terminá primero el módulo en curso' : `Clic para ver la lección y demostración de: ${fila.titulo}`}
               >
                 <p className="font-body-sm text-body-sm font-semibold text-on-surface truncate group-hover:text-primary transition-colors flex items-center gap-1">
                   <span>{fila.titulo}</span>

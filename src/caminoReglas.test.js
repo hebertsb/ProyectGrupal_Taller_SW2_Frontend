@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { demostracionInicialCompletada, puedeProbarPartida, videoDelCapitulo } from './caminoReglas.js';
+import { avisoDeModuloBloqueado, demostracionInicialCompletada, puedeAbrirLeccion, puedeProbarPartida, videoDelCapitulo } from './caminoReglas.js';
 
 test('un tema ya completado se practica directo; el paso en curso o bloqueado exige la demostración', () => {
   assert.equal(demostracionInicialCompletada({ estado: 'completado' }), true);
@@ -27,4 +27,12 @@ test('sin video del tema se usa el de la pieza y sin ninguno no hay video', () =
   assert.deepEqual(videoDelCapitulo(videos, { id: 'captura', tipoPiezaVideo: 'dama' }), { url: null, esEspecificoDelModulo: false });
   assert.deepEqual(videoDelCapitulo(videos, { id: 'jaque', tipoPiezaVideo: null }), { url: null, esEspecificoDelModulo: false });
   assert.deepEqual(videoDelCapitulo(undefined, { id: 'enroque', tipoPiezaVideo: 'rey' }), { url: null, esEspecificoDelModulo: false });
+});
+
+test('un módulo bloqueado no abre su lección y el aviso nombra el módulo en curso', () => {
+  assert.equal(puedeAbrirLeccion({ estado: 'bloqueado' }), false);
+  assert.equal(puedeAbrirLeccion({ estado: 'en_curso' }), true);
+  assert.equal(puedeAbrirLeccion({ estado: 'completado' }), true);
+  const camino = [{ titulo: 'El tablero', estado: 'en_curso' }, { titulo: 'Las 6 piezas', estado: 'bloqueado' }];
+  assert.match(avisoDeModuloBloqueado(camino), /El tablero/);
 });
